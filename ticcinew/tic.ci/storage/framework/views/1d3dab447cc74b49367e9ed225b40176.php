@@ -1,0 +1,1 @@
+<i class="fas fa-users me-n2 me-n2" style="opacity: .1; --bb-icon-size: 80px;"></i><?php /**PATH /home/dcidev/CascadeProjects/tic.ci/storage/framework/views/79849e4db46d750f99922b1e923b1d5b.blade.php ENDPATH**/ ?>

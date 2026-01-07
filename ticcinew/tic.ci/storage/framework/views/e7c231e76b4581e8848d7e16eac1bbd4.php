@@ -1,0 +1,2 @@
+<?php echo $__env->make('plugins/ecommerce::themes.attributes.swatches-renderer', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+<?php /**PATH /home/dcidev/CascadeProjects/tic.ci/platform/themes/farmart/views/ecommerce/attributes/swatches-renderer.blade.php ENDPATH**/ ?>

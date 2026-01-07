@@ -1,0 +1,2 @@
+<?php echo $__env->make('packages/theme::fronts.toast-notification', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+<?php /**PATH /home/dcidev/CascadeProjects/tic.ci/platform/packages/theme/resources/views/toast-notification.blade.php ENDPATH**/ ?>
