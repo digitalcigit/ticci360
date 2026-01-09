@@ -20,13 +20,13 @@ class NumericFilter extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>.google.analytics.data.v1beta.Filter.NumericFilter.Operation operation = 1;</code>
      */
-    protected $operation = 0;
+    private $operation = 0;
     /**
      * A numeric value or a date value.
      *
      * Generated from protobuf field <code>.google.analytics.data.v1beta.NumericValue value = 2;</code>
      */
-    protected $value = null;
+    private $value = null;
 
     /**
      * Constructor.

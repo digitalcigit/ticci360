@@ -28,25 +28,35 @@ class ScopingHttpClient implements HttpClientInterface, ResetInterface, LoggerAw
 {
     use HttpClientTrait;
 
-    public function __construct(
-        private HttpClientInterface $client,
-        private array $defaultOptionsByRegexp,
-        private ?string $defaultRegexp = null,
-    ) {
+    private $client;
+    private array $defaultOptionsByRegexp;
+    private ?string $defaultRegexp;
+
+    public function __construct(HttpClientInterface $client, array $defaultOptionsByRegexp, string $defaultRegexp = null)
+    {
+        $this->client = $client;
+        $this->defaultOptionsByRegexp = $defaultOptionsByRegexp;
+        $this->defaultRegexp = $defaultRegexp;
+
         if (null !== $defaultRegexp && !isset($defaultOptionsByRegexp[$defaultRegexp])) {
-            throw new InvalidArgumentException(\sprintf('No options are mapped to the provided "%s" default regexp.', $defaultRegexp));
+            throw new InvalidArgumentException(sprintf('No options are mapped to the provided "%s" default regexp.', $defaultRegexp));
         }
     }
 
-    public static function forBaseUri(HttpClientInterface $client, string $baseUri, array $defaultOptions = [], ?string $regexp = null): self
+    public static function forBaseUri(HttpClientInterface $client, string $baseUri, array $defaultOptions = [], string $regexp = null): self
     {
-        $regexp ??= preg_quote(implode('', self::resolveUrl(self::parseUrl('.'), self::parseUrl($baseUri))));
+        if (null === $regexp) {
+            $regexp = preg_quote(implode('', self::resolveUrl(self::parseUrl('.'), self::parseUrl($baseUri))));
+        }
 
         $defaultOptions['base_uri'] = $baseUri;
 
         return new self($client, [$regexp => $defaultOptions], $regexp);
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public function request(string $method, string $url, array $options = []): ResponseInterface
     {
         $e = null;
@@ -83,12 +93,15 @@ class ScopingHttpClient implements HttpClientInterface, ResetInterface, LoggerAw
         return $this->client->request($method, $url, $options);
     }
 
-    public function stream(ResponseInterface|iterable $responses, ?float $timeout = null): ResponseStreamInterface
+    /**
+     * {@inheritdoc}
+     */
+    public function stream(ResponseInterface|iterable $responses, float $timeout = null): ResponseStreamInterface
     {
         return $this->client->stream($responses, $timeout);
     }
 
-    public function reset(): void
+    public function reset()
     {
         if ($this->client instanceof ResetInterface) {
             $this->client->reset();
@@ -96,17 +109,18 @@ class ScopingHttpClient implements HttpClientInterface, ResetInterface, LoggerAw
     }
 
     /**
-     * @deprecated since Symfony 7.1, configure the logger on the wrapped HTTP client directly instead
+     * {@inheritdoc}
      */
     public function setLogger(LoggerInterface $logger): void
     {
-        trigger_deprecation('symfony/http-client', '7.1', 'Configure the logger on the wrapped HTTP client directly instead.');
-
         if ($this->client instanceof LoggerAwareInterface) {
             $this->client->setLogger($logger);
         }
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public function withOptions(array $options): static
     {
         $clone = clone $this;

@@ -3,49 +3,50 @@
 namespace Botble\Location\Forms;
 
 use Botble\Base\Facades\Assets;
-use Botble\Base\Forms\FieldOptions\IsDefaultFieldOption;
-use Botble\Base\Forms\FieldOptions\MediaImageFieldOption;
-use Botble\Base\Forms\FieldOptions\NameFieldOption;
-use Botble\Base\Forms\FieldOptions\SortOrderFieldOption;
-use Botble\Base\Forms\FieldOptions\StatusFieldOption;
-use Botble\Base\Forms\FieldOptions\TextFieldOption;
-use Botble\Base\Forms\Fields\MediaImageField;
-use Botble\Base\Forms\Fields\NumberField;
-use Botble\Base\Forms\Fields\OnOffField;
-use Botble\Base\Forms\Fields\SelectField;
-use Botble\Base\Forms\Fields\TextField;
+use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Base\Forms\FormAbstract;
 use Botble\Location\Http\Requests\CityRequest;
 use Botble\Location\Models\City;
-use Botble\Location\Models\Country;
+use Botble\Location\Repositories\Interfaces\CountryInterface;
+use Botble\Location\Repositories\Interfaces\StateInterface;
 
 class CityForm extends FormAbstract
 {
-    public function setup(): void
+    public function __construct(protected CountryInterface $countryRepository, protected StateInterface $stateRepository)
+    {
+        parent::__construct();
+    }
+
+    public function buildForm(): void
     {
         Assets::addScriptsDirectly('vendor/core/plugins/location/js/location.js');
 
-        $countries = Country::query()->pluck('name', 'id')->all();
+        $countries = $this->countryRepository->pluck('countries.name', 'countries.id');
 
         $states = [];
         if ($this->getModel()) {
-            $states = $this->getModel()->country->states()->pluck('name', 'id')->all();
+            $states = $this->stateRepository->pluck(
+                'states.name',
+                'states.id',
+                [['country_id', '=', $this->model->country_id]]
+            );
         }
 
         $this
-            ->model(City::class)
+            ->setupModel(new City())
             ->setValidatorClass(CityRequest::class)
-            ->add('name', TextField::class, NameFieldOption::make()->required())
-            ->add('slug', TextField::class, [
-                'label' => __('Slug'),
+            ->withCustomFields()
+            ->add('name', 'text', [
+                'label' => trans('core/base::forms.name'),
+                'label_attr' => ['class' => 'control-label required'],
                 'attr' => [
-                    'placeholder' => __('Slug'),
+                    'placeholder' => trans('core/base::forms.name_placeholder'),
                     'data-counter' => 120,
                 ],
             ])
-            ->add('country_id', SelectField::class, [
+            ->add('country_id', 'customSelect', [
                 'label' => trans('plugins/location::city.country'),
-                'required' => true,
+                'label_attr' => ['class' => 'control-label required'],
                 'attr' => [
                     'id' => 'country_id',
                     'class' => 'select-search-full',
@@ -53,8 +54,9 @@ class CityForm extends FormAbstract
                 ],
                 'choices' => [0 => trans('plugins/location::city.select_country')] + $countries,
             ])
-            ->add('state_id', SelectField::class, [
+            ->add('state_id', 'customSelect', [
                 'label' => trans('plugins/location::city.state'),
+                'label_attr' => ['class' => 'control-label'],
                 'attr' => [
                     'id' => 'state_id',
                     'data-url' => route('ajax.states-by-country'),
@@ -63,23 +65,29 @@ class CityForm extends FormAbstract
                 ],
                 'choices' => ($this->getModel()->state_id ?
                         [
-                            0 => trans('plugins/location::city.select_state'),
                             $this->model->state->id => $this->model->state->name,
                         ]
                         :
                         [0 => trans('plugins/location::city.select_state')]) + $states,
             ])
-            ->add(
-                'zip_code',
-                TextField::class,
-                TextFieldOption::make()
-                    ->label(trans('plugins/location::city.zip_code'))
-                    ->helperText(trans('plugins/location::city.zip_code_helper'))
-            )
-            ->add('order', NumberField::class, SortOrderFieldOption::make())
-            ->add('is_default', OnOffField::class, IsDefaultFieldOption::make())
-            ->add('status', SelectField::class, StatusFieldOption::make())
-            ->add('image', MediaImageField::class, MediaImageFieldOption::make())
+            ->add('order', 'number', [
+                'label' => trans('core/base::forms.order'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'placeholder' => trans('core/base::forms.order_by_placeholder'),
+                ],
+                'default_value' => 0,
+            ])
+            ->add('is_default', 'onOff', [
+                'label' => trans('core/base::forms.is_default'),
+                'label_attr' => ['class' => 'control-label'],
+                'default_value' => false,
+            ])
+            ->add('status', 'customSelect', [
+                'label' => trans('core/base::tables.status'),
+                'label_attr' => ['class' => 'control-label required'],
+                'choices' => BaseStatusEnum::labels(),
+            ])
             ->setBreakFieldPoint('status');
     }
 }

@@ -2,23 +2,10 @@
     <div class="table-responsive">
         <table class="table text-start table-striped table-bordered">
             <tbody>
-                @foreach ($locales as $locale)
+                @foreach($locales as $locale)
                     <tr>
                         <td>{{ $locale['name'] }} - {{ $locale['locale'] }}</td>
-                        <td
-                            class="text-center"
-                            style="white-space: nowrap; width: 1%;"
-                        >
-                            <x-core::button
-                                type="button"
-                                color="primary"
-                                class="btn-import-remote-locale"
-                                data-url="{{ route('translations.locales.download-remote-locale', $locale['locale']) }}"
-                                icon="ti ti-download"
-                            >
-                                {{ trans('plugins/translation::translation.download_locale') }}
-                            </x-core::button>
-                        </td>
+                        <td class="text-center" style="white-space: nowrap; width: 1%;"><button class="btn btn-info btn-import-remote-locale" data-url="{{ route('translations.locales.download-remote-locale', $locale['locale']) }}" type="button"><i class="fas fa-cloud-download-alt"></i> {{ trans('plugins/translation::translation.download_locale') }}</button></td>
                     </tr>
                 @endforeach
             </tbody>

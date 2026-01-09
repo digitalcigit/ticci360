@@ -2,10 +2,9 @@
 
 namespace Botble\Ecommerce\Http\Requests;
 
-use Botble\Base\Facades\BaseHelper;
 use Botble\Ecommerce\Enums\ShippingRuleTypeEnum;
-use Botble\Ecommerce\Facades\EcommerceHelper;
 use Botble\Ecommerce\Models\ShippingRule;
+use Botble\Ecommerce\Repositories\Interfaces\ShippingRuleInterface;
 use Botble\Support\Http\Requests\Request;
 use Illuminate\Validation\Rule;
 
@@ -20,33 +19,26 @@ class ShippingRuleItemRequest extends Request
                     return $query->whereIn('type', ShippingRuleTypeEnum::keysAllowRuleItems());
                 }),
             ],
-            'country' => ['required'],
+            'country' => 'required',
             'state' => [
-                'sometimes',
                 Rule::requiredIf(function () {
-                    return ShippingRule::query()
-                        ->where([
-                            'id' => $this->input('shipping_rule_id'),
-                            'type' => ShippingRuleTypeEnum::BASED_ON_LOCATION,
-                        ])
-                        ->exists();
+                    return app(ShippingRuleInterface::class)->count([
+                        'id' => $this->input('shipping_rule_id'),
+                        'type' => ShippingRuleTypeEnum::BASED_ON_LOCATION,
+                    ]);
                 }),
-                Rule::exists('states', 'id'),
             ],
-            'city' => ['nullable', 'required_without:state'] + (EcommerceHelper::useCityFieldAsTextField() ? [] : ['exists:cities,id']),
+            'city' => 'nullable',
             'zip_code' => [
-                'nullable',
-                ...BaseHelper::getZipcodeValidationRule(true),
+                'max:20',
                 Rule::requiredIf(function () {
-                    return ShippingRule::query()
-                        ->where([
-                            'id' => $this->input('shipping_rule_id'),
-                            'type' => ShippingRuleTypeEnum::BASED_ON_ZIPCODE,
-                        ])
-                        ->exists();
+                    return app(ShippingRuleInterface::class)->count([
+                        'id' => $this->input('shipping_rule_id'),
+                        'type' => ShippingRuleTypeEnum::BASED_ON_ZIPCODE,
+                    ]);
                 }),
             ],
-            'adjustment_price' => ['nullable', 'numeric', 'min:-100000000000', 'max:100000000000'],
+            'adjustment_price' => 'required|numeric|min:-100000000000|max:100000000000',
             'is_enabled' => Rule::in(['0', '1']),
         ];
     }

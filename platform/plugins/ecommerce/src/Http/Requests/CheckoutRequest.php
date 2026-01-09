@@ -2,14 +2,11 @@
 
 namespace Botble\Ecommerce\Http\Requests;
 
-use Botble\Base\Rules\EmailRule;
 use Botble\Ecommerce\Enums\ShippingMethodEnum;
-use Botble\Ecommerce\Facades\Cart;
-use Botble\Ecommerce\Facades\EcommerceHelper;
-use Botble\Ecommerce\Models\Customer;
 use Botble\Payment\Enums\PaymentMethodEnum;
 use Botble\Support\Http\Requests\Request;
-use Botble\Theme\Facades\Theme;
+use Botble\Ecommerce\Facades\Cart;
+use Botble\Ecommerce\Facades\EcommerceHelper;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 
@@ -18,29 +15,21 @@ class CheckoutRequest extends Request
     public function rules(): array
     {
         $rules = [
-            'amount' => ['required', 'min:0'],
+            'amount' => 'required|min:0',
         ];
 
-        if (Theme::termAndPrivacyPolicyUrl() && get_ecommerce_setting('show_terms_and_policy_checkbox', true)) {
-            $rules['agree_terms_and_policy'] = 'required|accepted:1';
-        }
-
-        if (is_plugin_active('payment') && Cart::instance('cart')->rawTotal()) {
+        if (is_plugin_active('payment')) {
             $paymentMethods = Arr::where(PaymentMethodEnum::values(), function ($value) {
-                return (int) get_payment_setting('status', $value) == 1;
+                return get_payment_setting('status', $value) == 1;
             });
 
-            $rules['payment_method'] = 'sometimes|' . Rule::in($paymentMethods);
+            $rules['payment_method'] = 'required|' . Rule::in($paymentMethods);
         }
 
         $addressId = $this->input('address.address_id');
 
         $products = Cart::instance('cart')->products();
-        if (
-            ! EcommerceHelper::isDisabledPhysicalProduct()
-            && EcommerceHelper::isAvailableShipping($products)
-            && ! (bool) get_ecommerce_setting('disable_shipping_options', false)
-        ) {
+        if (EcommerceHelper::isAvailableShipping($products)) {
             $rules['shipping_method'] = 'required|' . Rule::in(ShippingMethodEnum::values());
             if (auth('customer')->check()) {
                 $rules['address.address_id'] = 'required_without:address.name';
@@ -55,46 +44,13 @@ class CheckoutRequest extends Request
         $billingAddressSameAsShippingAddress = false;
         if (EcommerceHelper::isBillingAddressEnabled()) {
             $isSaveOrderShippingAddress = EcommerceHelper::isSaveOrderShippingAddress($products);
-            $rules['billing_address_same_as_shipping_address'] = 'nullable|' . Rule::in(['0', '1']);
+            $rules['billing_address_same_as_shipping_address'] = 'required|' . Rule::in(['0', '1']);
             if (! $this->input('billing_address_same_as_shipping_address') || (! $isSaveOrderShippingAddress && auth('customer')->check() && ! $addressId)) {
                 $rules['billing_address'] = 'array';
                 $rules = array_merge($rules, EcommerceHelper::getCustomerAddressValidationRules('billing_address.'));
             } else {
                 $billingAddressSameAsShippingAddress = true;
             }
-        }
-
-        if (EcommerceHelper::isDisplayTaxFieldsAtCheckoutPage()) {
-            $rules = array_merge($rules, [
-                'with_tax_information' => ['nullable', 'bool'],
-                'tax_information' => ['array'],
-                'tax_information.company_tax_code' => [
-                    'required_if:with_tax_information,1',
-                    'nullable',
-                    'string',
-                    'min:3',
-                    'max:20',
-                ],
-                'tax_information.company_name' => [
-                    'required_if:with_tax_information,1',
-                    'nullable',
-                    'string',
-                    'min:3',
-                    'max:120',
-                ],
-                'tax_information.company_address' => [
-                    'required_if:with_tax_information,1',
-                    'nullable',
-                    'string',
-                    'min:3',
-                    'max:255',
-                ],
-                'tax_information.company_email' => [
-                    'required_if:with_tax_information,1',
-                    'nullable',
-                    new EmailRule(),
-                ],
-            ]);
         }
 
         if (! auth('customer')->check()) {
@@ -116,7 +72,7 @@ class CheckoutRequest extends Request
         if ($isCreateAccount) {
             $rules['password'] = 'required|min:6';
             $rules['password_confirmation'] = 'required|same:password';
-            $rules['address.email'] = ['required', new EmailRule(), Rule::unique((new Customer())->getTable(), 'email')];
+            $rules['address.email'] = 'required|max:60|min:6|email|unique:ec_customers,email';
             $rules['address.name'] = 'required|min:3|max:120';
         }
 
@@ -133,18 +89,8 @@ class CheckoutRequest extends Request
             foreach ($nullableFields as $value) {
                 $key = "address.$value";
 
-                if (! isset($rules[$key])) {
-                    continue;
-                }
-
-                if (is_string($rules[$key])) {
+                if (isset($rules[$key])) {
                     $rules[$key] = str_replace('required', 'nullable', $rules[$key]);
-
-                    continue;
-                }
-
-                if (is_array($rules[$key])) {
-                    $rules[$key] = array_merge(['nullable'], array_filter($rules[$key], fn ($item) => $item !== 'required'));
                 }
             }
         }
@@ -155,8 +101,25 @@ class CheckoutRequest extends Request
     public function messages(): array
     {
         return apply_filters(PROCESS_CHECKOUT_MESSAGES_REQUEST_ECOMMERCE, [
-            'agree_terms_and_policy.required' => __('You must agree to the terms and conditions and privacy policy.'),
-            'agree_terms_and_policy.accepted' => __('You must agree to the terms and conditions and privacy policy.'),
+            'address.name.required' => trans('plugins/ecommerce::order.address_name_required'),
+            'address.phone.required' => trans('plugins/ecommerce::order.address_phone_required'),
+            'address.email.required' => trans('plugins/ecommerce::order.address_email_required'),
+            'address.email.unique' => trans('plugins/ecommerce::order.address_email_unique'),
+            'address.state.required' => trans('plugins/ecommerce::order.address_state_required'),
+            'address.city.required' => trans('plugins/ecommerce::order.address_city_required'),
+            'address.country.required' => trans('plugins/ecommerce::order.address_country_required'),
+            'address.address.required' => trans('plugins/ecommerce::order.address_address_required'),
+            'address.zip_code.required' => trans('plugins/ecommerce::order.address_zipcode_required'),
+
+            'billing_address.name.required' => trans('plugins/ecommerce::order.address_name_required'),
+            'billing_address.phone.required' => trans('plugins/ecommerce::order.address_phone_required'),
+            'billing_address.email.required' => trans('plugins/ecommerce::order.address_email_required'),
+            'billing_address.email.unique' => trans('plugins/ecommerce::order.address_email_unique'),
+            'billing_address.state.required' => trans('plugins/ecommerce::order.address_state_required'),
+            'billing_address.city.required' => trans('plugins/ecommerce::order.address_city_required'),
+            'billing_address.country.required' => trans('plugins/ecommerce::order.address_country_required'),
+            'billing_address.address.required' => trans('plugins/ecommerce::order.address_address_required'),
+            'billing_address.zip_code.required' => trans('plugins/ecommerce::order.address_zipcode_required'),
         ]);
     }
 
@@ -179,7 +142,6 @@ class CheckoutRequest extends Request
         if (! is_array($keys)) {
             $keys = [$keys];
         }
-
         foreach ($keys as $key) {
             if (! empty($rules[$key])) {
                 $values = $rules[$key];

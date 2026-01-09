@@ -2,71 +2,51 @@
 
 namespace Botble\Base\Http\Controllers;
 
-use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Base\Models\AdminNotification;
-use Botble\Base\Models\AdminNotificationQueryBuilder;
 use Carbon\Carbon;
-use Illuminate\Database\Query\Builder;
-use Illuminate\Http\RedirectResponse;
 
 class NotificationController extends BaseController
 {
-    public function index(): BaseHttpResponse
+    public function getNotification()
     {
-        $notificationsCount = AdminNotification::countUnread();
-
-        /**
-         * @var AdminNotificationQueryBuilder $adminQuery
-         */
-        $adminQuery = AdminNotification::query();
-
-        $query = $adminQuery->hasPermission();
-
-        $notifications = $query
+        $notifications = AdminNotification::query()
+            ->hasPermission()
             ->latest()
             ->paginate(10);
 
-        return $this
-            ->httpResponse()
-            ->setData(view('core/base::notification.partials.content', compact('notifications', 'notificationsCount'))->render());
+        return view('core/base::notification.partials.notification-item', compact('notifications'));
     }
 
-    public function destroy(int|string $id): BaseHttpResponse
+    public function countNotification()
+    {
+        $countNotificationUnread = AdminNotification::countUnread();
+
+        return view('core/base::notification.partials.count-notification-unread', compact('countNotificationUnread'));
+    }
+
+    public function delete(int|string $id)
     {
         $notificationItem = AdminNotification::query()->findOrFail($id);
         $notificationItem->delete();
 
-        /**
-         * @var AdminNotificationQueryBuilder $adminQuery
-         */
-        $adminQuery = AdminNotification::query();
-
-        /**
-         * @var Builder $query
-         */
-        $query = $adminQuery->hasPermission();
-
-        if (! $query->exists()) {
-            return $this
-                ->httpResponse()
-                ->setData(view('core/base::notification.partials.content')->render());
+        if (! AdminNotification::query()->hasPermission()->exists()) {
+            return [
+                'view' => view('core/base::notification.partials.sidebar-notification')->render(),
+            ];
         }
 
-        return $this->httpResponse();
+        return [];
     }
 
-    public function deleteAll(): BaseHttpResponse
+    public function deleteAll()
     {
         AdminNotification::query()->delete();
 
-        return $this->httpResponse();
+        return view('core/base::notification.partials.sidebar-notification');
     }
 
-    public function read(int|string $id): RedirectResponse
+    public function read(int|string $id)
     {
-        /**
-         * @var AdminNotification $notificationItem
-         */
         $notificationItem = AdminNotification::query()->findOrFail($id);
 
         if ($notificationItem->read_at === null) {
@@ -80,7 +60,7 @@ class NotificationController extends BaseController
         return redirect()->to(url($notificationItem->action_url));
     }
 
-    public function readAll(): BaseHttpResponse
+    public function readAll()
     {
         AdminNotification::query()
             ->whereNull('read_at')
@@ -88,13 +68,6 @@ class NotificationController extends BaseController
                 'read_at' => Carbon::now(),
             ]);
 
-        return $this->httpResponse();
-    }
-
-    public function countUnread(): BaseHttpResponse
-    {
-        return $this
-            ->httpResponse()
-            ->setData(AdminNotification::countUnread());
+        return [];
     }
 }

@@ -12,7 +12,7 @@ return new class () extends Migration {
         Schema::dropIfExists('ec_invoice_items');
         Schema::dropIfExists('ec_invoices');
 
-        Schema::create('ec_invoices', function (Blueprint $table): void {
+        Schema::create('ec_invoices', function (Blueprint $table) {
             $table->id();
             $table->morphs('reference');
             $table->string('code')->unique();
@@ -23,15 +23,15 @@ return new class () extends Migration {
             $table->string('customer_phone')->nullable();
             $table->string('customer_address')->nullable();
             $table->string('customer_tax_id')->nullable();
-            $table->decimal('sub_total', 15)->unsigned();
-            $table->decimal('tax_amount', 15)->default(0)->unsigned();
-            $table->decimal('shipping_amount', 15)->default(0)->unsigned();
-            $table->decimal('discount_amount', 15)->default(0)->unsigned();
+            $table->unsignedDecimal('sub_total', 15);
+            $table->unsignedDecimal('tax_amount', 15)->default(0);
+            $table->unsignedDecimal('shipping_amount', 15)->default(0);
+            $table->unsignedDecimal('discount_amount', 15)->default(0);
             $table->string('shipping_option', 60)->nullable();
             $table->string('shipping_method', 60)->default('default');
             $table->string('coupon_code', 120)->nullable();
-            $table->string('discount_description')->nullable();
-            $table->decimal('amount', 15)->unsigned();
+            $table->string('discount_description', 255)->nullable();
+            $table->unsignedDecimal('amount', 15);
             $table->text('description')->nullable();
             $table->foreignId('payment_id')->nullable()->index();
             $table->string('status')->index()->default('pending');
@@ -39,18 +39,18 @@ return new class () extends Migration {
             $table->timestamps();
         });
 
-        Schema::create('ec_invoice_items', function (Blueprint $table): void {
+        Schema::create('ec_invoice_items', function (Blueprint $table) {
             $table->id();
             $table->foreignId('invoice_id');
             $table->morphs('reference');
             $table->string('name');
-            $table->string('description', 400)->nullable();
+            $table->string('description')->nullable();
             $table->string('image')->nullable();
-            $table->integer('qty')->unsigned();
-            $table->decimal('sub_total', 15)->unsigned();
-            $table->decimal('tax_amount', 15)->default(0)->unsigned();
-            $table->decimal('discount_amount', 15)->default(0)->unsigned();
-            $table->decimal('amount', 15)->unsigned();
+            $table->unsignedInteger('qty');
+            $table->unsignedDecimal('sub_total', 15);
+            $table->unsignedDecimal('tax_amount', 15)->default(0);
+            $table->unsignedDecimal('discount_amount', 15)->default(0);
+            $table->unsignedDecimal('amount', 15);
             $table->text('options')->nullable();
             $table->timestamps();
         });
@@ -61,9 +61,6 @@ return new class () extends Migration {
                     continue;
                 }
 
-                /**
-                 * @var Order $order
-                 */
                 InvoiceHelper::store($order);
             }
         } catch (Exception $exception) {

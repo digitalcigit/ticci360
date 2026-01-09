@@ -1,16 +1,1 @@
-@if (is_plugin_active('ecommerce') && ! empty($categories))
-    <div>
-        <p>
-            @if ($config['name'])
-                <strong>{{ $config['name'] }}:</strong>
-            @endif
-
-            @foreach ($categories as $category)
-                <a
-                    href="{{ route('public.single', $category->url) }}"
-                    title="{{ $category->name }}"
-                >{{ $category->name }}</a>
-            @endforeach
-        </p>
-    </div>
-@endif
+<footer-product-categories-component name="{{ $config['name'] }}" url="{{ route('public.ajax.get-product-categories') }}?{{ http_build_query(['categories' => $config['categories']]) }}"></footer-product-categories-component>

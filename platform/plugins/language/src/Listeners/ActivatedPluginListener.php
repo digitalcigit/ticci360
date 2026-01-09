@@ -2,7 +2,6 @@
 
 namespace Botble\Language\Listeners;
 
-use Botble\Base\Facades\BaseHelper;
 use Botble\Language\Plugin;
 use Exception;
 
@@ -13,7 +12,7 @@ class ActivatedPluginListener
         try {
             Plugin::activated();
         } catch (Exception $exception) {
-            BaseHelper::logError($exception);
+            info($exception->getMessage());
         }
     }
 }

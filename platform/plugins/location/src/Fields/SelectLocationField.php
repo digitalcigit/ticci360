@@ -3,21 +3,31 @@
 namespace Botble\Location\Fields;
 
 use Botble\Base\Facades\Assets;
+use Botble\Location\Repositories\Interfaces\CityInterface;
+use Botble\Location\Repositories\Interfaces\CountryInterface;
+use Botble\Location\Repositories\Interfaces\StateInterface;
 use Botble\Base\Facades\Html;
-use Botble\Base\Forms\Form;
-use Botble\Base\Forms\FormField;
-use Botble\Location\Models\City;
-use Botble\Location\Models\Country;
-use Botble\Location\Models\State;
 use Illuminate\Support\Arr;
 use Illuminate\Support\HtmlString;
+use Botble\Base\Forms\FormField;
+use Botble\Base\Forms\Form;
 
 class SelectLocationField extends FormField
 {
+    protected CountryInterface $countryRepository;
+
+    protected StateInterface $stateRepository;
+
+    protected CityInterface $cityRepository;
+
     protected array $locationKeys = [];
 
-    public function __construct($name, $type, Form $parent, array $options = [])
-    {
+    public function __construct(
+        $name,
+        $type,
+        Form $parent,
+        array $options = []
+    ) {
         parent::__construct($name, $type, $parent);
 
         $default = [
@@ -25,7 +35,6 @@ class SelectLocationField extends FormField
             'state' => 'state_id',
             'city' => 'city_id',
         ];
-
         $this->locationKeys = array_filter(array_merge($default, Arr::get($options, 'locationKeys', [])));
 
         $this->name = $name;
@@ -37,6 +46,10 @@ class SelectLocationField extends FormField
         $this->setDefaultOptions($options);
         $this->setupValue();
         $this->initFilters();
+
+        $this->countryRepository = app(CountryInterface::class);
+        $this->stateRepository = app(StateInterface::class);
+        $this->cityRepository = app(CityInterface::class);
 
         Assets::addScriptsDirectly('vendor/core/plugins/location/js/location.js');
     }
@@ -68,21 +81,8 @@ class SelectLocationField extends FormField
     public function getCountryOptions(): array
     {
         $countryKey = Arr::get($this->locationKeys, 'country');
-        $countries = Country::query()
-            ->select('name', 'id')
-            ->oldest('order')
-            ->oldest('name')
-            ->latest()
-            ->get()
-            ->mapWithKeys(fn ($item) => [$item->getKey() => $item->name])
-            ->all();
-
+        $countries = $this->countryRepository->pluck('name', 'id');
         $value = Arr::get($this->getValue(), 'country');
-
-        if (! $value && count($countries)) {
-            $value = Arr::first(array_keys($countries));
-        }
-
         $attr = array_merge($this->getOption('attr', []), [
             'id' => $countryKey,
             'class' => 'select-search-full',
@@ -103,33 +103,9 @@ class SelectLocationField extends FormField
         $states = [];
         $stateKey = Arr::get($this->locationKeys, 'state');
         $countryId = Arr::get($this->getValue(), 'country');
-
-        if (! $countryId) {
-            $countries = Country::query()
-                ->select('name', 'id')
-                ->oldest('order')
-                ->oldest('name')
-                ->latest()
-                ->get()
-                ->mapWithKeys(fn ($item) => [$item->getKey() => $item->name])
-                ->all();
-
-            if (count($countries)) {
-                $countryId = Arr::first(array_keys($countries));
-            }
-        }
-
         $value = Arr::get($this->getValue(), 'state');
         if ($countryId) {
-            $states = State::query()
-                ->where('country_id', $countryId)
-                ->select('name', 'id')
-                ->oldest('order')
-                ->oldest('name')
-                ->latest()
-                ->get()
-                ->mapWithKeys(fn ($item) => [$item->getKey() => $item->name])
-                ->all();
+            $states = $this->stateRepository->pluck('name', 'id', [['country_id', '=', $countryId]]);
         }
 
         $attr = array_merge($this->getOption('attr', []), [
@@ -153,27 +129,9 @@ class SelectLocationField extends FormField
         $cities = [];
         $cityKey = Arr::get($this->locationKeys, 'city');
         $stateId = Arr::get($this->getValue(), 'state');
-        $countryId = Arr::get($this->getValue(), 'country');
         $value = Arr::get($this->getValue(), 'city');
         if ($stateId) {
-            $cities = City::query()
-                ->where('state_id', $stateId)
-                ->oldest('order')
-                ->oldest('name')
-                ->latest()
-                ->select('name', 'id')->get()
-                ->mapWithKeys(fn ($item) => [$item->getKey() => $item->name])
-                ->all();
-        } elseif ($countryId) {
-            $cities = City::query()
-                ->where('country_id', $countryId)
-                ->select('name', 'id')
-                ->oldest('order')
-                ->oldest('name')
-                ->latest()
-                ->get()
-                ->mapWithKeys(fn ($item) => [$item->getKey() => $item->name])
-                ->all();
+            $cities = $this->cityRepository->pluck('name', 'id', [['state_id', '=', $stateId]]);
         }
 
         $attr = array_merge($this->getOption('attr', []), [
@@ -250,16 +208,12 @@ class SelectLocationField extends FormField
                     'translationTemplate' => $this->parent->getTranslationTemplate(),
                 ]
             )->render();
-
-            if (request()->ajax()) {
-                $html .= Html::script('vendor/core/plugins/location/js/location.js');
-            }
         }
 
         return Html::tag(
             'div',
             $html,
-            ['class' => ($this->getOption('wrapperClassName') ?: 'mb-3 row') . ' select-location-fields']
+            ['class' => ($this->getOption('wrapperClassName') ?: 'row g-1') . ' select-location-fields']
         );
     }
 

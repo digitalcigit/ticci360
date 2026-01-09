@@ -2,6 +2,7 @@
 
 namespace Botble\Blog\Repositories\Eloquent;
 
+use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Blog\Repositories\Interfaces\TagInterface;
 use Botble\Support\Repositories\Eloquent\RepositoriesAbstract;
 use Illuminate\Support\Collection;
@@ -12,8 +13,8 @@ class TagRepository extends RepositoriesAbstract implements TagInterface
     {
         $data = $this->model
             ->with('slugable')
-            ->wherePublished()
-            ->orderByDesc('created_at')
+            ->where('status', BaseStatusEnum::PUBLISHED)
+            ->orderBy('created_at', 'desc')
             ->select(['id', 'name', 'updated_at']);
 
         return $this->applyBeforeExecuteQuery($data)->get();
@@ -24,7 +25,7 @@ class TagRepository extends RepositoriesAbstract implements TagInterface
         $data = $this->model
             ->with($with)
             ->withCount($withCount)
-            ->latest('posts_count')
+            ->orderBy('posts_count', 'DESC')
             ->limit($limit);
 
         return $this->applyBeforeExecuteQuery($data)->get();
@@ -34,7 +35,7 @@ class TagRepository extends RepositoriesAbstract implements TagInterface
     {
         $data = $this->model;
         if ($active) {
-            $data = $data->wherePublished();
+            $data = $data->where('status', BaseStatusEnum::PUBLISHED);
         }
 
         return $this->applyBeforeExecuteQuery($data)->get();

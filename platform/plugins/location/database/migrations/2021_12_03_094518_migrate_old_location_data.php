@@ -13,28 +13,34 @@ return new class () extends Migration {
     public function up(): void
     {
         if (is_plugin_active('language')) {
-            $tablePrefix = Schema::getConnection()->getTablePrefix();
-
             Schema::dropIfExists('countries_backup');
             Schema::dropIfExists('states_backup');
             Schema::dropIfExists('cities_backup');
 
-            DB::statement('CREATE TABLE ' . $tablePrefix . 'countries_backup AS SELECT * FROM ' . $tablePrefix . 'countries');
-            DB::statement('CREATE TABLE ' . $tablePrefix . 'states_backup AS SELECT * FROM ' . $tablePrefix . 'states');
-            DB::statement('CREATE TABLE ' . $tablePrefix . 'cities_backup AS SELECT * FROM ' . $tablePrefix . 'cities');
+            DB::statement('CREATE TABLE IF NOT EXISTS countries_backup LIKE countries');
+            DB::statement('TRUNCATE TABLE countries_backup');
+            DB::statement('INSERT countries_backup SELECT * FROM countries');
 
-            $cities = LanguageMeta::query()->where('reference_type', State::class)
+            DB::statement('CREATE TABLE IF NOT EXISTS states_backup LIKE states');
+            DB::statement('TRUNCATE TABLE states_backup');
+            DB::statement('INSERT states_backup SELECT * FROM states');
+
+            DB::statement('CREATE TABLE IF NOT EXISTS cities_backup LIKE cities');
+            DB::statement('TRUNCATE TABLE cities_backup');
+            DB::statement('INSERT cities_backup SELECT * FROM cities');
+
+            $cities = LanguageMeta::where('reference_type', State::class)
                 ->where('lang_meta_code', '!=', Language::getDefaultLocaleCode())
                 ->get();
 
             foreach ($cities as $item) {
-                $originalItem = City::query()->find($item->reference_id);
+                $originalItem = City::find($item->reference_id);
 
                 if (! $originalItem) {
                     continue;
                 }
 
-                $originalId = LanguageMeta::query()->where('lang_meta_origin', $item->lang_meta_origin)
+                $originalId = LanguageMeta::where('lang_meta_origin', $item->lang_meta_origin)
                     ->where('lang_meta_code', Language::getDefaultLocaleCode())
                     ->where('reference_id', '!=', $originalItem->id)
                     ->value('reference_id');
@@ -56,18 +62,18 @@ return new class () extends Migration {
                 DB::table('cities')->where('id', $originalItem->id)->delete();
             }
 
-            $states = LanguageMeta::query()->where('reference_type', State::class)
+            $states = LanguageMeta::where('reference_type', State::class)
                 ->where('lang_meta_code', '!=', Language::getDefaultLocaleCode())
                 ->get();
 
             foreach ($states as $item) {
-                $originalItem = State::query()->find($item->reference_id);
+                $originalItem = State::find($item->reference_id);
 
                 if (! $originalItem) {
                     continue;
                 }
 
-                $originalId = LanguageMeta::query()->where('lang_meta_origin', $item->lang_meta_origin)
+                $originalId = LanguageMeta::where('lang_meta_origin', $item->lang_meta_origin)
                     ->where('lang_meta_code', Language::getDefaultLocaleCode())
                     ->where('reference_id', '!=', $originalItem->id)
                     ->value('reference_id');
@@ -83,23 +89,23 @@ return new class () extends Migration {
                     'abbreviation' => $originalItem->abbreviation,
                 ]);
 
-                City::query()->where('state_id', $originalItem->id)->update(['state_id' => $originalId]);
+                City::where('state_id', $originalItem->id)->update(['state_id' => $originalId]);
 
                 DB::table('states')->where('id', $originalItem->id)->delete();
             }
 
-            $countries = LanguageMeta::query()->where('reference_type', Country::class)
+            $countries = LanguageMeta::where('reference_type', Country::class)
                 ->where('lang_meta_code', '!=', Language::getDefaultLocaleCode())
                 ->get();
 
             foreach ($countries as $item) {
-                $originalItem = Country::query()->find($item->reference_id);
+                $originalItem = Country::find($item->reference_id);
 
                 if (! $originalItem) {
                     continue;
                 }
 
-                $originalId = LanguageMeta::query()->where('lang_meta_origin', $item->lang_meta_origin)
+                $originalId = LanguageMeta::where('lang_meta_origin', $item->lang_meta_origin)
                     ->where('lang_meta_code', Language::getDefaultLocaleCode())
                     ->where('reference_id', '!=', $originalItem->id)
                     ->value('reference_id');
@@ -115,32 +121,32 @@ return new class () extends Migration {
                     'nationality' => $originalItem->nationality,
                 ]);
 
-                City::query()->where('country_id', $originalItem->id)->update(['country_id' => $originalId]);
-                State::query()->where('country_id', $originalItem->id)->update(['country_id' => $originalId]);
+                City::where('country_id', $originalItem->id)->update(['country_id' => $originalId]);
+                State::where('country_id', $originalItem->id)->update(['country_id' => $originalId]);
 
                 DB::table('countries')->where('id', $originalItem->id)->delete();
             }
 
-            DB::statement('CREATE TABLE ' . $tablePrefix . 'language_meta_backup AS SELECT * FROM ' . $tablePrefix . 'language_meta');
+            DB::statement('CREATE TABLE IF NOT EXISTS language_meta_backup LIKE language_meta');
+            DB::statement('TRUNCATE TABLE language_meta_backup');
 
             DB::table('language_meta_backup')->insert(
-                LanguageMeta::query()->where('reference_type', State::class)->get()->toArray()
+                LanguageMeta::where('reference_type', State::class)->get()->toArray()
             );
             DB::table('language_meta_backup')->insert(
-                LanguageMeta::query()->where('reference_type', City::class)->get()->toArray()
+                LanguageMeta::where('reference_type', City::class)->get()->toArray()
             );
             DB::table('language_meta_backup')->insert(
-                LanguageMeta::query()->where('reference_type', Country::class)->get()->toArray()
+                LanguageMeta::where('reference_type', Country::class)->get()->toArray()
             );
 
-            LanguageMeta::query()->where('reference_type', State::class)->delete();
-            LanguageMeta::query()->where('reference_type', City::class)->delete();
-            LanguageMeta::query()->where('reference_type', Country::class)->delete();
+            LanguageMeta::where('reference_type', State::class)->delete();
+            LanguageMeta::where('reference_type', City::class)->delete();
+            LanguageMeta::where('reference_type', Country::class)->delete();
 
             Schema::dropIfExists('countries_backup');
             Schema::dropIfExists('states_backup');
             Schema::dropIfExists('cities_backup');
-            Schema::dropIfExists('language_meta_backup');
         }
     }
 };

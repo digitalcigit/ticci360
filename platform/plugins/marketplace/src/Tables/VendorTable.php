@@ -3,7 +3,6 @@
 namespace Botble\Marketplace\Tables;
 
 use Botble\Ecommerce\Tables\CustomerTable;
-use Botble\Table\Columns\Column;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -12,7 +11,7 @@ class VendorTable extends CustomerTable
 {
     public function query(): Relation|Builder|QueryBuilder
     {
-        $query = $this->getModel()->query()
+        $query = $this->repository->getModel()
             ->select([
                 'id',
                 'name',
@@ -22,22 +21,8 @@ class VendorTable extends CustomerTable
                 'status',
                 'confirmed_at',
             ])
-            ->where('is_vendor', true)
-            ->with(['store']);
+            ->where('is_vendor', true);
 
         return $this->applyScopes($query);
-    }
-
-    public function columns(): array
-    {
-        $columns = parent::columns();
-
-        $columns[] = Column::make('store_name')
-            ->title(trans('plugins/marketplace::marketplace.store_name'))
-            ->alignStart()
-            ->orderable(false)
-            ->searchable(false);
-
-        return $columns;
     }
 }

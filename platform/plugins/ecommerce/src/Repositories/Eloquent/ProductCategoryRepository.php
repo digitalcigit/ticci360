@@ -2,6 +2,7 @@
 
 namespace Botble\Ecommerce\Repositories\Eloquent;
 
+use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Ecommerce\Repositories\Interfaces\ProductCategoryInterface;
 use Botble\Support\Repositories\Eloquent\RepositoriesAbstract;
 
@@ -20,7 +21,7 @@ class ProductCategoryRepository extends RepositoriesAbstract implements ProductC
         $data = $this->model;
 
         if ($param['active']) {
-            $data = $data->wherePublished();
+            $data = $data->where('status', BaseStatusEnum::PUBLISHED);
         }
 
         if ($param['is_child'] !== null) {
@@ -47,8 +48,8 @@ class ProductCategoryRepository extends RepositoriesAbstract implements ProductC
     public function getDataSiteMap()
     {
         $data = $this->model
-            ->wherePublished()
-            ->orderByDesc('created_at');
+            ->where('status', BaseStatusEnum::PUBLISHED)
+            ->orderBy('created_at', 'desc');
 
         return $this->applyBeforeExecuteQuery($data)->get();
     }
@@ -56,8 +57,10 @@ class ProductCategoryRepository extends RepositoriesAbstract implements ProductC
     public function getFeaturedCategories($limit)
     {
         $data = $this->model
-            ->where('is_featured', true)
-            ->wherePublished()
+            ->where([
+                'status' => BaseStatusEnum::PUBLISHED,
+                'is_featured' => 1,
+            ])
             ->select([
                 'id',
                 'name',
@@ -70,11 +73,11 @@ class ProductCategoryRepository extends RepositoriesAbstract implements ProductC
         return $this->applyBeforeExecuteQuery($data)->get();
     }
 
-    public function getAllCategories(bool $active = true)
+    public function getAllCategories($active = true)
     {
         $data = $this->model;
         if ($active) {
-            $data = $data->wherePublished();
+            $data = $data->where(['status' => BaseStatusEnum::PUBLISHED]);
         }
 
         return $this->applyBeforeExecuteQuery($data)->get();
@@ -84,8 +87,7 @@ class ProductCategoryRepository extends RepositoriesAbstract implements ProductC
         array $conditions = [],
         array $with = [],
         array $withCount = [],
-        bool $parentOnly = false,
-        array $select = [],
+        bool $parentOnly = false
     ) {
         $data = $this->model;
 
@@ -102,7 +104,7 @@ class ProductCategoryRepository extends RepositoriesAbstract implements ProductC
         }
 
         if ($parentOnly) {
-            $data = $data->where(function ($query): void {
+            $data = $data->where(function ($query) {
                 $query
                     ->whereNull('parent_id')
                     ->orWhere('parent_id', 0);
@@ -110,11 +112,8 @@ class ProductCategoryRepository extends RepositoriesAbstract implements ProductC
         }
 
         $data = $data
-            ->orderBy('order')->latest();
-
-        if ($select) {
-            $data = $data->select($select);
-        }
+            ->orderBy('order', 'ASC')
+            ->orderBy('created_at', 'DESC');
 
         return $this->applyBeforeExecuteQuery($data)->get();
     }

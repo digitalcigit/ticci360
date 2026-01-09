@@ -1,28 +1,10 @@
 <!doctype html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
-
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta
-        name="viewport"
-        content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0"
-    >
-    <meta
-        http-equiv="X-UA-Compatible"
-        content="ie=edge"
-    >
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>{{ trans('core/setting::setting.preview') }}</title>
-
-    @if (setting('admin_favicon') || config('core.base.general.favicon'))
-        <link
-            href="{{ $favicon = setting('admin_favicon') ? RvMedia::getImageUrl(setting('admin_favicon')) : url(config('core.base.general.favicon')) }}"
-            rel="icon shortcut"
-        >
-        <meta
-            property="og:image"
-            content="{{ $favicon }}"
-        >
-    @endif
 
     <style>
         body {
@@ -49,6 +31,7 @@
         }
 
         .form-label {
+
             font-size: 15px;
             padding-bottom: 10px;
         }
@@ -111,47 +94,25 @@
         }
     </style>
 </head>
-
 <body>
     <div class="container">
         <div class="iframe">
-            <iframe
-                src="{{ $iframeUrl . ($inputData ? '?' . http_build_query($inputData) : '') }}"
-                frameborder="0"
-                width="100%"
-                height="100%"
-            ></iframe>
+            <iframe src="{{ $iframeUrl . ($inputData ? '?' . http_build_query($inputData) : '') }}" frameborder="0" width="100%" height="100%"></iframe>
         </div>
         <div>
             <h3>{{ trans('core/setting::setting.enter_sample_value') }}</h3>
             <form method="POST">
                 @csrf
-                @foreach ($variables as $key => $variable)
+                @foreach($variables as $key => $variable)
                     <div class="form-group">
-                        <label
-                            class="form-label"
-                            for="txt-{{ $key }}"
-                        >{{ trans($variable) }}</label>
-                        <input
-                            class="form-control"
-                            id="txt-{{ $key }}"
-                            name="{{ $key }}"
-                            type="text"
-                            value="{{ Arr::get($inputData, $key) }}"
-                        >
+                        <label class="form-label" for="txt-{{ $key }}">{{ trans($variable) }}</label>
+                        <input type="text" class="form-control" id="txt-{{ $key }}" name="{{ $key }}" value="{{ Arr::get($inputData, $key) }}">
                     </div>
                 @endforeach
-                <button
-                    class="btn btn-primary"
-                    type="submit"
-                >{{ trans('core/setting::setting.submit') }}</button>
-                <a
-                    class="btn btn-secondary"
-                    href="{{ $backUrl }}"
-                >{{ trans('core/setting::setting.back') }}</a>
+                <button type="submit" class="btn btn-primary">{{ trans('core/setting::setting.submit') }}</button>
+                <a class="btn btn-secondary" href="{{ $backUrl }}">{{ trans('core/setting::setting.back') }}</a>
             </form>
         </div>
     </div>
 </body>
-
 </html>

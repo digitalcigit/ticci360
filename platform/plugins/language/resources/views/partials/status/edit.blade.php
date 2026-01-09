@@ -1,11 +1,5 @@
-@if (!is_in_admin() || (Auth::guard()->check() && Auth::guard()->user()->hasPermission($route['edit'])))
-    <a
-        data-bs-toggle="tooltip"
-        data-bs-original-title="{{ trans('plugins/language::language.edit_related') }}"
-        href="{{ Route::has($route['edit']) ? route($route['edit'], $relatedLanguage) : '#' }}"
-    >
-        <x-core::icon name="ti ti-edit" />
-    </a>
+@if (!is_in_admin() || (Auth::check() && Auth::user()->hasPermission($route['edit'])))
+    <a href="{{ Route::has($route['edit']) ? route($route['edit'], $relatedLanguage) : '#' }}" data-bs-toggle="tooltip" data-bs-original-title="{{ trans('plugins/language::language.edit_related') }}"><i class="fa fa-edit"></i></a>
 @else
-    <x-core::icon name="ti ti-check" class="text-success" />
+    <i class="fa fa-check text-success"></i>
 @endif

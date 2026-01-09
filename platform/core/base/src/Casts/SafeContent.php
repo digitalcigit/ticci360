@@ -14,10 +14,6 @@ class SafeContent implements CastsAttributes
 
     public function get($model, string $key, $value, array $attributes)
     {
-        if (! $value) {
-            return $value;
-        }
-
         return html_entity_decode(BaseHelper::clean($value));
     }
 }

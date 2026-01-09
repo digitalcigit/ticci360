@@ -7,12 +7,10 @@ use Illuminate\Support\Facades\Schema;
 return new class () extends Migration {
     public function up(): void
     {
-        if (Schema::hasColumn('mp_customer_revenues', 'fee')) {
-            return;
+        if (Schema::hasTable('mp_customer_revenues')) {
+            Schema::table('mp_customer_revenues', function (Blueprint $table) {
+                $table->decimal('fee', 15)->default(0)->nullable()->change();
+            });
         }
-
-        Schema::table('mp_customer_revenues', function (Blueprint $table): void {
-            $table->decimal('fee', 15)->default(0)->nullable()->change();
-        });
     }
 };

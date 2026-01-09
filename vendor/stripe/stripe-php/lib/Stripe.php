@@ -22,8 +22,8 @@ class Stripe
     /** @var string The base URL for the Stripe API uploads endpoint. */
     public static $apiUploadBase = 'https://files.stripe.com';
 
-    /** @var string The version of the Stripe API to use for requests. */
-    public static $apiVersion = Util\ApiVersion::CURRENT;
+    /** @var null|string The version of the Stripe API to use for requests. */
+    public static $apiVersion = null;
 
     /** @var null|string The account ID for connected accounts requests. */
     public static $accountId = null;
@@ -43,18 +43,12 @@ class Stripe
      */
     public static $logger = null;
 
-    // this is set higher (to `2`) in all other SDKs, but PHP gets a special exception
-    // because PHP scripts are run as short one-offs rather than long-lived servers.
-    // We didn't want to risk messing up integrations by setting a higher default
-    // since that would have worse side effects than other more long-running languages.
     /** @var int Maximum number of request retries */
     public static $maxNetworkRetries = 0;
 
     /** @var bool Whether client telemetry is enabled. Defaults to true. */
     public static $enableTelemetry = true;
 
-    // this is 5s in other languages
-    // see note on `maxNetworkRetries` for more info
     /** @var float Maximum delay between retries, in seconds */
     private static $maxNetworkRetryDelay = 2.0;
 
@@ -64,7 +58,7 @@ class Stripe
     /** @var float Initial delay between retries, in seconds */
     private static $initialNetworkRetryDelay = 0.5;
 
-    const VERSION = '17.2.0';
+    const VERSION = '10.14.0';
 
     /**
      * @return string the API key used for requests
@@ -125,7 +119,8 @@ class Stripe
     }
 
     /**
-     * @return string the API version used for requests
+     * @return string The API version used for requests. null if we're using the
+     *    latest version.
      */
     public static function getApiVersion()
     {
@@ -230,9 +225,7 @@ class Stripe
     }
 
     /**
-     * > NOTE: this value is only read during client creation, so creating a client and _then_ calling this method won't affect your client's behavior.
-     *
-     * @param int $maxNetworkRetries maximum number of request retries
+     * @param int $maxNetworkRetries Maximum number of request retries
      */
     public static function setMaxNetworkRetries($maxNetworkRetries)
     {

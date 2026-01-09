@@ -11,8 +11,6 @@ use Illuminate\Contracts\View\Factory as ViewFactory;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
-use Symfony\Component\HttpFoundation\HeaderUtils;
 
 /**
  * A Laravel wrapper for Dompdf
@@ -20,31 +18,7 @@ use Symfony\Component\HttpFoundation\HeaderUtils;
  * @package laravel-dompdf
  * @author Barry vd. Heuvel
  *
- * @method PDF setBaseHost(string $baseHost)
- * @method PDF setBasePath(string $basePath)
- * @method PDF setCanvas(\Dompdf\Canvas $canvas)
- * @method PDF setCallbacks(array<string, mixed> $callbacks)
- * @method PDF setCss(\Dompdf\Css\Stylesheet $css)
- * @method PDF setDefaultView(string $defaultView, array<string, mixed> $options)
- * @method PDF setDom(\DOMDocument $dom)
- * @method PDF setFontMetrics(\Dompdf\FontMetrics $fontMetrics)
- * @method PDF setHttpContext(resource|array<string, mixed> $httpContext)
- * @method PDF setPaper(string|float[] $paper, string $orientation = 'portrait')
- * @method PDF setProtocol(string $protocol)
- * @method PDF setTree(\Dompdf\Frame\FrameTree $tree)
- * @method string getBaseHost()
- * @method string getBasePath()
- * @method \Dompdf\Canvas getCanvas()
- * @method array<string, mixed> getCallbacks()
- * @method \Dompdf\Css\Stylesheet getCss()
- * @method \DOMDocument getDom()
- * @method \Dompdf\FontMetrics getFontMetrics()
- * @method resource getHttpContext()
- * @method Options getOptions()
- * @method \Dompdf\Frame\FrameTree getTree()
- * @method string getPaperOrientation()
- * @method float[] getPaperSize()
- * @method string getProtocol()
+ * @mixin \Dompdf\Dompdf
  */
 class PDF
 {
@@ -69,6 +43,12 @@ class PDF
     /** @var string */
     protected $public_path;
 
+    /**
+     * @param Dompdf $dompdf
+     * @param \Illuminate\Contracts\Config\Repository $config
+     * @param \Illuminate\Filesystem\Filesystem $files
+     * @param \Illuminate\Contracts\View\Factory $view
+     */
     public function __construct(Dompdf $dompdf, ConfigRepository $config, Filesystem $files, ViewFactory $view)
     {
         $this->dompdf = $dompdf;
@@ -81,6 +61,8 @@ class PDF
 
     /**
      * Get the DomPDF instance
+     *
+     * @return Dompdf
      */
     public function getDomPDF(): Dompdf
     {
@@ -122,6 +104,7 @@ class PDF
     /**
      * Add metadata info
      * @param array<string, string> $info
+     * @return static
      */
     public function addInfo(array $info): self
     {
@@ -148,6 +131,7 @@ class PDF
      *
      * @param array<string, mixed>|string $attribute
      * @param null|mixed $value
+     * @return $this
      */
     public function setOption($attribute, $value = null): self
     {
@@ -158,15 +142,13 @@ class PDF
     /**
      * Replace all the Options from DomPDF
      *
+     * @deprecated Use setOption to override individual options.
      * @param array<string, mixed> $options
      */
-    public function setOptions(array $options, bool $mergeWithDefaults = false): self
+    public function setOptions(array $options): self
     {
-        if ($mergeWithDefaults) {
-            $options = array_merge(app()->make('dompdf.options'), $options);
-        }
-
-        $this->dompdf->setOptions(new Options($options));
+        $options = new Options($options);
+        $this->dompdf->setOptions($options);
         return $this;
     }
 
@@ -193,7 +175,7 @@ class PDF
     /**
      * Save the PDF to a file
      */
-    public function save(string $filename, ?string $disk = null): self
+    public function save(string $filename, string $disk = null): self
     {
         $disk = $disk ?: $this->config->get('dompdf.disk');
 
@@ -212,11 +194,9 @@ class PDF
     public function download(string $filename = 'document.pdf'): Response
     {
         $output = $this->output();
-        $fallback = $this->fallbackName($filename);
-
         return new Response($output, 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => HeaderUtils::makeDisposition('attachment', $filename, $fallback),
+            'Content-Disposition' =>  'attachment; filename="' . $filename . '"',
             'Content-Length' => strlen($output),
         ]);
     }
@@ -227,12 +207,9 @@ class PDF
     public function stream(string $filename = 'document.pdf'): Response
     {
         $output = $this->output();
-        $fallback = $this->fallbackName($filename);
-
-
         return new Response($output, 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => HeaderUtils::makeDisposition('inline', $filename, $fallback),
+            'Content-Disposition' =>  'inline; filename="' . $filename . '"',
         ]);
     }
 
@@ -307,13 +284,5 @@ class PDF
         }
 
         throw new \UnexpectedValueException("Method [{$method}] does not exist on PDF instance.");
-    }
-
-    /**
-     * Make a safe fallback filename
-     */
-    protected function fallbackName(string $filename): string
-    {
-        return str_replace('%', '', Str::ascii($filename));
     }
 }

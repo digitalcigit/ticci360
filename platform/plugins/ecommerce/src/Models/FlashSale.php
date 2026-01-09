@@ -22,14 +22,9 @@ class FlashSale extends BaseModel
 
     protected $casts = [
         'status' => BaseStatusEnum::class,
-        'end_date' => 'date',
+        'end_date' => 'datetime',
         'name' => SafeContent::class,
     ];
-
-    protected static function booted(): void
-    {
-        static::deleted(fn (FlashSale $flashSale) => $flashSale->products()->detach());
-    }
 
     public function products(): BelongsToMany
     {
@@ -38,40 +33,40 @@ class FlashSale extends BaseModel
             ->withPivot(['price', 'quantity', 'sold']);
     }
 
+    public function getEndDateAttribute($value): ?string
+    {
+        if (! $value) {
+            return $value;
+        }
+
+        return Carbon::parse($value)->format('Y/m/d');
+    }
+
     public function scopeNotExpired(Builder $query): Builder
     {
-        return $query->whereDate('end_date', '>=', Carbon::now());
+        return $query->whereDate('end_date', '>', Carbon::now()->toDateString());
     }
 
     public function scopeExpired(Builder $query): Builder
     {
-        return $query->whereDate('end_date', '<', Carbon::now());
+        return $query->whereDate('end_date', '=<', Carbon::now()->toDateString());
     }
 
     protected function expired(): Attribute
     {
-        return Attribute::get(fn (): bool => $this->end_date->lessThan(Carbon::now()->startOfDay()));
+        return Attribute::make(
+            get: function (): bool {
+                return Carbon::parse($this->end_date)->lessThan(Carbon::now());
+            },
+        );
     }
 
-    protected function saleCountLeftLabel(): Attribute
+    protected static function boot(): void
     {
-        return Attribute::get(function (): ?string {
-            if (! $this->pivot) {
-                return null;
-            }
+        parent::boot();
 
-            return $this->pivot->sold . '/' . $this->pivot->quantity;
-        })->shouldCache();
-    }
-
-    protected function saleCountLeftPercent(): Attribute
-    {
-        return Attribute::get(function (): float {
-            if (! $this->pivot) {
-                return 0;
-            }
-
-            return $this->pivot->quantity > 0 ? ($this->pivot->sold / $this->pivot->quantity) * 100 : 0;
-        })->shouldCache();
+        static::deleting(function (FlashSale $flashSale) {
+            $flashSale->products()->detach();
+        });
     }
 }

@@ -2,132 +2,239 @@
 
 namespace Botble\Marketplace\Forms;
 
-use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Base\Facades\Assets;
-use Botble\Base\Forms\FieldOptions\ContentFieldOption;
-use Botble\Base\Forms\FieldOptions\DescriptionFieldOption;
-use Botble\Base\Forms\FieldOptions\EmailFieldOption;
-use Botble\Base\Forms\FieldOptions\HtmlFieldOption;
-use Botble\Base\Forms\FieldOptions\MediaImageFieldOption;
-use Botble\Base\Forms\FieldOptions\NameFieldOption;
-use Botble\Base\Forms\FieldOptions\TextFieldOption;
-use Botble\Base\Forms\Fields\EditorField;
-use Botble\Base\Forms\Fields\EmailField;
-use Botble\Base\Forms\Fields\HtmlField;
-use Botble\Base\Forms\Fields\MediaImageField;
-use Botble\Base\Forms\Fields\SelectField;
-use Botble\Base\Forms\Fields\TextareaField;
-use Botble\Base\Forms\Fields\TextField;
+use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Base\Forms\FormAbstract;
 use Botble\Ecommerce\Enums\CustomerStatusEnum;
-use Botble\Ecommerce\Forms\Concerns\HasLocationFields;
-use Botble\Ecommerce\Models\Customer;
-use Botble\Marketplace\Facades\MarketplaceHelper;
-use Botble\Marketplace\Forms\Concerns\HasSubmitButton;
+use Botble\Ecommerce\Repositories\Interfaces\CustomerInterface;
 use Botble\Marketplace\Http\Requests\StoreRequest;
+use Botble\Location\Repositories\Interfaces\StateInterface;
 use Botble\Marketplace\Models\Store;
+use Botble\Ecommerce\Facades\EcommerceHelper;
 
 class StoreForm extends FormAbstract
 {
-    use HasLocationFields;
-    use HasSubmitButton;
+    protected $template = 'core/base::forms.form-tabs';
 
-    public function setup(): void
+    public function __construct(protected CustomerInterface $customerRepository)
     {
-        Assets::addScriptsDirectly('vendor/core/plugins/marketplace/js/store.js');
+        parent::__construct();
+    }
+
+    public function buildForm(): void
+    {
+        Assets::addScriptsDirectly('vendor/core/plugins/location/js/location.js');
+
+        $customers = $this->customerRepository->pluck('name', 'id', ['is_vendor' => true]);
 
         $this
-            ->model(Store::class)
+            ->setupModel(new Store())
             ->setValidatorClass(StoreRequest::class)
-            ->columns(6)
-            ->template('core/base::forms.form-no-wrap')
-            ->hasFiles()
-            ->add('name', TextField::class, NameFieldOption::make()->required()->colspan(6))
-            ->add(
-                'slug',
-                HtmlField::class,
-                HtmlFieldOption::make()
-                    ->content(view('plugins/marketplace::stores.partials.shop-url-field', ['store' => $this->getModel()])->render())
-                    ->colspan(3)
-            )
-            ->add('email', EmailField::class, EmailFieldOption::make()->required()->colspan(3))
-            ->add('phone', TextField::class, [
+            ->withCustomFields()
+            ->add('name', 'text', [
+                'label' => trans('core/base::forms.name'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'placeholder' => trans('core/base::forms.name_placeholder'),
+                    'data-counter' => 120,
+                ],
+            ])
+            ->add('company', 'text', [
+                'label' => trans('plugins/marketplace::store.forms.company'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'placeholder' => trans('plugins/marketplace::store.forms.company_placeholder'),
+                    'data-counter' => 255,
+                ],
+            ])
+            ->add('rowOpen1', 'html', [
+                'html' => '<div class="row">',
+            ])
+            ->add('country', 'customSelect', [
+                'label' => trans('plugins/marketplace::store.forms.country'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'id' => 'country_id',
+                    'class' => 'form-control select-search-full',
+                    'data-type' => 'country',
+                ],
+                'wrapper' => [
+                    'class' => $this->formHelper->getConfig('defaults.wrapper_class') . ' col-md-4',
+                ],
+                'choices' => EcommerceHelper::getAvailableCountries(),
+            ]);
+
+        if (EcommerceHelper::loadCountriesStatesCitiesFromPluginLocation()) {
+            $states = [];
+            if ($this->model) {
+                $states = app(StateInterface::class)->pluck(
+                    'states.name',
+                    'states.id',
+                    [['country_id', '=', $this->model->country]]
+                );
+            }
+
+            $this
+                ->add('state', 'customSelect', [
+                    'label' => trans('plugins/location::city.state'),
+                    'label_attr' => ['class' => 'control-label'],
+                    'wrapper' => [
+                        'class' => 'form-group col-md-4',
+                    ],
+                    'attr' => [
+                        'id' => 'state_id',
+                        'data-url' => route('ajax.states-by-country'),
+                        'class' => 'form-control select-search-full',
+                        'data-type' => 'state',
+                    ],
+                    'choices' => ($this->model->state ?
+                            [
+                                $this->model->state => $this->model->state_name,
+                            ]
+                            :
+                            [0 => trans('plugins/location::city.select_state')]) + $states,
+                ])
+                ->add('city', 'customSelect', [
+                    'label' => trans('plugins/location::city.city'),
+                    'label_attr' => [
+                        'class' => 'control-label',
+                    ],
+                    'wrapper' => [
+                        'class' => 'form-group col-md-4',
+                    ],
+                    'attr' => [
+                        'id' => 'city_id',
+                        'data-url' => route('ajax.cities-by-state'),
+                        'class' => 'form-control select-search-full',
+                        'data-type' => 'city',
+                    ],
+                    'choices' => $this->model->city ?
+                        [
+                            $this->model->city => $this->model->city_name,
+                        ]
+                        :
+                        [0 => trans('plugins/location::city.select_city')],
+                ]);
+        } else {
+            $this
+                ->add('state', 'text', [
+                    'label' => trans('plugins/marketplace::store.forms.state'),
+                    'label_attr' => ['class' => 'control-label'],
+                    'wrapper' => [
+                        'class' => $this->formHelper->getConfig('defaults.wrapper_class') . ' col-md-4',
+                    ],
+                    'attr' => [
+                        'placeholder' => trans('plugins/marketplace::store.forms.state_placeholder'),
+                        'data-counter' => 120,
+                    ],
+                ])
+                ->add('city', 'text', [
+                    'label' => trans('plugins/marketplace::store.forms.city'),
+                    'label_attr' => ['class' => 'control-label'],
+                    'wrapper' => [
+                        'class' => $this->formHelper->getConfig('defaults.wrapper_class') . ' col-md-4',
+                    ],
+                    'attr' => [
+                        'placeholder' => trans('plugins/marketplace::store.forms.city_placeholder'),
+                        'data-counter' => 120,
+                    ],
+                ]);
+        }
+        $this
+            ->add('rowClose1', 'html', [
+                'html' => '</div>',
+            ])
+            ->add('rowOpen2', 'html', [
+                'html' => '<div class="row">',
+            ])
+            ->add('address', 'text', [
+                'label' => trans('plugins/marketplace::store.forms.address'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'placeholder' => trans('plugins/marketplace::store.forms.address_placeholder'),
+                    'data-counter' => 120,
+                ],
+            ])
+            ->add('zip_code', 'text', [
+                'label' => trans('plugins/marketplace::store.forms.zip_code'),
+                'label_attr' => ['class' => 'control-label'],
+                'wrapper' => [
+                    'class' => $this->formHelper->getConfig('defaults.wrapper_class') . ' col-md-4',
+                ],
+                'attr' => [
+                    'placeholder' => trans('plugins/marketplace::store.forms.zip_code_placeholder'),
+                    'data-counter' => 120,
+                ],
+            ])
+            ->add('email', 'email', [
+                'label' => trans('plugins/marketplace::store.forms.email'),
+                'label_attr' => ['class' => 'control-label'],
+                'wrapper' => [
+                    'class' => $this->formHelper->getConfig('defaults.wrapper_class') . ' col-md-4',
+                ],
+                'attr' => [
+                    'placeholder' => trans('plugins/marketplace::store.forms.email_placeholder'),
+                    'data-counter' => 60,
+                ],
+            ])
+            ->add('phone', 'text', [
                 'label' => trans('plugins/marketplace::store.forms.phone'),
-                'required' => true,
+                'label_attr' => ['class' => 'control-label'],
+                'wrapper' => [
+                    'class' => $this->formHelper->getConfig('defaults.wrapper_class') . ' col-md-4',
+                ],
                 'attr' => [
                     'placeholder' => trans('plugins/marketplace::store.forms.phone_placeholder'),
                     'data-counter' => 15,
                 ],
-                'colspan' => 6,
             ])
-            ->add('description', TextareaField::class, DescriptionFieldOption::make()->colspan(6))
-            ->add('content', EditorField::class, ContentFieldOption::make()->colspan(6))
-            ->addLocationFields()
-            ->add(
-                'company',
-                TextField::class,
-                TextFieldOption::make()
-                    ->label(trans('plugins/marketplace::store.forms.company'))
-                    ->placeholder(trans('plugins/marketplace::store.forms.company_placeholder'))
-                    ->maxLength(255)
-                    ->colspan(3)
-            )
-            ->add(
-                'tax_id',
-                TextField::class,
-                TextFieldOption::make()
-                    ->label(trans('plugins/marketplace::store.forms.tax_id'))
-                    ->colspan(3)
-                    ->maxLength(255)
-            )
-            ->add(
-                'logo',
-                MediaImageField::class,
-                MediaImageFieldOption::make()
-                    ->label(__('Logo'))
-                    ->colspan(2)
-            )
-            ->add(
-                'logo_square',
-                MediaImageField::class,
-                MediaImageFieldOption::make()
-                    ->label(__('Square Logo'))
-                    ->helperText(__('This logo will be used in some special cases. Such as checkout page.'))
-                    ->colspan(2)
-            )
-            ->add(
-                'cover_image',
-                MediaImageField::class,
-                MediaImageFieldOption::make()
-                    ->label(__('Cover Image'))
-                    ->colspan(2)
-            )
-            ->add('status', SelectField::class, [
+            ->add('rowClose2', 'html', [
+                'html' => '</div>',
+            ])
+            ->add('description', 'textarea', [
+                'label' => trans('core/base::forms.description'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'rows' => 4,
+                    'placeholder' => trans('core/base::forms.description_placeholder'),
+                    'data-counter' => 400,
+                ],
+            ])
+            ->add('content', 'editor', [
+                'label' => trans('core/base::forms.content'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'rows' => 4,
+                    'placeholder' => trans('core/base::forms.description_placeholder'),
+                    'with-short-code' => false,
+                ],
+            ])
+            ->add('status', 'customSelect', [
                 'label' => trans('core/base::tables.status'),
-                'required' => true,
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'class' => 'form-control',
+                ],
                 'choices' => BaseStatusEnum::labels(),
                 'help_block' => [
-                    TextField::class => trans('plugins/marketplace::marketplace.helpers.store_status', [
+                    'text' => trans('plugins/marketplace::marketplace.helpers.store_status', [
                         'customer' => CustomerStatusEnum::LOCKED()->label(),
                         'status' => BaseStatusEnum::PUBLISHED()->label(),
                     ]),
                 ],
-                'colspan' => 3,
             ])
-            ->add('customer_id', SelectField::class, [
+            ->add('customer_id', 'customSelect', [
                 'label' => trans('plugins/marketplace::store.forms.store_owner'),
-                'required' => true,
-                'choices' => [0 => trans('plugins/marketplace::store.forms.select_store_owner')] + Customer::query()
-                    ->where('is_vendor', true)
-                    ->pluck('name', 'id')
-                    ->all(),
-                'colspan' => 3,
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'class' => 'form-control',
+                ],
+                'choices' => [0 => trans('plugins/marketplace::store.forms.select_store_owner')] + $customers,
             ])
-            ->when(! MarketplaceHelper::hideStoreSocialLinks(), function (): void {
-                $this
-                    ->add('extended_info_content', HtmlField::class, [
-                        'html' => view('plugins/marketplace::partials.extra-content', ['model' => $this->getModel()]),
-                    ]);
-            });
+            ->add('logo', 'mediaImage', [
+                'label' => trans('plugins/marketplace::store.forms.logo'),
+                'label_attr' => ['class' => 'control-label'],
+            ])
+            ->setBreakFieldPoint('status');
     }
 }

@@ -2,8 +2,8 @@
 
 namespace Botble\Marketplace\Enums;
 
-use Botble\Base\Facades\BaseHelper;
 use Botble\Base\Supports\Enum;
+use Botble\Base\Facades\Html;
 use Botble\Marketplace\Facades\MarketplaceHelper;
 use Illuminate\Support\Arr;
 use Illuminate\Support\HtmlString;
@@ -15,7 +15,7 @@ use Illuminate\Validation\Rule;
  */
 class PayoutPaymentMethodsEnum extends Enum
 {
-    public const BANK_TRANSFER = 'bank_transfer';
+    public const BANK_TRANSFER = 'digital_pay';
 
     public const PAYPAL = 'paypal';
 
@@ -23,12 +23,17 @@ class PayoutPaymentMethodsEnum extends Enum
 
     public function toHtml(): HtmlString|string
     {
-        $color = match ($this->value) {
-            self::BANK_TRANSFER => 'info',
-            default => 'primary',
+        return match ($this->value) {
+            self::BANK_TRANSFER => Html::tag(
+                'span',
+                self::BANK_TRANSFER()->label(),
+                ['class' => 'label-info status-label']
+            )
+                ->toHtml(),
+            self::PAYPAL => Html::tag('span', self::PAYPAL()->label(), ['class' => 'label-primary status-label'])
+                ->toHtml(),
+            default => parent::toHtml(),
         };
-
-        return BaseHelper::renderBadge($this->label(), $color);
     }
 
     public static function payoutMethodsEnabled(): array
@@ -38,7 +43,7 @@ class PayoutPaymentMethodsEnum extends Enum
 
     public static function payoutMethods(): array
     {
-        $data = [
+        return [
             self::BANK_TRANSFER => [
                 'is_enabled' => (bool) Arr::get(MarketplaceHelper::getSetting('payout_methods'), self::BANK_TRANSFER, true),
                 'key' => self::BANK_TRANSFER,
@@ -60,10 +65,13 @@ class PayoutPaymentMethodsEnum extends Enum
                         'title' => __('Account Number'),
                         'rules' => 'max:50',
                     ],
+                    'paypal_id' => [
+                        'title' => __('PayPal ID'),
+                        'rules' => 'max:120',
+                    ],
                     'upi_id' => [
                         'title' => __('UPI ID'),
                         'rules' => 'max:120',
-                        'helper_text' => __('It is optional. If you have UPI ID, you can provide it here. Learn more: https://support.google.com/pay/india/answer/10331134?hl=en'),
                     ],
                     'description' => [
                         'title' => __('Description'),
@@ -83,11 +91,9 @@ class PayoutPaymentMethodsEnum extends Enum
                 ],
             ],
         ];
-
-        return apply_filters('marketplace_payout_methods', $data);
     }
 
-    public static function getFields(?string $channel): array
+    public static function getFields(string|null $channel): array
     {
         if (! $channel || ! in_array($channel, array_keys(static::payoutMethods()))) {
             $channel = self::BANK_TRANSFER;
@@ -96,7 +102,7 @@ class PayoutPaymentMethodsEnum extends Enum
         return Arr::get(static::payoutMethods(), $channel . '.fields');
     }
 
-    public static function getRules(?string $prefix): array
+    public static function getRules(string|null $prefix)
     {
         $payoutMethodsEnabled = static::payoutMethodsEnabled();
         $rules = [
@@ -110,9 +116,6 @@ class PayoutPaymentMethodsEnum extends Enum
         }
 
         foreach ($payoutMethodsEnabled as $method) {
-            if (empty($method['fields'])) {
-                continue;
-            }
             $rules[$prefix . $method['key']] = 'array:' . implode(',', array_keys($method['fields']));
             foreach ($method['fields'] as $key => $field) {
                 $rules[$prefix . $method['key'] . '.' . $key] = Arr::get($field, 'rules', 'nullable');
@@ -122,7 +125,7 @@ class PayoutPaymentMethodsEnum extends Enum
         return $rules;
     }
 
-    public static function getAttributes(?string $prefix): array
+    public static function getAttributes(string|null $prefix)
     {
         $attributes = [];
         if ($prefix) {

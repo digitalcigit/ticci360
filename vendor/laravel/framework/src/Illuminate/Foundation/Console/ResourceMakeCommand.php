@@ -17,6 +17,17 @@ class ResourceMakeCommand extends GeneratorCommand
     protected $name = 'make:resource';
 
     /**
+     * The name of the console command.
+     *
+     * This name is used to identify the command during lazy loading.
+     *
+     * @var string|null
+     *
+     * @deprecated
+     */
+    protected static $defaultName = 'make:resource';
+
+    /**
      * The console command description.
      *
      * @var string
@@ -52,8 +63,8 @@ class ResourceMakeCommand extends GeneratorCommand
     protected function getStub()
     {
         return $this->collection()
-            ? $this->resolveStubPath('/stubs/resource-collection.stub')
-            : $this->resolveStubPath('/stubs/resource.stub');
+                    ? $this->resolveStubPath('/stubs/resource-collection.stub')
+                    : $this->resolveStubPath('/stubs/resource.stub');
     }
 
     /**
@@ -76,8 +87,8 @@ class ResourceMakeCommand extends GeneratorCommand
     protected function resolveStubPath($stub)
     {
         return file_exists($customPath = $this->laravel->basePath(trim($stub, '/')))
-            ? $customPath
-            : __DIR__.$stub;
+                        ? $customPath
+                        : __DIR__.$stub;
     }
 
     /**

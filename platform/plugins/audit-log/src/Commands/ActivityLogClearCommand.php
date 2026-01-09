@@ -2,28 +2,21 @@
 
 namespace Botble\AuditLog\Commands;
 
-use Botble\AuditLog\Models\AuditHistory;
+use Botble\AuditLog\Repositories\Interfaces\AuditLogInterface;
 use Illuminate\Console\Command;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 #[AsCommand('cms:activity-logs:clear', 'Clear all activity logs')]
 class ActivityLogClearCommand extends Command
 {
-    public function handle(): int
+    public function handle(AuditLogInterface $auditLogRepository): int
     {
         $this->components->info('Processing...');
 
-        $count = AuditHistory::query()->count();
+        $count = $auditLogRepository->count();
+        $auditLogRepository->getModel()->truncate();
 
-        if ($count === 0) {
-            $this->components->info('No record found!');
-
-            return self::SUCCESS;
-        }
-
-        AuditHistory::query()->truncate();
-
-        $this->components->info(sprintf('Done. Deleted %s records!', number_format($count)));
+        $this->components->info('Done. Deleted ' . $count . ' records!');
 
         return self::SUCCESS;
     }

@@ -23,13 +23,13 @@ return [
          * With Model: App\Post
          * Export filename: posts_timestamp
          */
-        'model' => 'App\\Models',
+        'model' => '',
     ],
 
     /*
      * Set Custom stub folder
      */
-    // 'stub' => '/resources/custom_stub',
+    //'stub' => '/resources/custom_stub',
 
     /*
      * PDF generator to be used when converting the table to pdf.

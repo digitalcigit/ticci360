@@ -2,20 +2,20 @@
 
 namespace Botble\Ecommerce\Http\Controllers\Customers;
 
+use App\Http\Controllers\Controller;
 use Botble\ACL\Traits\AuthenticatesUsers;
 use Botble\ACL\Traits\LogoutGuardTrait;
-use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Http\Controllers\BaseController;
 use Botble\Ecommerce\Enums\CustomerStatusEnum;
 use Botble\Ecommerce\Facades\EcommerceHelper;
-use Botble\Ecommerce\Forms\Fronts\Auth\LoginForm;
 use Botble\Ecommerce\Http\Requests\LoginRequest;
+use Botble\JsValidation\Facades\JsValidator;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 use Botble\SeoHelper\Facades\SeoHelper;
 use Botble\Theme\Facades\Theme;
-use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 
-class LoginController extends BaseController
+class LoginController extends Controller
 {
     use AuthenticatesUsers, LogoutGuardTrait {
         AuthenticatesUsers::attemptLogin as baseAttemptLogin;
@@ -32,17 +32,24 @@ class LoginController extends BaseController
     {
         SeoHelper::setTitle(__('Login'));
 
-        Theme::breadcrumb()->add(__('Login'), route('customer.login'));
+        Theme::breadcrumb()->add(__('Home'), route('public.index'))->add(__('Login'), route('customer.login'));
 
-        if (! in_array(url()->previous(), [route('customer.login'), route('customer.register')])) {
+        if (! session()->has('url.intended') &&
+            ! in_array(url()->previous(), [route('customer.login'), route('customer.register')])
+        ) {
             session(['url.intended' => url()->previous()]);
         }
 
-        return Theme::scope(
-            'ecommerce.customers.login',
-            ['form' => LoginForm::create()],
-            'plugins/ecommerce::themes.customers.login'
-        )->render();
+        Theme::asset()
+            ->container('footer')
+            ->usePath(false)
+            ->add('js-validation', 'vendor/core/core/js-validation/js/js-validation.js', ['jquery']);
+
+        add_filter(THEME_FRONT_FOOTER, function ($html) {
+            return $html . JsValidator::formRequest(LoginRequest::class)->render();
+        });
+
+        return Theme::scope('ecommerce.customers.login', [], 'plugins/ecommerce::themes.customers.login')->render();
     }
 
     protected function guard()
@@ -50,8 +57,15 @@ class LoginController extends BaseController
         return auth('customer');
     }
 
-    public function login(LoginRequest $request)
+    protected function validator(array $data)
     {
+        return Validator::make($data, (new LoginRequest())->rules());
+    }
+
+    public function login(Request $request)
+    {
+        $this->validateLogin($request);
+
         // If the class is using the ThrottlesLogins trait, we can automatically throttle
         // the login attempts for this application. We'll key this by the username and
         // the IP address of the client making these requests into this application.
@@ -79,10 +93,10 @@ class LoginController extends BaseController
 
         $this->loggedOut($request);
 
-        return redirect()->to(BaseHelper::getHomepageUrl());
+        return redirect()->to(route('public.index'));
     }
 
-    protected function attemptLogin(LoginRequest $request)
+    protected function attemptLogin(Request $request)
     {
         if ($this->guard()->validate($this->credentials($request))) {
             $customer = $this->guard()->getLastAttempted();
@@ -112,19 +126,5 @@ class LoginController extends BaseController
         }
 
         return false;
-    }
-
-    public function credentials(LoginRequest $request): array
-    {
-        $usernameKey = match (EcommerceHelper::getLoginOption()) {
-            'phone' => 'phone',
-            'email_or_phone' => $request->isEmail($request->input($this->username())) ? 'email' : 'phone',
-            default => 'email',
-        };
-
-        return [
-            $usernameKey => $request->input($this->username()),
-            'password' => $request->input('password'),
-        ];
     }
 }

@@ -12,7 +12,7 @@ class PayPalPaymentService extends PayPalPaymentAbstract
 {
     public function makePayment(array $data)
     {
-        $amount = round((float) $data['amount'], $this->isSupportedDecimals() ? 2 : 0);
+        $amount = round((float)$data['amount'], $this->isSupportedDecimals() ? 2 : 0);
 
         $currency = $data['currency'];
         $currency = strtoupper($currency);
@@ -35,7 +35,7 @@ class PayPalPaymentService extends PayPalPaymentAbstract
         return $this
             ->setReturnUrl($data['callback_url'] . '?' . http_build_query($queryParams))
             ->setCurrency($currency)
-            ->setCustomer(Arr::get($data, 'address.email') ?: '')
+            ->setCustomer(Arr::get($data, 'address.email'))
             ->setItem([
                 'name' => $description,
                 'quantity' => 1,
@@ -46,13 +46,13 @@ class PayPalPaymentService extends PayPalPaymentAbstract
             ->createPayment($description);
     }
 
-    public function afterMakePayment(array $data): ?string
+    public function afterMakePayment(array $data): string|null
     {
         $status = PaymentStatusEnum::COMPLETED;
 
         $chargeId = session('paypal_payment_id');
 
-        $orderIds = (array) Arr::get($data, 'order_id', []);
+        $orderIds = (array)Arr::get($data, 'order_id', []);
 
         do_action(PAYMENT_ACTION_PAYMENT_PROCESSED, [
             'amount' => $data['amount'],

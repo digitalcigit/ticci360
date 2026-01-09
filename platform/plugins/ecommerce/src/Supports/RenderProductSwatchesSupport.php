@@ -2,12 +2,10 @@
 
 namespace Botble\Ecommerce\Supports;
 
-use Botble\Ecommerce\Facades\EcommerceHelper as EcommerceHelperFacade;
 use Botble\Ecommerce\Models\Product;
-use Botble\Ecommerce\Models\ProductVariation;
-use Botble\Ecommerce\Models\ProductVariationItem;
 use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
-use Illuminate\Support\Arr;
+use Botble\Ecommerce\Repositories\Interfaces\ProductVariationItemInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ProductVariationInterface;
 
 class RenderProductSwatchesSupport
 {
@@ -28,50 +26,31 @@ class RenderProductSwatchesSupport
     {
         $params = array_merge([
             'selected' => [],
-            'view' => EcommerceHelperFacade::viewPath('attributes.swatches-renderer'),
+            'view' => 'plugins/ecommerce::themes.attributes.swatches-renderer',
         ], $params);
 
         $product = $this->product;
 
-        $attributeSets = $product->productAttributeSets()->orderBy('order')->latest()->get();
+        $attributeSets = $product->productAttributeSets()->orderBy('order')->get();
 
         $attributes = $this->productRepository->getRelatedProductAttributes($this->product)->sortBy('order');
 
-        $productVariations = ProductVariation::query()
-            ->where('configurable_product_id', $product->getKey())
-            ->with(['productAttributes', 'product'])
-            ->get();
+        $productVariations = app(ProductVariationInterface::class)->allBy([
+            'configurable_product_id' => $product->id,
+        ], ['product', 'productAttributes']);
 
-        $productVariationsInfo = ProductVariationItem::getVariationsInfo($productVariations->pluck('id')->all());
-
-        if ($productVariationsInfo->isNotEmpty()) {
-            $productVariationsInfo = $productVariationsInfo
-                ->reject(function (ProductVariationItem $productVariation) use ($productVariations) {
-                    $variationItem = $productVariations->where('id', $productVariation->variation_id)->first();
-
-                    if (! $variationItem) {
-                        return false;
-                    }
-
-                    return $variationItem->product->isOutOfStock();
-                });
-        }
+        $productVariationsInfo = app(ProductVariationItemInterface::class)
+            ->getVariationsInfo($productVariations->pluck('id')->toArray());
 
         $selected = $params['selected'];
 
-        return view(
-            $params['view'],
-            [
-                ...compact(
-                    'attributeSets',
-                    'attributes',
-                    'product',
-                    'selected',
-                    'productVariationsInfo',
-                    'productVariations'
-                ),
-                ...Arr::except($params, ['view', 'selected']),
-            ]
-        )->render();
+        return view($params['view'], compact(
+            'attributeSets',
+            'attributes',
+            'product',
+            'selected',
+            'productVariationsInfo',
+            'productVariations'
+        ))->render();
     }
 }

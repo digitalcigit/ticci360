@@ -2,13 +2,12 @@
 
 namespace Botble\Ecommerce;
 
-use Botble\Dashboard\Models\DashboardWidget;
+use Botble\Dashboard\Repositories\Interfaces\DashboardWidgetInterface;
 use Botble\Ecommerce\Models\Brand;
 use Botble\Ecommerce\Models\ProductCategory;
-use Botble\Menu\Models\MenuNode;
+use Botble\Menu\Repositories\Interfaces\MenuNodeInterface;
 use Botble\PluginManagement\Abstracts\PluginOperationAbstract;
 use Botble\Setting\Facades\Setting;
-use Botble\Widget\Models\Widget;
 use Illuminate\Support\Facades\Schema;
 
 class Plugin extends PluginOperationAbstract
@@ -46,7 +45,6 @@ class Plugin extends PluginOperationAbstract
         Schema::dropIfExists('ec_product_attribute_sets');
         Schema::dropIfExists('ec_taxes');
         Schema::dropIfExists('ec_reviews');
-        Schema::dropIfExists('ec_review_replies');
         Schema::dropIfExists('ec_shipping');
         Schema::dropIfExists('ec_orders');
         Schema::dropIfExists('ec_order_product');
@@ -71,9 +69,14 @@ class Plugin extends PluginOperationAbstract
         Schema::dropIfExists('ec_discount_products');
         Schema::dropIfExists('ec_discount_customers');
         Schema::dropIfExists('ec_discount_product_collections');
-        Schema::dropIfExists('ec_discount_product_categories');
         Schema::dropIfExists('ec_flash_sales');
         Schema::dropIfExists('ec_flash_sale_products');
+
+        app(DashboardWidgetInterface::class)->deleteBy(['name' => 'widget_ecommerce_report_general']);
+
+        app(MenuNodeInterface::class)->deleteBy(['reference_type' => Brand::class]);
+        app(MenuNodeInterface::class)->deleteBy(['reference_type' => ProductCategory::class]);
+
         Schema::dropIfExists('ec_products_translations');
         Schema::dropIfExists('ec_product_categories_translations');
         Schema::dropIfExists('ec_product_attributes_translations');
@@ -97,26 +100,5 @@ class Plugin extends PluginOperationAbstract
         Schema::dropIfExists('ec_tax_products');
         Schema::dropIfExists('ec_product_views');
         Schema::dropIfExists('ec_customer_used_coupons');
-        Schema::dropIfExists('ec_order_tax_information');
-        Schema::dropIfExists('ec_customer_recently_viewed_products');
-        Schema::dropIfExists('ec_flash_sales_translations');
-        Schema::dropIfExists('ec_taxes_translations');
-        Schema::dropIfExists('ec_product_categorizables');
-        Schema::dropIfExists('ec_product_files');
-        Schema::dropIfExists('ec_tax_rules');
-        Schema::dropIfExists('ec_product_specification_attribute');
-        Schema::dropIfExists('ec_specification_table_group');
-        Schema::dropIfExists('ec_specification_tables');
-        Schema::dropIfExists('ec_specification_attributes');
-        Schema::dropIfExists('ec_specification_attributes_translations');
-        Schema::dropIfExists('ec_specification_groups');
-        Schema::dropIfExists('ec_order_return_histories');
-        Schema::dropIfExists('ec_shared_wishlists');
-
-        Widget::query()->where('name', 'widget_ecommerce_report_general')
-            ->each(fn (DashboardWidget $dashboardWidget) => $dashboardWidget->delete());
-
-        MenuNode::query()->whereIn('reference_type', [Brand::class, ProductCategory::class])
-            ->each(fn (MenuNode $menuNode) => $menuNode->delete());
     }
 }

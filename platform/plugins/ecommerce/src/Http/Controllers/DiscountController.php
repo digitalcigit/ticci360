@@ -2,32 +2,32 @@
 
 namespace Botble\Ecommerce\Http\Controllers;
 
-use Botble\Base\Events\CreatedContentEvent;
-use Botble\Base\Events\UpdatedContentEvent;
 use Botble\Base\Facades\Assets;
-use Botble\Base\Http\Actions\DeleteResourceAction;
-use Botble\Base\Supports\Breadcrumb;
+use Botble\Base\Events\CreatedContentEvent;
+use Botble\Base\Events\DeletedContentEvent;
+use Botble\Base\Facades\PageTitle;
+use Botble\Base\Http\Controllers\BaseController;
+use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Ecommerce\Http\Requests\DiscountRequest;
 use Botble\Ecommerce\Models\Discount;
-use Botble\Ecommerce\Models\Product;
+use Botble\Ecommerce\Repositories\Interfaces\DiscountInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
 use Botble\Ecommerce\Tables\DiscountTable;
-use Botble\JsValidation\Facades\JsValidator;
-use Botble\Media\Facades\RvMedia;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Carbon\Carbon;
+use Exception;
+use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
 class DiscountController extends BaseController
 {
-    protected function breadcrumb(): Breadcrumb
+    public function __construct(protected DiscountInterface $discountRepository)
     {
-        return parent::breadcrumb()
-            ->add(trans('plugins/ecommerce::discount.name'), route('discounts.index'));
     }
 
     public function index(DiscountTable $dataTable)
     {
-        $this->pageTitle(trans('plugins/ecommerce::discount.name'));
+        PageTitle::setTitle(trans('plugins/ecommerce::discount.name'));
 
         Assets::addStylesDirectly(['vendor/core/plugins/ecommerce/css/ecommerce.css']);
 
@@ -36,40 +36,63 @@ class DiscountController extends BaseController
 
     public function create()
     {
-        $this->pageTitle(trans('plugins/ecommerce::discount.create'));
+        PageTitle::setTitle(trans('plugins/ecommerce::discount.create'));
 
-        Assets::usingVueJS()
-            ->addStylesDirectly('vendor/core/plugins/ecommerce/css/ecommerce.css')
-            ->addScriptsDirectly('vendor/core/plugins/ecommerce/js/discount.js')
-            ->addScripts(['timepicker', 'input-mask', 'form-validation'])
-            ->addStyles('timepicker');
+        Assets::addStylesDirectly(['vendor/core/plugins/ecommerce/css/ecommerce.css'])
+            ->addScriptsDirectly([
+                'vendor/core/plugins/ecommerce/js/discount.js',
+            ])
+            ->addScripts(['timepicker', 'input-mask', 'blockui'])
+            ->addStyles(['timepicker']);
 
-        $jsValidation = JsValidator::formRequest(DiscountRequest::class);
+        Assets::usingVueJS();
 
-        return view('plugins/ecommerce::discounts.create', compact('jsValidation'));
+        return view('plugins/ecommerce::discounts.create');
     }
 
-    public function store(DiscountRequest $request)
+    public function store(DiscountRequest $request, BaseHttpResponse $response)
     {
+        if (! $request->has('can_use_with_promotion')) {
+            $request->merge(['can_use_with_promotion' => 0]);
+        }
+
+        if ($request->input('is_unlimited')) {
+            $request->merge(['quantity' => null]);
+        }
+
+        $request->merge([
+            'start_date' => Carbon::parse($request->input('start_date') . ' ' . $request->input('start_time'))
+                ->toDateTimeString(),
+        ]);
+
+        if ($request->has('end_date') && ! $request->has('unlimited_time')) {
+            $request->merge([
+                'end_date' => Carbon::parse($request->input('end_date') . ' ' . $request->input('end_time'))
+                    ->toDateTimeString(),
+            ]);
+        } else {
+            $request->merge([
+                'end_date' => null,
+            ]);
+        }
+
         /**
          * @var Discount $discount
          */
-        $discount = Discount::query()->create($request->validated());
+        $discount = $this->discountRepository->createOrUpdate($request->input());
 
         if ($discount) {
-            if ($productCollections = $request->input('product_collections')) {
+            $productCollections = $request->input('product_collections');
+            if ($productCollections) {
                 if (! is_array($productCollections)) {
                     $productCollections = [$productCollections];
                     $discount->productCollections()->attach($productCollections);
                 }
             }
 
-            if (($productCategories = $request->input('product_categories')) && ! is_array($productCategories)) {
-                $productCategories = [$productCategories];
-                $discount->productCategories()->attach($productCategories);
-            }
+            $products = $request->input('products');
 
-            if ($products = $request->input('products')) {
+            if ($products) {
                 if (is_string($products) && Str::contains($products, ',')) {
                     $products = explode(',', $products);
                 }
@@ -79,10 +102,7 @@ class DiscountController extends BaseController
                 }
 
                 foreach ($products as $productId) {
-                    /**
-                     * @var Product $product
-                     */
-                    $product = Product::query()->find($productId);
+                    $product = app(ProductInterface::class)->findById($productId);
 
                     if (! $product || $product->is_variation) {
                         Arr::forget($products, $productId);
@@ -94,7 +114,8 @@ class DiscountController extends BaseController
                 $discount->products()->attach(array_unique($products));
             }
 
-            if ($variants = $request->input('variants')) {
+            $variants = $request->input('variants');
+            if ($variants) {
                 if (is_string($variants) && Str::contains($variants, ',')) {
                     $variants = explode(',', $variants);
                 }
@@ -104,10 +125,10 @@ class DiscountController extends BaseController
                 }
 
                 foreach ($variants as $variantId) {
-                    $product = Product::query()->find($variantId);
+                    $product = app(ProductInterface::class)->findById($variantId);
 
                     if (! $product || ! $product->is_variation || ! $product->original_product->id) {
-                        Arr::forget($products, $product->getKey());
+                        Arr::forget($products, $product->id);
                     }
 
                     $variants = array_merge($variants, [$product->original_product->id]);
@@ -116,7 +137,8 @@ class DiscountController extends BaseController
                 $discount->products()->attach(array_unique($variants));
             }
 
-            if ($customers = $request->input('customers')) {
+            $customers = $request->input('customers');
+            if ($customers) {
                 if (is_string($customers) && Str::contains($customers, ',')) {
                     $customers = explode(',', $customers);
                 }
@@ -131,151 +153,50 @@ class DiscountController extends BaseController
 
         event(new CreatedContentEvent(DISCOUNT_MODULE_SCREEN_NAME, $request, $discount));
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setNextUrl(route('discounts.index'))
-            ->withCreatedSuccessMessage();
+            ->setMessage(trans('core/base::notices.create_success_message'));
     }
 
-    public function edit(Discount $discount)
+    public function destroy(int|string $id, Request $request, BaseHttpResponse $response)
     {
-        $discount->load([
-            'customers',
-            'productCollections',
-            'productCategories',
-            'products' => fn (BelongsToMany $query) => $query->where('is_variation', false),
-            'productVariants.variationInfo.variationItems.attribute',
-        ]);
+        try {
+            $discount = $this->discountRepository->findOrFail($id);
+            $this->discountRepository->delete($discount);
+            event(new DeletedContentEvent(DISCOUNT_MODULE_SCREEN_NAME, $request, $discount));
 
-        foreach ($discount->productVariants as $productVariant) {
-            $productVariant->image_url = RvMedia::getImageUrl($productVariant->image, 'thumb', false, RvMedia::getDefaultImage());
-            $productVariant->price = $productVariant->variationInfo->product->front_sale_price;
-            foreach ($productVariant->variationInfo->variationItems as $variationItem) {
-                $variationItem->attribute_title = $variationItem->attribute->title;
-            }
-
-            $productVariant->variationItems = $productVariant->variationInfo->variationItems;
+            return $response->setMessage(trans('core/base::notices.delete_success_message'));
+        } catch (Exception $exception) {
+            return $response
+                ->setError()
+                ->setMessage($exception->getMessage());
         }
-
-        $discount->products->each(function ($product): void {
-            $product->image_url = RvMedia::getImageUrl($product->image, 'thumb', false, RvMedia::getDefaultImage());
-        });
-
-        $discount->customers->each(function ($customer): void {
-            $customer->avatar_url = RvMedia::getImageUrl($customer->avatar, 'thumb', false, RvMedia::getDefaultImage());
-        });
-
-        $this->pageTitle(trans('plugins/ecommerce::discount.edit'));
-
-        Assets::usingVueJS()
-            ->addStylesDirectly('vendor/core/plugins/ecommerce/css/ecommerce.css')
-            ->addScriptsDirectly('vendor/core/plugins/ecommerce/js/discount.js')
-            ->addScripts(['timepicker', 'input-mask', 'form-validation'])
-            ->addStyles('timepicker');
-
-        return view('plugins/ecommerce::discounts.edit', compact('discount'));
     }
 
-    public function update(Discount $discount, DiscountRequest $request)
+    public function deletes(Request $request, BaseHttpResponse $response)
     {
-        $discount->update($request->validated());
-
-        if ($productCollections = $request->input('product_collections')) {
-            if (! is_array($productCollections)) {
-                $productCollections = [$productCollections];
-                $discount->productCollections()->sync($productCollections);
-            }
+        $ids = $request->input('ids');
+        if (empty($ids)) {
+            return $response
+                ->setError()
+                ->setMessage(trans('core/base::notices.no_select'));
         }
 
-        if (($productCategories = $request->input('product_categories')) && ! is_array($productCategories)) {
-            $productCategories = [$productCategories];
-            $discount->productCategories()->sync($productCategories);
+        foreach ($ids as $id) {
+            $discount = $this->discountRepository->findOrFail($id);
+            $this->discountRepository->delete($discount);
+            event(new DeletedContentEvent(DISCOUNT_MODULE_SCREEN_NAME, $request, $discount));
         }
 
-        if ($products = $request->input('products')) {
-            if (is_string($products) && Str::contains($products, ',')) {
-                $products = explode(',', $products);
-            }
-
-            if (! is_array($products)) {
-                $products = [$products];
-            }
-
-            foreach ($products as $productId) {
-                /**
-                 * @var Product $product
-                 */
-                $product = Product::query()->find($productId);
-
-                if (! $product || $product->is_variation) {
-                    Arr::forget($products, $productId);
-                }
-
-                $products = array_merge($products, $product->variations()->pluck('product_id')->all());
-            }
-
-            $discount->products()->sync(array_unique($products));
-        } else {
-            $discount->products()->detach();
-        }
-
-        if ($variants = $request->input('variants')) {
-            if (is_string($variants) && Str::contains($variants, ',')) {
-                $variants = explode(',', $variants);
-            }
-
-            if (! is_array($variants)) {
-                $variants = [$variants];
-            }
-
-            foreach ($variants as $variantId) {
-                $product = Product::query()->find($variantId);
-
-                if (! $product || ! $product->is_variation || ! $product->original_product->id) {
-                    Arr::forget($products, $product->id);
-                }
-
-                $variants = array_merge($variants, [$product->original_product->id]);
-            }
-
-            $discount->products()->sync(array_unique($variants));
-        }
-
-        if ($customers = $request->input('customers')) {
-            if (is_string($customers) && Str::contains($customers, ',')) {
-                $customers = explode(',', $customers);
-            }
-
-            if (! is_array($customers)) {
-                $customers = [$customers];
-            }
-
-            $discount->customers()->sync(array_unique($customers));
-        } else {
-            $discount->customers()->detach();
-        }
-
-        event(new UpdatedContentEvent(DISCOUNT_MODULE_SCREEN_NAME, $request, $discount));
-
-        return $this
-            ->httpResponse()
-            ->setNextUrl(route('discounts.edit', $discount))
-            ->withUpdatedSuccessMessage();
+        return $response->setMessage(trans('core/base::notices.delete_success_message'));
     }
 
-    public function destroy(Discount $discount)
-    {
-        return DeleteResourceAction::make($discount);
-    }
-
-    public function postGenerateCoupon()
+    public function postGenerateCoupon(BaseHttpResponse $response)
     {
         do {
             $code = strtoupper(Str::random(12));
-        } while (Discount::query()->where(['code' => $code])->exists());
+        } while ($this->discountRepository->count(['code' => $code]) > 0);
 
-        return $this
-            ->httpResponse()
-            ->setData($code);
+        return $response->setData($code);
     }
 }

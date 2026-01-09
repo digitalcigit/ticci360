@@ -2,54 +2,132 @@
 
 namespace Botble\Newsletter\Tables;
 
+use Botble\Base\Facades\BaseHelper;
+use Botble\Newsletter\Enums\NewsletterStatusEnum;
 use Botble\Newsletter\Models\Newsletter;
+use Botble\Newsletter\Repositories\Interfaces\NewsletterInterface;
 use Botble\Table\Abstracts\TableAbstract;
-use Botble\Table\Actions\DeleteAction;
-use Botble\Table\BulkActions\DeleteBulkAction;
-use Botble\Table\BulkChanges\CreatedAtBulkChange;
-use Botble\Table\BulkChanges\EmailBulkChange;
-use Botble\Table\BulkChanges\NameBulkChange;
-use Botble\Table\BulkChanges\StatusBulkChange;
-use Botble\Table\Columns\CreatedAtColumn;
-use Botble\Table\Columns\EmailColumn;
-use Botble\Table\Columns\IdColumn;
-use Botble\Table\Columns\NameColumn;
-use Botble\Table\Columns\StatusColumn;
+use Illuminate\Contracts\Routing\UrlGenerator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
+use Botble\Table\DataTables;
 
 class NewsletterTable extends TableAbstract
 {
-    public function setup(): void
+    protected $hasActions = true;
+
+    protected $hasFilter = true;
+
+    public function __construct(
+        DataTables $table,
+        UrlGenerator $urlGenerator,
+        NewsletterInterface $newsletterRepository
+    ) {
+        parent::__construct($table, $urlGenerator);
+
+        $this->repository = $newsletterRepository;
+
+        if (! Auth::user()->hasPermission('newsletter.destroy')) {
+            $this->hasOperations = false;
+            $this->hasActions = false;
+        }
+    }
+
+    public function ajax(): JsonResponse
     {
-        $this
-            ->model(Newsletter::class)
-            ->addColumns([
-                IdColumn::make(),
-                EmailColumn::make()->linkable(),
-                NameColumn::make(),
-                CreatedAtColumn::make(),
-                StatusColumn::make(),
-            ])
-            ->addActions([
-                DeleteAction::make()->route('newsletter.destroy'),
-            ])
-            ->addBulkAction(DeleteBulkAction::make()->permission('newsletter.destroy'))
-            ->addBulkChanges([
-                NameBulkChange::make(),
-                EmailBulkChange::make(),
-                StatusBulkChange::make(),
-                CreatedAtBulkChange::make(),
-            ])
-            ->queryUsing(function (Builder $query) {
-                return $query
-                    ->select([
-                        'id',
-                        'email',
-                        'name',
-                        'created_at',
-                        'status',
-                    ]);
+        $data = $this->table
+            ->eloquent($this->query())
+            ->editColumn('checkbox', function (Newsletter $item) {
+                return $this->getCheckbox($item->id);
+            })
+            ->editColumn('name', function (Newsletter $item) {
+                return BaseHelper::clean(trim($item->name)) ?: '&mdash;';
+            })
+            ->editColumn('created_at', function (Newsletter $item) {
+                return BaseHelper::formatDate($item->created_at);
+            })
+            ->editColumn('status', function (Newsletter $item) {
+                return $item->status->toHtml();
+            })
+            ->addColumn('operations', function (Newsletter $item) {
+                return $this->getOperations(null, 'newsletter.destroy', $item);
             });
+
+        return $this->toJson($data);
+    }
+
+    public function query(): Relation|Builder|QueryBuilder
+    {
+        $query = $this->repository->getModel()->select([
+            'id',
+            'email',
+            'name',
+            'created_at',
+            'status',
+        ]);
+
+        return $this->applyScopes($query);
+    }
+
+    public function columns(): array
+    {
+        return [
+            'id' => [
+                'title' => trans('core/base::tables.id'),
+                'width' => '20px',
+            ],
+            'email' => [
+                'title' => trans('core/base::tables.email'),
+                'class' => 'text-start',
+            ],
+            'name' => [
+                'title' => trans('core/base::tables.name'),
+                'class' => 'text-start',
+            ],
+            'created_at' => [
+                'title' => trans('core/base::tables.created_at'),
+                'width' => '100px',
+            ],
+            'status' => [
+                'title' => trans('core/base::tables.status'),
+                'width' => '100px',
+            ],
+        ];
+    }
+
+    public function bulkActions(): array
+    {
+        return $this->addDeleteAction(route('newsletter.deletes'), 'newsletter.destroy', parent::bulkActions());
+    }
+
+    public function getBulkChanges(): array
+    {
+        return [
+            'name' => [
+                'title' => trans('core/base::tables.name'),
+                'type' => 'text',
+                'validate' => 'required|max:120',
+            ],
+            'email' => [
+                'title' => trans('core/base::tables.email'),
+                'type' => 'text',
+                'validate' => 'required|max:120|email',
+            ],
+            'status' => [
+                'title' => trans('core/base::tables.status'),
+                'type' => 'customSelect',
+                'choices' => NewsletterStatusEnum::labels(),
+                'validate' => 'required|' . Rule::in(NewsletterStatusEnum::values()),
+            ],
+            'created_at' => [
+                'title' => trans('core/base::tables.created_at'),
+                'type' => 'datePicker',
+            ],
+        ];
     }
 
     public function getDefaultButtons(): array

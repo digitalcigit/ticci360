@@ -2,10 +2,9 @@
 
 namespace Botble\Marketplace\Widgets;
 
-use Botble\Base\Facades\BaseHelper;
 use Botble\Base\Widgets\Html;
 use Botble\Marketplace\Enums\RevenueTypeEnum;
-use Botble\Marketplace\Models\Revenue;
+use Botble\Marketplace\Repositories\Interfaces\RevenueInterface;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
@@ -19,14 +18,15 @@ class SaleCommissionHtml extends Html
             'endDate' => $this->endDate,
         ]);
 
-        $revenues = Revenue::query()
+        $revenues = app(RevenueInterface::class)
+            ->getModel()
             ->selectRaw('DATE(created_at) AS date, SUM(COALESCE(fee, 0)) as total_fee, SUM(COALESCE(amount, 0)) as total_amount')
             ->whereDate('created_at', '>=', $this->startDate)
             ->whereDate('created_at', '<=', $this->endDate)
-            ->where(function (Builder $query): void {
+            ->where(function (Builder $query) {
                 $query
                     ->whereNull('type')
-                    ->orWhere('type', RevenueTypeEnum::ADD_AMOUNT);
+                    ->orWhere('type', RevenueTypeEnum::ORDER_RETURN);
             })
             ->groupBy('date')
             ->get();
@@ -36,7 +36,6 @@ class SaleCommissionHtml extends Html
 
         $colors = ['#80bc00', '#E91E63'];
 
-        // @phpstan-ignore-next-line
         $count['revenues'] = collect([
             [
                 'label' => trans('plugins/marketplace::marketplace.reports.total_fee'),
@@ -50,7 +49,9 @@ class SaleCommissionHtml extends Html
             ],
         ]);
 
+        $series = [];
         $dates = [];
+        $earningSales = collect();
         $period = CarbonPeriod::create($this->startDate->startOfDay(), $this->endDate->endOfDay());
 
         $symbol = get_application_currency()->symbol;
@@ -66,16 +67,16 @@ class SaleCommissionHtml extends Html
 
         foreach ($period as $date) {
             $fee = $revenues
-                ->where('date', $date->toDateString())
+                ->where('date', $date->format('Y-m-d'))
                 ->sum('total_fee');
 
             $amount = $revenues
-                ->where('date', $date->toDateString())
+                ->where('date', $date->format('Y-m-d'))
                 ->sum('total_amount');
 
             $feeData['data'][] = (float) $fee;
             $amountData['data'][] = (float) $amount;
-            $dates[] = BaseHelper::formatDate($date);
+            $dates[] = $date->format('Y-m-d');
         }
 
         $series = [

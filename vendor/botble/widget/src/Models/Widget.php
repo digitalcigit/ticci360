@@ -3,9 +3,9 @@
 namespace Botble\Widget\Models;
 
 use Botble\Base\Models\BaseModel;
-use Botble\Language\Facades\Language;
 use Botble\Theme\Facades\Theme;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Support\Facades\App;
 
 class Widget extends BaseModel
 {
@@ -25,7 +25,9 @@ class Widget extends BaseModel
 
     protected function position(): Attribute
     {
-        return Attribute::get(fn ($value) => $value >= 0 && $value < 127 ? $value : (int) substr($value, -1));
+        return Attribute::make(
+            set: fn ($value) => $value >= 0 && $value < 127 ? $value : (int)substr($value, -1)
+        );
     }
 
     public static function getThemeName(
@@ -37,18 +39,10 @@ class Widget extends BaseModel
             $theme = Theme::getThemeName();
         }
 
-        if (! is_plugin_active('language')) {
-            return $theme;
-        }
-
-        if ($refLang = Language::getRefLang()) {
-            $locale = $refLang;
-        }
-
         if (! $defaultLocale) {
-            $defaultLocale = Language::getDefaultLocale();
+            $defaultLocale = App::getLocale();
         }
 
-        return (! $locale || $locale == $defaultLocale) ? $theme : ($theme . '-' . ltrim($locale, '-'));
+        return $locale == $defaultLocale ? $theme : ($theme . '-' . ltrim($locale, '-'));
     }
 }

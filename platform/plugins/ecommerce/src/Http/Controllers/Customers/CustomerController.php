@@ -2,195 +2,210 @@
 
 namespace Botble\Ecommerce\Http\Controllers\Customers;
 
-use Botble\Base\Events\CreatedContentEvent;
-use Botble\Base\Events\UpdatedContentEvent;
 use Botble\Base\Facades\Assets;
-use Botble\Base\Http\Actions\DeleteResourceAction;
-use Botble\Base\Supports\Breadcrumb;
-use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Base\Events\CreatedContentEvent;
+use Botble\Base\Events\DeletedContentEvent;
+use Botble\Base\Events\UpdatedContentEvent;
+use Botble\Base\Facades\PageTitle;
+use Botble\Base\Forms\FormBuilder;
+use Botble\Base\Http\Controllers\BaseController;
+use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Ecommerce\Forms\CustomerForm;
-use Botble\Ecommerce\Http\Controllers\BaseController;
 use Botble\Ecommerce\Http\Requests\AddCustomerWhenCreateOrderRequest;
 use Botble\Ecommerce\Http\Requests\CustomerCreateRequest;
 use Botble\Ecommerce\Http\Requests\CustomerEditRequest;
 use Botble\Ecommerce\Http\Requests\CustomerUpdateEmailRequest;
 use Botble\Ecommerce\Http\Resources\CustomerAddressResource;
-use Botble\Ecommerce\Models\Address;
-use Botble\Ecommerce\Models\Customer;
-use Botble\Ecommerce\Tables\CustomerReviewTable;
+use Botble\Ecommerce\Repositories\Interfaces\AddressInterface;
+use Botble\Ecommerce\Repositories\Interfaces\CustomerInterface;
 use Botble\Ecommerce\Tables\CustomerTable;
 use Carbon\Carbon;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 class CustomerController extends BaseController
 {
-    protected function breadcrumb(): Breadcrumb
+    public function __construct(protected CustomerInterface $customerRepository, protected AddressInterface $addressRepository)
     {
-        return parent::breadcrumb()
-            ->add(trans('plugins/ecommerce::customer.name'), route('customers.index'));
     }
 
     public function index(CustomerTable $dataTable)
     {
-        $this->pageTitle(trans('plugins/ecommerce::customer.name'));
+        PageTitle::setTitle(trans('plugins/ecommerce::customer.name'));
 
         return $dataTable->renderTable();
     }
 
-    public function create()
+    public function create(FormBuilder $formBuilder)
     {
-        $this->pageTitle(trans('plugins/ecommerce::customer.create'));
+        PageTitle::setTitle(trans('plugins/ecommerce::customer.create'));
 
         Assets::addScriptsDirectly('vendor/core/plugins/ecommerce/js/customer.js');
 
-        return CustomerForm::create()->remove('is_change_password')->renderForm();
+        return $formBuilder->create(CustomerForm::class)->remove('is_change_password')->renderForm();
     }
 
-    public function store(CustomerCreateRequest $request)
+    public function store(CustomerCreateRequest $request, BaseHttpResponse $response)
     {
-        $customer = new Customer();
+        $customer = $this->customerRepository->getModel();
         $customer->fill($request->input());
         $customer->confirmed_at = Carbon::now();
         $customer->password = Hash::make($request->input('password'));
-        $customer->dob = Carbon::parse($request->input('dob'));
-        $customer->save();
+        $customer->dob = Carbon::parse($request->input('dob'))->toDateString();
+        $customer = $this->customerRepository->createOrUpdate($customer);
 
         event(new CreatedContentEvent(CUSTOMER_MODULE_SCREEN_NAME, $request, $customer));
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setPreviousUrl(route('customers.index'))
-            ->setNextUrl(route('customers.edit', $customer->getKey()))
-            ->withCreatedSuccessMessage();
+            ->setNextUrl(route('customers.edit', $customer->id))
+            ->setMessage(trans('core/base::notices.create_success_message'));
     }
 
-    public function edit(Customer $customer)
+    public function edit(int|string $id, FormBuilder $formBuilder)
     {
         Assets::addScriptsDirectly('vendor/core/plugins/ecommerce/js/customer.js');
 
-        $this->pageTitle(trans('plugins/ecommerce::customer.edit', ['name' => $customer->name]));
+        $customer = $this->customerRepository->findOrFail($id);
+
+        PageTitle::setTitle(trans('plugins/ecommerce::customer.edit', ['name' => $customer->name]));
 
         $customer->password = null;
 
-        return CustomerForm::createFromModel($customer)->renderForm();
+        return $formBuilder->create(CustomerForm::class, ['model' => $customer])->renderForm();
     }
 
-    public function update(Customer $customer, CustomerEditRequest $request)
+    public function update(int|string $id, CustomerEditRequest $request, BaseHttpResponse $response)
     {
+        $customer = $this->customerRepository->findOrFail($id);
+
         $customer->fill($request->except('password'));
 
         if ($request->input('is_change_password') == 1) {
             $customer->password = Hash::make($request->input('password'));
         }
 
-        $customer->dob = Carbon::parse($request->input('dob'));
+        $customer->dob = Carbon::parse($request->input('dob'))->toDateString();
 
-        $customer->save();
+        $customer = $this->customerRepository->createOrUpdate($customer);
 
         event(new UpdatedContentEvent(CUSTOMER_MODULE_SCREEN_NAME, $request, $customer));
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setPreviousUrl(route('customers.index'))
-            ->withUpdatedSuccessMessage();
+            ->setMessage(trans('core/base::notices.update_success_message'));
     }
 
-    public function destroy(Customer $customer)
+    public function destroy(int|string $id, Request $request, BaseHttpResponse $response)
     {
-        return DeleteResourceAction::make($customer);
+        try {
+            $customer = $this->customerRepository->findOrFail($id);
+            $this->customerRepository->delete($customer);
+            event(new DeletedContentEvent(CUSTOMER_MODULE_SCREEN_NAME, $request, $customer));
+
+            return $response->setMessage(trans('core/base::notices.delete_success_message'));
+        } catch (Exception $exception) {
+            return $response
+                ->setError()
+                ->setMessage($exception->getMessage());
+        }
     }
 
-    public function verifyEmail(int|string $id, Request $request)
+    public function deletes(Request $request, BaseHttpResponse $response)
     {
-        $customer = Customer::query()
-            ->where([
-                'id' => $id,
-                'confirmed_at' => null,
-            ])->firstOrFail();
+        $ids = $request->input('ids');
+        if (empty($ids)) {
+            return $response
+                ->setError()
+                ->setMessage(trans('core/base::notices.no_select'));
+        }
+
+        foreach ($ids as $id) {
+            $customer = $this->customerRepository->findOrFail($id);
+            $this->customerRepository->delete($customer);
+            event(new DeletedContentEvent(CUSTOMER_MODULE_SCREEN_NAME, $request, $customer));
+        }
+
+        return $response->setMessage(trans('core/base::notices.delete_success_message'));
+    }
+
+    public function verifyEmail(int|string $id, Request $request, BaseHttpResponse $response)
+    {
+        $customer = $this->customerRepository->getFirstBy([
+            'id' => $id,
+            'confirmed_at' => null,
+        ]);
+
+        if (! $customer) {
+            abort(404);
+        }
 
         $customer->confirmed_at = Carbon::now();
         $customer->save();
 
         event(new UpdatedContentEvent(CUSTOMER_MODULE_SCREEN_NAME, $request, $customer));
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setPreviousUrl(route('customers.index'))
-            ->withUpdatedSuccessMessage();
+            ->setMessage(trans('core/base::notices.update_success_message'));
     }
 
-    public function getListCustomerForSelect()
+    public function getListCustomerForSelect(BaseHttpResponse $response)
     {
-        $customers = Customer::query()
-            ->select(['id', 'name'])
-            ->get()
-            ->all();
+        $customers = $this->customerRepository
+            ->allBy([], [], ['id', 'name'])
+            ->toArray();
 
-        return $this
-            ->httpResponse()
-            ->setData($customers);
+        return $response->setData($customers);
     }
 
-    public function getListCustomerForSearch(Request $request)
+    public function getListCustomerForSearch(Request $request, BaseHttpResponse $response)
     {
-        $customers = Customer::query()
+        $customers = $this->customerRepository
+            ->getModel()
             ->where('name', 'LIKE', '%' . $request->input('keyword') . '%')
             ->simplePaginate(5);
 
         foreach ($customers as &$customer) {
-            $customer->avatar_url = (string) $customer->avatar_url;
+            $customer->avatar_url = (string)$customer->avatar_url;
         }
 
-        return $this
-            ->httpResponse()->setData($customers);
+        return $response->setData($customers);
     }
 
-    public function postUpdateEmail($id, CustomerUpdateEmailRequest $request)
+    public function postUpdateEmail($id, CustomerUpdateEmailRequest $request, BaseHttpResponse $response)
     {
-        $customer = Customer::query()->findOrFail($id);
+        $this->customerRepository->createOrUpdate(['email' => $request->input('email')], ['id' => $id]);
 
-        $customer->email = $request->input('email');
-        $customer->save();
-
-        return $this
-            ->httpResponse()
-            ->withUpdatedSuccessMessage();
+        return $response->setMessage(trans('core/base::notices.update_success_message'));
     }
 
-    public function getCustomerAddresses($id)
+    public function getCustomerAddresses($id, BaseHttpResponse $response)
     {
-        $addresses = Address::query()->where('customer_id', $id)->get();
+        $addresses = $this->addressRepository->allBy(['customer_id' => $id]);
 
-        return $this
-            ->httpResponse()
-            ->setData(CustomerAddressResource::collection($addresses));
+        return $response->setData(CustomerAddressResource::collection($addresses));
     }
 
-    public function getCustomerOrderNumbers($id)
+    public function getCustomerOrderNumbers($id, BaseHttpResponse $response)
     {
-        /**
-         * @var Customer $customer
-         */
-        $customer = Customer::query()->find($id);
-
+        $customer = $this->customerRepository->findById($id);
         if (! $customer) {
-            return $this
-                ->httpResponse()
-                ->setData(0);
+            return $response->setData(0);
         }
 
-        return $this
-            ->httpResponse()
-            ->setData($customer->completedOrders()->count());
+        return $response->setData($customer->orders()->count());
     }
 
-    public function postCreateCustomerWhenCreatingOrder(AddCustomerWhenCreateOrderRequest $request)
-    {
+    public function postCreateCustomerWhenCreatingOrder(
+        AddCustomerWhenCreateOrderRequest $request,
+        BaseHttpResponse $response
+    ) {
         $request->merge(['password' => Hash::make(Str::random(36))]);
-        $customer = Customer::query()->create($request->input());
-        $customer->avatar = (string) $customer->avatar_url;
+        $customer = $this->customerRepository->createOrUpdate($request->input());
+        $customer->avatar = (string)$customer->avatar_url;
 
         event(new CreatedContentEvent(CUSTOMER_MODULE_SCREEN_NAME, $request, $customer));
 
@@ -199,22 +214,18 @@ class CustomerController extends BaseController
             'is_default' => true,
         ]);
 
-        $address = Address::query()->create($request->input());
+        $address = $this->addressRepository->createOrUpdate($request->input());
 
-        if (! EcommerceHelper::loadCountriesStatesCitiesFromPluginLocation()) {
-            $address->country = $address->country_name;
-            $address->state = $address->state_name;
-            $address->city = $address->city_name;
-        }
+        $address->country = $address->country_name;
+        $address->state = $address->state_name;
+        $address->city = $address->city_name;
 
-        return $this
-            ->httpResponse()
+        $address->country_name = $address->country;
+        $address->state_name = $address->state;
+        $address->city_name = $address->city;
+
+        return $response
             ->setData(compact('address', 'customer'))
-            ->withCreatedSuccessMessage();
-    }
-
-    public function ajaxReviews(int|string $id, CustomerReviewTable $customerReviewTable)
-    {
-        return $customerReviewTable->customerId($id)->renderTable();
+            ->setMessage(trans('core/base::notices.create_success_message'));
     }
 }

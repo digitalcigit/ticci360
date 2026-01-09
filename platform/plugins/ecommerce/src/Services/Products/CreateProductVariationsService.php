@@ -3,20 +3,27 @@
 namespace Botble\Ecommerce\Services\Products;
 
 use Botble\Ecommerce\Models\Product;
-use Botble\Ecommerce\Models\ProductAttribute;
-use Botble\Ecommerce\Models\ProductVariation;
-use Illuminate\Database\Eloquent\Builder;
+use Botble\Ecommerce\Repositories\Interfaces\ProductAttributeInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ProductVariationInterface;
 
 class CreateProductVariationsService
 {
-    public function execute(Product $product, array $attributeIds = []): array
+    public function __construct(
+        protected ProductInterface $productRepository,
+        protected ProductAttributeInterface $productAttributeRepository,
+        protected ProductVariationInterface $productVariationRepository
+    ) {
+    }
+
+    public function execute(Product $product): array
     {
         $attributeSets = $product->productAttributeSets()->allRelatedIds()->toArray();
 
-        $attributes = ProductAttribute::query()
-            ->whereIn('attribute_set_id', $attributeSets)
-            ->when($attributeIds, fn (Builder $query) => $query->whereIn('id', $attributeIds))
-            ->get();
+        $attributes = $this->productAttributeRepository
+            ->advancedGet([
+                'condition' => [['attribute_set_id', 'IN', $attributeSets]],
+            ]);
 
         $data = [];
 
@@ -24,14 +31,14 @@ class CreateProductVariationsService
             $data[] = $attributes
                 ->where('attribute_set_id', $attributeSet)
                 ->pluck('id')
-                ->all();
+                ->toArray();
         }
 
         $variationsInfo = $this->combinations($data);
 
         $variations = [];
         foreach ($variationsInfo as $value) {
-            $result = ProductVariation::getVariationByAttributesOrCreate($product->getKey(), $value);
+            $result = $this->productVariationRepository->getVariationByAttributesOrCreate($product->id, $value);
             $variations[] = $result['variation'];
         }
 

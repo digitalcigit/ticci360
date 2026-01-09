@@ -2,11 +2,9 @@
 
 namespace Botble\Ecommerce\Repositories\Caches;
 
-use Botble\Ecommerce\Repositories\Eloquent\InvoiceRepository;
+use Botble\Support\Repositories\Caches\CacheAbstractDecorator;
+use Botble\Ecommerce\Repositories\Interfaces\InvoiceInterface;
 
-/**
- * @deprecated
- */
-class InvoiceCacheDecorator extends InvoiceRepository
+class InvoiceCacheDecorator extends CacheAbstractDecorator implements InvoiceInterface
 {
 }

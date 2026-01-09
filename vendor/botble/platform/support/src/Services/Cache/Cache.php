@@ -3,32 +3,24 @@
 namespace Botble\Support\Services\Cache;
 
 use Botble\Base\Facades\BaseHelper;
-use Closure;
-use DateInterval;
-use DateTimeInterface;
 use Illuminate\Cache\CacheManager;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
 
 class Cache implements CacheInterface
 {
-    final public function __construct(
+    public function __construct(
         protected CacheManager $cache,
-        protected ?string $cacheGroup,
+        protected string|null $cacheGroup,
         protected array $config = []
     ) {
         $this->config = ! empty($config) ? $config : [
-            'cache_time' => 10 * 60,
+            'cache_time' => setting('cache_time', 10) * 60,
             'stored_keys' => storage_path('cache_keys.json'),
         ];
     }
 
-    public static function make(string $group): static
-    {
-        return new static(app(CacheManager::class), $group);
-    }
-
-    public function get(string $key): mixed
+    public function get(string $key)
     {
         if (! file_exists($this->config['stored_keys'])) {
             return null;
@@ -39,49 +31,22 @@ class Cache implements CacheInterface
 
     public function generateCacheKey(string $key): string
     {
-        return md5($this->cacheGroup) . '@' . $key;
+        return md5($this->cacheGroup) . $key;
     }
 
-    public function put(string $key, $value, Closure|DateTimeInterface|DateInterval|int|null $ttl = null): bool
+    public function put(string $key, $value, $minutes = false): bool
     {
-        if (! $ttl) {
-            $ttl = $this->config['cache_time'];
-        }
-
-        if ($ttl === -1) {
-            $ttl = null;
+        if (! $minutes) {
+            $minutes = $this->config['cache_time'];
         }
 
         $key = $this->generateCacheKey($key);
 
         $this->storeCacheKey($key);
 
-        $this->cache->put($key, $value, $ttl);
+        $this->cache->put($key, $value, $minutes);
 
         return true;
-    }
-
-    public function forever(string $key, mixed $value): bool
-    {
-        return $this->put($key, $value, -1);
-    }
-
-    public function remember(string $key, Closure|DateTimeInterface|DateInterval|int|null $ttl, Closure $callback): mixed
-    {
-        if ($this->has($key)) {
-            return $this->get($key);
-        }
-
-        $value = value($callback);
-
-        $this->put($key, $value, $ttl);
-
-        return $value;
-    }
-
-    public function rememberForever(string $key, Closure $callback): mixed
-    {
-        return $this->remember($key, -1, $callback);
     }
 
     public function storeCacheKey(string $key): bool
@@ -112,11 +77,6 @@ class Cache implements CacheInterface
         return $this->cache->has($key);
     }
 
-    public function forget(string $key): bool
-    {
-        return $this->cache->forget($key);
-    }
-
     public function flush(): bool
     {
         $cacheKeys = [];
@@ -139,10 +99,5 @@ class Cache implements CacheInterface
         }
 
         return true;
-    }
-
-    public function generateCacheKeyFromInput(): string
-    {
-        return serialize(request()->input()) . serialize(BaseHelper::getHomepageUrl());
     }
 }

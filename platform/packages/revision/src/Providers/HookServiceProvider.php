@@ -2,51 +2,48 @@
 
 namespace Botble\Revision\Providers;
 
-use Botble\Base\Facades\AdminHelper;
 use Botble\Base\Facades\Assets;
-use Botble\Base\Forms\FormAbstract;
-use Botble\Base\Forms\FormTab;
-use Botble\Base\Models\BaseModel;
-use Botble\Base\Supports\ServiceProvider;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\ServiceProvider;
 
 class HookServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
-        FormAbstract::extend(function (FormAbstract $form): void {
-            $model = $form->getModel();
+        add_filter(BASE_FILTER_REGISTER_CONTENT_TABS, [$this, 'addHistoryTab'], 55, 3);
+        add_filter(BASE_FILTER_REGISTER_CONTENT_TAB_INSIDE, [$this, 'addHistoryContent'], 55, 3);
+    }
 
-            if (
-                ! $model instanceof BaseModel
-                || ! $model->exists
-                || ! $this->isSupported($model)
-                || ! AdminHelper::isInAdmin(true)
-            ) {
-                return;
-            }
+    public function addHistoryTab(string|null $tabs, string|Model|null $data = null): string
+    {
+        if (! empty($data) && $this->isSupported($data)) {
+            Assets::addScriptsDirectly([
+                '/vendor/core/packages/revision/js/html-diff.js',
+                '/vendor/core/packages/revision/js/revision.js',
+            ])
+                ->addStylesDirectly('/vendor/core/packages/revision/css/revision.css');
 
-            Assets::addStylesDirectly('vendor/core/packages/revision/css/revision.css')
-                ->addScriptsDirectly([
-                    'vendor/core/packages/revision/js/html-diff.js',
-                    'vendor/core/packages/revision/js/revision.js',
-                ]);
+            return $tabs . view('packages/revision::history-tab')->render();
+        }
 
-            $form->addTab(
-                FormTab::make()
-                    ->id('revisions')
-                    ->label(trans('core/base::tabs.revision'))
-                    ->content(view('packages/revision::history-content', compact('model')))
-            );
-        }, 999);
+        return $tabs;
     }
 
     protected function isSupported(string|Model $model): bool
     {
         if (is_object($model)) {
-            $model = $model::class;
+            $model = get_class($model);
         }
 
         return in_array($model, config('packages.revision.general.supported', []));
+    }
+
+    public function addHistoryContent(string|null $tabs, string|Model|null $data = null): string
+    {
+        if (! empty($data) && $this->isSupported($data)) {
+            return $tabs . view('packages/revision::history-content', ['model' => $data])->render();
+        }
+
+        return $tabs;
     }
 }

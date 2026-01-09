@@ -4,7 +4,6 @@ return [
     [
         'name' => 'Media',
         'flag' => 'media.index',
-        'parent_flag' => 'core.cms',
     ],
     [
         'name' => 'File',

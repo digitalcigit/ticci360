@@ -1,7 +1,15 @@
 <?php
 
-use Botble\Blog\Widgets\Fronts\Tags;
+use Botble\Widget\AbstractWidget;
 
-class BlogTagsWidget extends Tags
+class BlogTagsWidget extends AbstractWidget
 {
+    public function __construct()
+    {
+        parent::__construct([
+            'name' => __('Blog Tags'),
+            'description' => __('Blog - Popular tags'),
+            'number_display' => 5,
+        ]);
+    }
 }

@@ -1,11 +1,8 @@
 @if (is_plugin_active('ads'))
     @if ($image = display_ads_advanced($config['ads_key'], ['class' => 'd-flex justify-content-center']))
-        <div
-            class="lazyload"
-            @if ($config['background']) data-bg="{{ RvMedia::getImageUrl($config['background']) }}" @endif
-        >
+        <div class="lazyload" @if ($config['background']) data-bg="{{ RvMedia::getImageUrl($config['background']) }}" @endif>
             @php
-                $size = 'xxxl';
+                $size = 'xxxl'; //full-with
                 switch ($config['size']) {
                     case 'large':
                         $size = 'xxl';
@@ -18,7 +15,7 @@
             <div class="container-{{ $size }}">
                 <div class="row">
                     <div class="my-5">
-                        {!! $image !!}
+                        {!! BaseHelper::clean($image) !!}
                     </div>
                 </div>
             </div>

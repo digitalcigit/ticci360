@@ -3,7 +3,6 @@
 namespace Botble\Shortcode\Compilers;
 
 use Botble\Shortcode\View\View;
-use Botble\Theme\Facades\Theme;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -36,14 +35,14 @@ class ShortcodeCompiler
 
     public function setEditLink(string $editLink, string $permission): void
     {
-        if ($permission && (! Auth::guard()->check() || ! Auth::guard()->user()->hasPermission($permission))) {
+        if ($permission && (! Auth::check() || ! Auth::user()->hasPermission($permission))) {
             return;
         }
 
         $this->editLink = $editLink;
     }
 
-    public function getEditLink(): ?string
+    public function getEditLink(): string|null
     {
         if (! isset($this->editLink)) {
             return null;
@@ -56,32 +55,12 @@ class ShortcodeCompiler
 
     public function add(
         string $key,
-        ?string $name,
-        ?string $description = null,
+        string|null $name,
+        string|null $description = null,
         string|null|callable|array $callback = null,
         string $previewImage = ''
     ): void {
-        $shortcode = compact('key', 'name', 'description', 'callback', 'previewImage');
-
-        $this->registered[$key] = isset($this->registered[$key])
-            ? [...$this->registered[$key], ...$shortcode]
-            : $shortcode;
-    }
-
-    public function setPreviewImage(string $key, string $previewImage): void
-    {
-        if (! $this->hasShortcode($key)) {
-            return;
-        }
-
-        $this->registered[$key]['previewImage'] = $previewImage;
-    }
-
-    public function remove(string $key): void
-    {
-        if ($this->hasShortcode($key)) {
-            unset($this->registered[$key]);
-        }
+        $this->registered[$key] = compact('key', 'name', 'description', 'callback', 'previewImage');
     }
 
     public function compile(string $value, bool $force = false): string
@@ -137,23 +116,6 @@ class ShortcodeCompiler
         $compiled = $this->compileShortcode($matches);
         $name = $compiled->getName();
 
-        if ($compiled->enable_lazy_loading === 'yes' && ! request()->ajax()) {
-            add_filter(THEME_FRONT_FOOTER, function (?string $html) {
-                return $html . view('packages/shortcode::partials.lazy-loading-script')->render();
-            }, 120);
-
-            $placeholderView = Theme::getThemeNamespace('partials.lazy-loading-placeholder');
-
-            if (! view()->exists($placeholderView)) {
-                $placeholderView = 'packages/shortcode::partials.lazy-loading-placeholder';
-            }
-
-            return view($placeholderView, [
-                'name' => $name,
-                'attributes' => Arr::except($compiled->toArray(), 'enable_lazy_loading'),
-            ]);
-        }
-
         $callback = apply_filters('shortcode_get_callback', $this->getCallback($name), $name);
 
         // Render the shortcode through the callback
@@ -191,12 +153,12 @@ class ShortcodeCompiler
         $this->matches = $matches;
     }
 
-    public function getName(): ?string
+    public function getName(): string|null
     {
         return $this->matches[2];
     }
 
-    public function getContent(): ?string
+    public function getContent(): string|null
     {
         if (! $this->matches) {
             return null;
@@ -227,7 +189,7 @@ class ShortcodeCompiler
         return $callback;
     }
 
-    protected function parseAttributes(?string $text): array
+    protected function parseAttributes(string|null $text): array
     {
         // decode attribute values
         $text = htmlspecialchars_decode($text, ENT_QUOTES);
@@ -274,9 +236,9 @@ class ShortcodeCompiler
     /**
      * Remove all shortcode tags from the given content.
      */
-    public function strip(?string $content, array $except = []): ?string
+    public function strip(string|null $content, array $except = []): string|null
     {
-        if (empty($this->registered) || ! $content) {
+        if (empty($this->registered)) {
             return $content;
         }
 
@@ -295,7 +257,7 @@ class ShortcodeCompiler
         $this->strip = $strip;
     }
 
-    protected function stripTag(array $match): ?string
+    protected function stripTag(array $match): string|null
     {
         if ($match[1] == '[' && $match[6] == ']') {
             return substr($match[0], 1, -1);
@@ -312,11 +274,6 @@ class ShortcodeCompiler
     public function setAdminConfig(string $key, string|null|callable|array $html): void
     {
         $this->registered[$key]['admin_config'] = $html;
-    }
-
-    public function modifyAdminConfig(string $key, callable $callback): void
-    {
-        $this->registered[$key]['admin_config_modifier'] = $callback;
     }
 
     public function getAttributes(string $value): array

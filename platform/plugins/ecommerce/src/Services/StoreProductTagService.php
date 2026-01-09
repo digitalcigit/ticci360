@@ -4,35 +4,32 @@ namespace Botble\Ecommerce\Services;
 
 use Botble\Base\Events\CreatedContentEvent;
 use Botble\Ecommerce\Models\Product;
-use Botble\Ecommerce\Models\ProductTag;
+use Botble\Ecommerce\Repositories\Interfaces\ProductTagInterface;
 use Illuminate\Http\Request;
 
 class StoreProductTagService
 {
+    public function __construct(protected ProductTagInterface $productTagRepository)
+    {
+    }
+
     public function execute(Request $request, Product $product): void
     {
-        if (! $request->has('tag')) {
-            return;
-        }
-
         $tags = $product->tags->pluck('name')->all();
 
-        $tagsInput = collect(json_decode((string) $request->input('tag'), true))->pluck('value')->all();
+        $tagsInput = collect(json_decode($request->input('tag'), true))->pluck('value')->all();
 
         if (count($tags) != count($tagsInput) || count(array_diff($tags, $tagsInput)) > 0) {
             $product->tags()->detach();
-
-            $tagIds = [];
-
             foreach ($tagsInput as $tagName) {
                 if (! trim($tagName)) {
                     continue;
                 }
 
-                $tag = ProductTag::query()->where('name', $tagName)->first();
+                $tag = $this->productTagRepository->getFirstBy(['name' => $tagName]);
 
                 if ($tag === null && ! empty($tagName)) {
-                    $tag = ProductTag::query()->create(['name' => $tagName]);
+                    $tag = $this->productTagRepository->createOrUpdate(['name' => $tagName]);
 
                     $request->merge(['slug' => $tagName]);
 
@@ -40,11 +37,9 @@ class StoreProductTagService
                 }
 
                 if (! empty($tag)) {
-                    $tagIds[] = $tag->getKey();
+                    $product->tags()->attach($tag->id);
                 }
             }
-
-            $product->tags()->sync(array_unique($tagIds));
         }
     }
 }

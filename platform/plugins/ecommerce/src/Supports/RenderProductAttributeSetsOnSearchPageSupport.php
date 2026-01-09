@@ -2,86 +2,37 @@
 
 namespace Botble\Ecommerce\Supports;
 
-use Botble\Base\Models\BaseQueryBuilder;
-use Botble\Ecommerce\Facades\EcommerceHelper as EcommerceHelperFacade;
-use Botble\Ecommerce\Models\ProductAttributeSet;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
-use Illuminate\Support\Collection;
+use Botble\Base\Enums\BaseStatusEnum;
+use Botble\Ecommerce\Repositories\Interfaces\ProductAttributeSetInterface;
 
 class RenderProductAttributeSetsOnSearchPageSupport
 {
-    public function __construct(protected Request $request)
+    public function __construct(protected ProductAttributeSetInterface $productAttributeSetRepository)
     {
     }
 
-    public function getAttributeSets(): Collection
+    public function render(array $params = []): string
     {
-        $with = [
-            'categories:id',
-            'attributes' => fn (HasMany $query) => $query->whereHas('productVariationItems'),
-        ];
+        $params = array_merge(['view' => 'plugins/ecommerce::themes.attributes.attributes-filter-renderer'], $params);
+
+        $with = ['attributes', 'categories:id'];
 
         if (is_plugin_active('language') && is_plugin_active('language-advanced')) {
             $with[] = 'attributes.translations';
         }
 
-        return ProductAttributeSet::query()
-            ->where('is_searchable', true)
-            ->wherePublished()
-            ->when((array) $this->request->input('categories', []), function (BaseQueryBuilder $query, $categoryIds): void {
-                $query->where(function (BaseQueryBuilder $query) use ($categoryIds): void {
-                    $query
-                        ->whereDoesntHave('categories')
-                        ->orWhereHas(
-                            'categories',
-                            fn (BaseQueryBuilder $query) => $query->whereIn('id', $categoryIds)
-                        );
-                });
-            })
-            ->orderBy('order')
-            ->with($with)
-            ->get();
-    }
+        $attributeSets = $this->productAttributeSetRepository
+            ->advancedGet([
+                'condition' => [
+                    'status' => BaseStatusEnum::PUBLISHED,
+                    'is_searchable' => 1,
+                ],
+                'order_by' => [
+                    'order' => 'ASC',
+                ],
+                'with' => $with,
+            ]);
 
-    public function getSelectedAttributes(Collection $attributeSets): array
-    {
-        $selectedAttrs = [];
-
-        $attributesInput = (array) $this->request->input('attributes', []);
-
-        if (! array_is_list($attributesInput)) {
-            foreach ($attributeSets as $attributeSet) {
-                $attributeInput = Arr::get($attributesInput, $attributeSet->slug, []);
-
-                if (! is_array($attributeInput)) {
-                    continue;
-                }
-
-                $selectedAttrs[$attributeSet->slug] = $attributeInput;
-            }
-        } else {
-            $selectedAttrs = $attributesInput;
-        }
-
-        return $selectedAttrs;
-    }
-
-    public function render(array $params = []): string
-    {
-        if (! EcommerceHelperFacade::isEnabledFilterProductsByAttributes()) {
-            return '';
-        }
-
-        $params = ['view' => EcommerceHelperFacade::viewPath('attributes.attributes-filter-renderer'), ...$params];
-
-        $attributeSets = $this->getAttributeSets();
-        $selectedAttrs = $this->getSelectedAttributes($attributeSets);
-
-        return view(
-            $params['view'],
-            array_merge($params, compact('attributeSets', 'selectedAttrs'))
-        )->render();
+        return view($params['view'], array_merge($params, compact('attributeSets')))->render();
     }
 }

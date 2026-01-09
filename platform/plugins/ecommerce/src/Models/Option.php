@@ -18,22 +18,24 @@ class Option extends BaseModel
         'order',
     ];
 
-    protected static function booted(): void
-    {
-        self::deleted(function (Option $option): void {
-            $option->values()->delete();
-        });
-    }
-
     public function values(): HasMany
     {
         return $this
             ->hasMany(OptionValue::class, 'option_id')
-            ->orderBy('order');
+            ->orderBy('order', 'ASC');
     }
 
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        self::deleting(function (Option $option) {
+            OptionValue::where('option_id', $option->id)->delete();
+        });
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
-require_once __DIR__ . '/product-categories.php';
+if (is_plugin_active('ecommerce')) {
+    require_once __DIR__ . '/product-categories.php';
 
-register_widget(ProductCategoriesWidget::class);
+    register_widget(ProductCategoriesWidget::class);
+}

@@ -2,11 +2,9 @@
 
 namespace Botble\Faq\Repositories\Caches;
 
-use Botble\Faq\Repositories\Eloquent\FaqCategoryRepository;
+use Botble\Support\Repositories\Caches\CacheAbstractDecorator;
+use Botble\Faq\Repositories\Interfaces\FaqCategoryInterface;
 
-/**
- * @deprecated
- */
-class FaqCategoryCacheDecorator extends FaqCategoryRepository
+class FaqCategoryCacheDecorator extends CacheAbstractDecorator implements FaqCategoryInterface
 {
 }

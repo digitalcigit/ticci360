@@ -1,124 +1,90 @@
 @if (!empty($menu) && $menu->id)
-    <div class="core-menu-structure">
-        <input
-            type="hidden"
-            name="deleted_nodes"
-        >
-        <textarea
-            name="menu_nodes"
-            id="nestable-output"
-            class="d-none"
-        ></textarea>
+    <input type="hidden" name="deleted_nodes">
+    <textarea name="menu_nodes" id="nestable-output" class="form-control hidden"></textarea>
+    <div class="row widget-menu">
+        <div class="col-md-4">
+            <div class="panel-group" id="accordion">
 
-        <div class="row row-cards">
-            <div class="col-md-4">
-                @php
-                    do_action(MENU_ACTION_SIDEBAR_OPTIONS);
-                @endphp
+                @php do_action(MENU_ACTION_SIDEBAR_OPTIONS) @endphp
 
-                <x-core::card>
-                    <x-core::card.header>
-                        <a
-                            class="d-flex justify-content-between w-100 align-items-center text-decoration-none"
-                            data-bs-toggle="collapse"
-                            data-parent="#accordion"
-                            href="#collapseCustomLink"
-                        >
-                            <x-core::card.title>
-                                {{ trans('packages/menu::menu.add_link') }}
-                            </x-core::card.title>
+                <div class="widget meta-boxes">
+                    <a data-bs-toggle="collapse" data-parent="#accordion" href="#collapseCustomLink">
+                        <h4 class="widget-title">
+                            <span>{{ trans('packages/menu::menu.add_link') }}</span>
+                            <i class="fa fa-angle-down narrow-icon"></i>
+                        </h4>
+                    </a>
+                    <div id="collapseCustomLink" class="panel-collapse collapse">
+                        <div class="widget-body">
+                            <div class="box-links-for-menu">
+                                <div id="external_link" class="the-box">
+                                    <div class="node-content" id="menu-node-create-form">
+                                        {!! app(Botble\Base\Forms\FormBuilder::class)->create(Botble\Menu\Forms\MenuNodeForm::class)->renderForm([], false, true, false) !!}
 
-                            <button
-                                type="button"
-                                class="btn-action"
-                            >
-                                <x-core::icon name="ti ti-chevron-down" size="sm" />
-                            </button>
-                        </a>
-                    </x-core::card.header>
-                    <div
-                        id="collapseCustomLink"
-                        class="box-links-for-menu collapse"
-                    >
-                        <x-core::card.body>
-                            <div
-                                id="external_link"
-                                class="the-box"
-                            >
-                                <div
-                                    class="node-content"
-                                    id="menu-node-create-form"
-                                >
-                                    {!! Botble\Menu\Forms\MenuNodeForm::create()->renderForm([], false, true, false) !!}
-                                </div>
-                            </div>
-                        </x-core::card.body>
-                        <x-core::card.footer class="text-end">
-                            <x-core::button
-                                type="button"
-                                class="btn-add-to-menu"
-                                :data-url="route('menus.get-node')"
-                                icon="ti ti-plus"
-                            >
-                                {{ trans('packages/menu::menu.add_to_menu') }}
-                            </x-core::button>
-                        </x-core::card.footer>
-                    </div>
-                </x-core::card>
-            </div>
-            <div class="col-md-8">
-                <x-core::card class="mb-3">
-                    <x-core::card.header>
-                        <x-core::card.title>{{ trans('packages/menu::menu.structure') }}</x-core::card.title>
-                    </x-core::card.header>
-                    <x-core::card.body>
-                        <x-core::alert type="info" class="bg-white text-info">
-                            {{ trans('packages/menu::menu.drag_drop_info') }}
-                        </x-core::alert>
-
-                        <div
-                            class="dd nestable-menu"
-                            id="nestable"
-                            data-depth="0"
-                        >
-                            {!! Menu::generateMenu([
-                                'slug' => $menu->slug,
-                                'view' => 'packages/menu::partials.menu',
-                                'theme' => false,
-                                'active' => false,
-                            ]) !!}
-                        </div>
-                    </x-core::card.body>
-                </x-core::card>
-
-                @if (defined('THEME_MODULE_SCREEN_NAME'))
-                    <x-core::card>
-                        <x-core::card.header>
-                            <x-core::card.title>{{ trans('packages/menu::menu.menu_settings') }}</x-core::card.title>
-                        </x-core::card.header>
-                        <x-core::card.body>
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <p><i>{{ trans('packages/menu::menu.display_location') }}</i></p>
-                                </div>
-                                <div class="col-md-8">
-                                    @foreach (Menu::getMenuLocations() as $location => $description)
-                                        <div @class(['mb-3' => ! $loop->last])>
-                                            <x-core::form.checkbox
-                                                :label="$description"
-                                                id="menu_location_{{ $location }}"
-                                                name="locations[]"
-                                                :checked="in_array($location, $locations)"
-                                                :value="$location"
-                                            />
+                                        <div class="form-group mb-3">
+                                            <div class="text-end add-button">
+                                                <div class="btn-group">
+                                                    <a href="#" class="btn-add-to-menu btn btn-primary">
+                                                        <span class="text">
+                                                            <i class="fa fa-plus"></i> {{ trans('packages/menu::menu.add_to_menu') }}
+                                                        </span>
+                                                    </a>
+                                                </div>
+                                            </div>
                                         </div>
-                                    @endforeach
+                                    </div>
                                 </div>
                             </div>
-                        </x-core::card.body>
-                    </x-core::card>
-                @endif
+                        </div>
+                    </div>
+                </div>
             </div>
+        </div>
+        <div class="col-md-8">
+            <div class="widget meta-boxes">
+                <div class="widget-title">
+                    <h4>
+                        <span>{{ trans('packages/menu::menu.structure') }}</span>
+                    </h4>
+                </div>
+                <div class="widget-body">
+                    <div class="dd nestable-menu" id="nestable" data-depth="0">
+                        {!!
+                             Menu::generateMenu([
+                                'slug'   => $menu->slug,
+                                'view'   => 'packages/menu::partials.menu',
+                                'theme'  => false,
+                                'active' => false,
+                             ])
+                        !!}
+                    </div>
+                </div>
+            </div>
+
+            @if (defined('THEME_MODULE_SCREEN_NAME'))
+                <div class="widget meta-boxes">
+                    <div class="widget-title">
+                        <h4>
+                            <span>{{ trans('packages/menu::menu.menu_settings') }}</span>
+                        </h4>
+                    </div>
+                    <div class="widget-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <p><i>{{ trans('packages/menu::menu.display_location') }}</i></p>
+                            </div>
+                            <div class="col-md-8">
+                                @foreach (Menu::getMenuLocations() as $location => $description)
+                                    <div>
+                                        <input type="checkbox" @if (in_array($location, $locations)) checked @endif  name="locations[]" value="{{ $location }}" id="menu_location_{{ $location }}">
+                                        <label for="menu_location_{{ $location }}">{{ $description }}</label>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            @endif
         </div>
     </div>
 @endif

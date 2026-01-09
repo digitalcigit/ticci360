@@ -3,48 +3,74 @@
 namespace Botble\AuditLog\Http\Controllers;
 
 use Botble\AuditLog\Models\AuditHistory;
+use Botble\AuditLog\Repositories\Interfaces\AuditLogInterface;
 use Botble\AuditLog\Tables\AuditLogTable;
-use Botble\Base\Facades\Assets;
-use Botble\Base\Http\Actions\DeleteResourceAction;
-use Botble\Base\Http\Controllers\BaseSystemController;
+use Botble\Base\Events\DeletedContentEvent;
+use Botble\Base\Facades\PageTitle;
+use Botble\Base\Http\Controllers\BaseController;
+use Botble\Base\Http\Responses\BaseHttpResponse;
+use Botble\Base\Traits\HasDeleteManyItemsTrait;
+use Exception;
 use Illuminate\Http\Request;
 
-class AuditLogController extends BaseSystemController
+class AuditLogController extends BaseController
 {
-    public function getWidgetActivities(Request $request)
+    use HasDeleteManyItemsTrait;
+
+    public function __construct(protected AuditLogInterface $auditLogRepository)
+    {
+    }
+
+    public function getWidgetActivities(BaseHttpResponse $response, Request $request)
     {
         $limit = $request->integer('paginate', 10);
         $limit = $limit > 0 ? $limit : 10;
 
-        $histories = AuditHistory::query()
-            ->with('user')->latest()
-            ->paginate($limit);
+        $histories = $this->auditLogRepository
+            ->advancedGet([
+                'with' => ['user'],
+                'order_by' => ['created_at' => 'DESC'],
+                'paginate' => [
+                    'per_page' => $limit,
+                    'current_paged' => $request->integer('page', 1),
+                ],
+            ]);
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setData(view('plugins/audit-log::widgets.activities', compact('histories', 'limit'))->render());
     }
 
     public function index(AuditLogTable $dataTable)
     {
-        Assets::addScriptsDirectly('vendor/core/plugins/audit-log/js/audit-log.js');
-
-        $this->pageTitle(trans('plugins/audit-log::history.name'));
+        PageTitle::setTitle(trans('plugins/audit-log::history.name'));
 
         return $dataTable->renderTable();
     }
 
-    public function destroy(AuditHistory $auditLog)
+    public function destroy(AuditHistory $log, Request $request, BaseHttpResponse $response)
     {
-        return DeleteResourceAction::make($auditLog)->silent();
+        try {
+            $this->auditLogRepository->delete($log);
+
+            event(new DeletedContentEvent(AUDIT_LOG_MODULE_SCREEN_NAME, $request, $log));
+
+            return $response->setMessage(trans('core/base::notices.delete_success_message'));
+        } catch (Exception $ex) {
+            return $response
+                ->setError()
+                ->setMessage($ex->getMessage());
+        }
     }
 
-    public function deleteAll()
+    public function deletes(Request $request, BaseHttpResponse $response)
     {
-        AuditHistory::query()->truncate();
+        return $this->executeDeleteItems($request, $response, $this->auditLogRepository, AUDIT_LOG_MODULE_SCREEN_NAME);
+    }
 
-        return $this
-            ->httpResponse()
-            ->withDeletedSuccessMessage();
+    public function deleteAll(BaseHttpResponse $response)
+    {
+        $this->auditLogRepository->getModel()->truncate();
+
+        return $response->setMessage(trans('core/base::notices.delete_success_message'));
     }
 }

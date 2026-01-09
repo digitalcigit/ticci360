@@ -2,17 +2,16 @@
 
 namespace Botble\Ecommerce\Http\Controllers\Customers;
 
+use App\Http\Controllers\Controller;
 use Botble\ACL\Traits\ResetsPasswords;
-use Botble\Base\Http\Controllers\BaseController;
-use Botble\Ecommerce\Forms\Fronts\Auth\ResetPasswordForm;
-use Botble\SeoHelper\Facades\SeoHelper;
-use Botble\Theme\Facades\Theme;
 use Illuminate\Contracts\Auth\PasswordBroker;
 use Illuminate\Contracts\Auth\StatefulGuard;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
+use Botble\SeoHelper\Facades\SeoHelper;
+use Botble\Theme\Facades\Theme;
 
-class ResetPasswordController extends BaseController
+class ResetPasswordController extends Controller
 {
     use ResetsPasswords;
 
@@ -27,18 +26,18 @@ class ResetPasswordController extends BaseController
     {
         SeoHelper::setTitle(__('Reset Password'));
 
-        Theme::breadcrumb()
+        Theme::breadcrumb()->add(__('Home'), route('public.index'))
             ->add(__('Reset Password'), route('customer.password.reset'));
 
         return Theme::scope(
             'ecommerce.customers.passwords.reset',
             [
                 'token' => $token,
-                'email' => $request->input('email'),
-                'form' => ResetPasswordForm::create(),
+                'email' => $request->email,
             ],
             'plugins/ecommerce::themes.customers.passwords.reset'
-        )->render();
+        )
+            ->render();
     }
 
     public function broker(): PasswordBroker

@@ -2,78 +2,140 @@
 
 namespace Botble\Ecommerce\Http\Controllers;
 
-use Botble\Base\Http\Actions\DeleteResourceAction;
-use Botble\Base\Supports\Breadcrumb;
+use Botble\Base\Events\DeletedContentEvent;
+use Botble\Base\Facades\Assets;
+use Botble\Base\Facades\PageTitle;
+use Botble\Base\Forms\FormBuilder;
+use Botble\Base\Http\Controllers\BaseController;
+use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Ecommerce\Forms\ProductAttributeSetForm;
 use Botble\Ecommerce\Http\Requests\ProductAttributeSetsRequest;
-use Botble\Ecommerce\Models\ProductAttributeSet;
+use Botble\Ecommerce\Repositories\Interfaces\ProductAttributeSetInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ProductCategoryInterface;
 use Botble\Ecommerce\Services\ProductAttributes\StoreAttributeSetService;
 use Botble\Ecommerce\Tables\ProductAttributeSetsTable;
+use Exception;
+use Illuminate\Http\Request;
 
 class ProductAttributeSetsController extends BaseController
 {
-    protected function breadcrumb(): Breadcrumb
-    {
-        return parent::breadcrumb()
-            ->add(trans('plugins/ecommerce::product-attributes.name'), route('product-attribute-sets.index'));
+    public function __construct(
+        protected ProductAttributeSetInterface $productAttributeSetRepository,
+        protected ProductCategoryInterface $productCategoryRepository
+    ) {
     }
 
     public function index(ProductAttributeSetsTable $dataTable)
     {
-        $this->pageTitle(trans('plugins/ecommerce::product-attributes.name'));
+        PageTitle::setTitle(trans('plugins/ecommerce::product-attributes.name'));
 
         return $dataTable->renderTable();
     }
 
-    public function create()
+    public function create(FormBuilder $formBuilder)
     {
-        $this->pageTitle(trans('plugins/ecommerce::product-attributes.create'));
+        PageTitle::setTitle(trans('plugins/ecommerce::product-attributes.create'));
 
-        return ProductAttributeSetForm::create()->renderForm();
+        Assets::addScripts(['spectrum', 'jquery-ui'])
+            ->addStyles(['spectrum'])
+            ->addStylesDirectly([
+                asset('vendor/core/plugins/ecommerce/css/ecommerce-product-attributes.css'),
+            ])
+            ->addScriptsDirectly([
+                asset('vendor/core/plugins/ecommerce/js/ecommerce-product-attributes.js'),
+            ]);
+
+        return $formBuilder->create(ProductAttributeSetForm::class)->renderForm();
     }
 
-    public function store(ProductAttributeSetsRequest $request, StoreAttributeSetService $service)
-    {
-        $productAttributeSet = $service->execute($request, new ProductAttributeSet());
+    public function store(
+        ProductAttributeSetsRequest $request,
+        StoreAttributeSetService $service,
+        BaseHttpResponse $response
+    ) {
+        $productAttributeSet = $this->productAttributeSetRepository->getModel();
 
-        $productAttributeSet->categories()->detach();
+        $productAttributeSet = $service->execute($request, $productAttributeSet);
 
-        $productAttributeSet->categories()->sync((array) $request->input('categories', []));
+        if ($request->has('categories')) {
+            $productAttributeSet->categories()->sync((array) $request->input('categories', []));
+        }
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setPreviousUrl(route('product-attribute-sets.index'))
-            ->setNextUrl(route('product-attribute-sets.edit', $productAttributeSet->getKey()))
-            ->withCreatedSuccessMessage();
+            ->setNextUrl(route('product-attribute-sets.edit', $productAttributeSet->id))
+            ->setMessage(trans('core/base::notices.create_success_message'));
     }
 
-    public function edit(ProductAttributeSet $productAttributeSet)
+    public function edit(int|string $id, FormBuilder $formBuilder)
     {
-        $this->pageTitle(trans('plugins/ecommerce::product-attributes.edit'));
+        PageTitle::setTitle(trans('plugins/ecommerce::product-attributes.edit'));
 
-        return ProductAttributeSetForm::createFromModel($productAttributeSet)
+        $productAttributeSet = $this->productAttributeSetRepository->findOrFail($id);
+
+        Assets::addScripts(['spectrum', 'jquery-ui'])
+            ->addStyles(['spectrum'])
+            ->addStylesDirectly([
+                'vendor/core/plugins/ecommerce/css/ecommerce-product-attributes.css',
+            ])
+            ->addScriptsDirectly([
+                'vendor/core/plugins/ecommerce/js/ecommerce-product-attributes.js',
+            ]);
+
+        return $formBuilder
+            ->create(ProductAttributeSetForm::class, ['model' => $productAttributeSet])
             ->renderForm();
     }
 
     public function update(
-        ProductAttributeSet $productAttributeSet,
+        int|string $id,
         ProductAttributeSetsRequest $request,
         StoreAttributeSetService $service,
+        BaseHttpResponse $response
     ) {
+        $productAttributeSet = $this->productAttributeSetRepository->findOrFail($id);
+
         $service->execute($request, $productAttributeSet);
 
-        $productAttributeSet->categories()->detach();
+        if ($request->has('categories')) {
+            $productAttributeSet->categories()->sync((array) $request->input('categories', []));
+        }
 
-        $productAttributeSet->categories()->sync((array) $request->input('categories', []));
-
-        return $this
-            ->httpResponse()
+        return $response
             ->setPreviousUrl(route('product-attribute-sets.index'))
-            ->withUpdatedSuccessMessage();
+            ->setMessage(trans('core/base::notices.update_success_message'));
     }
 
-    public function destroy(ProductAttributeSet $productAttributeSet)
+    public function destroy(int|string $id, Request $request, BaseHttpResponse $response)
     {
-        return DeleteResourceAction::make($productAttributeSet);
+        try {
+            $productAttributeSet = $this->productAttributeSetRepository->findOrFail($id);
+            $this->productAttributeSetRepository->delete($productAttributeSet);
+            event(new DeletedContentEvent(PRODUCT_ATTRIBUTE_SETS_MODULE_SCREEN_NAME, $request, $productAttributeSet));
+
+            return $response->setMessage(trans('core/base::notices.delete_success_message'));
+        } catch (Exception $exception) {
+            return $response
+                ->setError()
+                ->setMessage($exception->getMessage());
+        }
+    }
+
+    public function deletes(Request $request, BaseHttpResponse $response)
+    {
+        $ids = $request->input('ids');
+        if (empty($ids)) {
+            return $response
+                ->setError()
+                ->setMessage(trans('core/base::notices.no_select'));
+        }
+
+        foreach ($ids as $id) {
+            $productAttributeSet = $this->productAttributeSetRepository->findOrFail($id);
+            $this->productAttributeSetRepository->delete($productAttributeSet);
+            event(new DeletedContentEvent(PRODUCT_ATTRIBUTE_SETS_MODULE_SCREEN_NAME, $request, $productAttributeSet));
+        }
+
+        return $response->setMessage(trans('core/base::notices.delete_success_message'));
     }
 }

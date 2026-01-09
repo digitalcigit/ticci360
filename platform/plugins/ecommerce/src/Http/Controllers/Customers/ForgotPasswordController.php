@@ -2,15 +2,14 @@
 
 namespace Botble\Ecommerce\Http\Controllers\Customers;
 
+use App\Http\Controllers\Controller;
 use Botble\ACL\Traits\SendsPasswordResetEmails;
-use Botble\Base\Http\Controllers\BaseController;
-use Botble\Ecommerce\Forms\Fronts\Auth\ForgotPasswordForm;
+use Illuminate\Contracts\Auth\PasswordBroker;
+use Password;
 use Botble\SeoHelper\Facades\SeoHelper;
 use Botble\Theme\Facades\Theme;
-use Illuminate\Contracts\Auth\PasswordBroker;
-use Illuminate\Support\Facades\Password;
 
-class ForgotPasswordController extends BaseController
+class ForgotPasswordController extends Controller
 {
     use SendsPasswordResetEmails;
 
@@ -24,13 +23,15 @@ class ForgotPasswordController extends BaseController
         SeoHelper::setTitle(__('Forgot Password'));
 
         Theme::breadcrumb()
+            ->add(__('Home'), route('public.index'))
             ->add(__('Login'), route('customer.password.reset'));
 
         return Theme::scope(
             'ecommerce.customers.passwords.email',
-            ['form' => ForgotPasswordForm::create()],
+            [],
             'plugins/ecommerce::themes.customers.passwords.email'
-        )->render();
+        )
+            ->render();
     }
 
     public function broker(): PasswordBroker

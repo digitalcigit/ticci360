@@ -38,12 +38,16 @@ use Google\Protobuf\Internal\Message;
 /**
  * Middleware which wraps the response in an OperationResponse object.
  */
-class OperationsMiddleware implements MiddlewareInterface
+class OperationsMiddleware
 {
     /** @var callable */
     private $nextHandler;
-    private object $operationsClient;
-    private array $descriptor;
+
+    /** @var object */
+    private $operationsClient;
+
+    /** @var array */
+    private $descriptor;
 
     public function __construct(
         callable $nextHandler,

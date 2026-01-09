@@ -2,51 +2,68 @@
 
 namespace Botble\Location\Forms;
 
-use Botble\Base\Forms\FieldOptions\IsDefaultFieldOption;
-use Botble\Base\Forms\FieldOptions\MediaImageFieldOption;
-use Botble\Base\Forms\FieldOptions\NameFieldOption;
-use Botble\Base\Forms\FieldOptions\SortOrderFieldOption;
-use Botble\Base\Forms\FieldOptions\StatusFieldOption;
-use Botble\Base\Forms\FieldOptions\TextFieldOption;
-use Botble\Base\Forms\Fields\MediaImageField;
-use Botble\Base\Forms\Fields\NumberField;
-use Botble\Base\Forms\Fields\OnOffField;
-use Botble\Base\Forms\Fields\SelectField;
-use Botble\Base\Forms\Fields\TextField;
 use Botble\Base\Forms\FormAbstract;
+use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Location\Http\Requests\CountryRequest;
 use Botble\Location\Models\Country;
 
 class CountryForm extends FormAbstract
 {
-    public function setup(): void
+    public function buildForm(): void
     {
         $this
-            ->model(Country::class)
+            ->setupModel(new Country())
             ->setValidatorClass(CountryRequest::class)
-            ->add('name', TextField::class, NameFieldOption::make()->required())
-            ->add(
-                'code',
-                TextField::class,
-                TextFieldOption::make()
-                    ->label(trans('plugins/location::country.code'))
-                    ->placeholder(trans('plugins/location::country.code_placeholder'))
-                    ->maxLength(3)
-                    ->helperText(trans('plugins/location::country.code_helper'))
-                    ->required()
-            )
-            ->add(
-                'nationality',
-                TextField::class,
-                TextFieldOption::make()
-                    ->label(trans('plugins/location::country.nationality'))
-                    ->placeholder(trans('plugins/location::country.nationality'))
-                    ->maxLength(120)
-            )
-            ->add('order', NumberField::class, SortOrderFieldOption::make())
-            ->add('is_default', OnOffField::class, IsDefaultFieldOption::make())
-            ->add('status', SelectField::class, StatusFieldOption::make())
-            ->add('image', MediaImageField::class, MediaImageFieldOption::make())
+            ->withCustomFields()
+            ->add('name', 'text', [
+                'label' => trans('core/base::forms.name'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'placeholder' => trans('core/base::forms.name_placeholder'),
+                    'data-counter' => 120,
+                ],
+            ])
+            ->add('code', 'text', [
+                'label' => trans('plugins/location::country.code'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'placeholder' => trans('plugins/location::country.code_placeholder'),
+                    'data-counter' => 10,
+                ],
+                'help_block' => [
+                    'text' => trans('plugins/location::country.code_helper'),
+                    'tag' => 'p',
+                    'attr' => [
+                        'class' => 'help-ts',
+                    ],
+                ],
+            ])
+            ->add('nationality', 'text', [
+                'label' => trans('plugins/location::country.nationality'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'placeholder' => trans('plugins/location::country.nationality'),
+                    'data-counter' => 120,
+                ],
+            ])
+            ->add('order', 'number', [
+                'label' => trans('core/base::forms.order'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'placeholder' => trans('core/base::forms.order_by_placeholder'),
+                ],
+                'default_value' => 0,
+            ])
+            ->add('is_default', 'onOff', [
+                'label' => trans('core/base::forms.is_default'),
+                'label_attr' => ['class' => 'control-label'],
+                'default_value' => false,
+            ])
+            ->add('status', 'customSelect', [
+                'label' => trans('core/base::tables.status'),
+                'label_attr' => ['class' => 'control-label required'],
+                'choices' => BaseStatusEnum::labels(),
+            ])
             ->setBreakFieldPoint('status');
     }
 }

@@ -1,35 +1,40 @@
-let mix = require('laravel-mix')
+let mix = require('laravel-mix');
 
-const path = require('path')
-let directory = path.basename(path.resolve(__dirname))
+const path = require('path');
+let directory = path.basename(path.resolve(__dirname));
 
-const source = 'platform/plugins/' + directory
-const dist = 'public/vendor/core/plugins/' + directory
+const source = 'platform/plugins/' + directory;
+const dist = 'public/vendor/core/plugins/' + directory;
+
+/*
+ |--------------------------------------------------------------------------
+ | Mix Asset Management
+ |--------------------------------------------------------------------------
+ |
+ | Mix provides a clean, fluent API for defining some Webpack build steps
+ | for your Laravel application. By default, we are compiling the Sass
+ | file for the application as well as bundling up all the JS files.
+ |
+ */
 
 mix
-    .js(source + '/resources/assets/js/discount.js', dist + '/js')
-    .js(source + '/resources/assets/js/order-create.js', dist + '/js')
+    .js(source + '/resources/assets/js/discount.js', dist + '/js').vue({ version: 2 })
+    .js(source + '/resources/assets/js/order-create.js', dist + '/js').vue({ version: 2 })
     .js(source + '/resources/assets/js/front/checkout.js', dist + '/js')
-    .js(source + '/resources/assets/js/admin-review.js', dist + '/js')
-    .js(source + '/resources/assets/js/front/order-return.js', dist + '/js')
-    .js(source + '/resources/assets/js/front-review.js', dist + '/js')
+    .js(source + '/resources/assets/js/front/order-return.js', dist + '/js');
 
 if (mix.inProduction()) {
     mix
         .copy(dist + '/js/discount.js', source + '/public/js')
         .copy(dist + '/js/order-create.js', source + '/public/js')
         .copy(dist + '/js/checkout.js', source + '/public/js')
-        .copy(dist + '/js/admin-review.js', source + '/public/js')
-        .copy(dist + '/js/order-return.js', source + '/public/js')
-        .copy(dist + '/js/front-review.js', source + '/public/js')
+        .copy(dist + '/js/order-return.js', source + '/public/js');
 }
 
 const scripts = [
     'edit-product.js',
-    'edit-product-collection.js',
     'global-option.js',
     'product-option.js',
-    'product-bulk-editable-table.js',
     'ecommerce-product-attributes.js',
     'change-product-swatches.js',
     'change-product-options.js',
@@ -51,18 +56,15 @@ const scripts = [
     'bulk-import.js',
     'export.js',
     'address.js',
-    'tax.js',
-    'invoice.js',
-    'front-ecommerce.js',
 ];
 
 scripts.forEach(item => {
-    mix.js(source + '/resources/assets/js/' + item, dist + '/js')
+    mix.js(source + '/resources/assets/js/' + item, dist + '/js');
 });
 
 if (mix.inProduction()) {
     scripts.forEach(item => {
-        mix.copy(dist + '/js/' + item, source + '/public/js')
+        mix.copy(dist + '/js/' + item, source + '/public/js');
     });
 }
 
@@ -72,25 +74,18 @@ const styles = [
     'currencies.scss',
     'review.scss',
     'customer.scss',
-    'report.scss',
-    'order-return.scss',
-    'widget.scss',
-    'front-auth.scss',
-    'front-ecommerce.scss',
-    'front-ecommerce-missing-bootstrap.scss',
-    'front-ecommerce-rtl.scss',
-    'front-faq.scss',
-    'front-review.scss',
     'front-theme.scss',
     'front-theme-rtl.scss',
-]
+    'report.scss',
+    'order-return.scss',
+];
 
 styles.forEach(item => {
-    mix.sass(source + '/resources/assets/sass/' + item, dist + '/css')
-})
+    mix.sass(source + '/resources/assets/sass/' + item, dist + '/css');
+});
 
 if (mix.inProduction()) {
     styles.forEach(item => {
-        mix.copy(dist + '/css/' + item.replace('.scss', '.css'), source + '/public/css')
-    })
+        mix.copy(dist + '/css/' + item.replace('.scss', '.css'), source + '/public/css');
+    });
 }

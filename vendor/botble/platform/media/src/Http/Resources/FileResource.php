@@ -3,10 +3,10 @@
 namespace Botble\Media\Http\Resources;
 
 use Botble\Base\Facades\BaseHelper;
-use Botble\Media\Facades\RvMedia;
 use Botble\Media\Models\MediaFile;
-use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\File;
+use Illuminate\Http\Resources\Json\JsonResource;
+use Botble\Media\Facades\RvMedia;
 
 /**
  * @mixin MediaFile
@@ -16,11 +16,11 @@ class FileResource extends JsonResource
     public function toArray($request): array
     {
         return [
-            'id' => $this->getKey(),
+            'id' => $this->id,
             'name' => $this->name,
             'basename' => File::basename($this->url),
             'url' => $this->url,
-            'full_url' => $this->visibility === 'public' ? RvMedia::url($this->url) : null,
+            'full_url' => RvMedia::url($this->url),
             'type' => $this->type,
             'icon' => $this->icon,
             'thumb' => $this->canGenerateThumbnails() ? RvMedia::getImageUrl($this->url, 'thumb') : null,
@@ -32,7 +32,6 @@ class FileResource extends JsonResource
             'folder_id' => $this->folder_id,
             'preview_url' => $this->preview_url,
             'preview_type' => $this->preview_type,
-            'indirect_url' => $this->indirect_url,
             'alt' => $this->alt,
         ];
     }

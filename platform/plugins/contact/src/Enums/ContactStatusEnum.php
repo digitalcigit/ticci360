@@ -2,8 +2,8 @@
 
 namespace Botble\Contact\Enums;
 
-use Botble\Base\Facades\Html;
 use Botble\Base\Supports\Enum;
+use Botble\Base\Facades\Html;
 use Illuminate\Support\HtmlString;
 
 /**
@@ -13,7 +13,6 @@ use Illuminate\Support\HtmlString;
 class ContactStatusEnum extends Enum
 {
     public const READ = 'read';
-
     public const UNREAD = 'unread';
 
     public static $langPath = 'plugins/contact::contact.statuses';
@@ -21,8 +20,10 @@ class ContactStatusEnum extends Enum
     public function toHtml(): HtmlString|string
     {
         return match ($this->value) {
-            self::UNREAD => Html::tag('span', self::UNREAD()->label(), ['class' => 'badge bg-warning text-warning-fg']),
-            self::READ => Html::tag('span', self::READ()->label(), ['class' => 'badge bg-success text-success-fg']),
+            self::UNREAD => Html::tag('span', self::UNREAD()->label(), ['class' => 'label-warning status-label'])
+                ->toHtml(),
+            self::READ => Html::tag('span', self::READ()->label(), ['class' => 'label-success status-label'])
+                ->toHtml(),
             default => parent::toHtml(),
         };
     }

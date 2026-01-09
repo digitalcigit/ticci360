@@ -3,9 +3,8 @@
 namespace Botble\SeoHelper\Listeners;
 
 use Botble\Base\Events\DeletedContentEvent;
-use Botble\Base\Facades\BaseHelper;
-use Botble\SeoHelper\Facades\SeoHelper;
 use Exception;
+use Botble\SeoHelper\Facades\SeoHelper;
 
 class DeletedContentListener
 {
@@ -14,7 +13,7 @@ class DeletedContentListener
         try {
             SeoHelper::deleteMetaData($event->screen, $event->data);
         } catch (Exception $exception) {
-            BaseHelper::logError($exception);
+            info($exception->getMessage());
         }
     }
 }

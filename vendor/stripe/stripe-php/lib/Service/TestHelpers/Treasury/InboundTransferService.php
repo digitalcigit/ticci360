@@ -4,11 +4,6 @@
 
 namespace Stripe\Service\TestHelpers\Treasury;
 
-/**
- * @phpstan-import-type RequestOptionsArray from \Stripe\Util\RequestOptions
- *
- * @psalm-import-type RequestOptionsArray from \Stripe\Util\RequestOptions
- */
 class InboundTransferService extends \Stripe\Service\AbstractService
 {
     /**
@@ -17,12 +12,12 @@ class InboundTransferService extends \Stripe\Service\AbstractService
      * state.
      *
      * @param string $id
-     * @param null|array{expand?: string[], failure_details?: array{code?: string}} $params
-     * @param null|RequestOptionsArray|\Stripe\Util\RequestOptions $opts
-     *
-     * @return \Stripe\Treasury\InboundTransfer
+     * @param null|array $params
+     * @param null|array|\Stripe\Util\RequestOptions $opts
      *
      * @throws \Stripe\Exception\ApiErrorException if the request fails
+     *
+     * @return \Stripe\Treasury\InboundTransfer
      */
     public function fail($id, $params = null, $opts = null)
     {
@@ -35,12 +30,12 @@ class InboundTransferService extends \Stripe\Service\AbstractService
      * <code>succeeded</code> state.
      *
      * @param string $id
-     * @param null|array{expand?: string[]} $params
-     * @param null|RequestOptionsArray|\Stripe\Util\RequestOptions $opts
-     *
-     * @return \Stripe\Treasury\InboundTransfer
+     * @param null|array $params
+     * @param null|array|\Stripe\Util\RequestOptions $opts
      *
      * @throws \Stripe\Exception\ApiErrorException if the request fails
+     *
+     * @return \Stripe\Treasury\InboundTransfer
      */
     public function returnInboundTransfer($id, $params = null, $opts = null)
     {
@@ -53,12 +48,12 @@ class InboundTransferService extends \Stripe\Service\AbstractService
      * state.
      *
      * @param string $id
-     * @param null|array{expand?: string[]} $params
-     * @param null|RequestOptionsArray|\Stripe\Util\RequestOptions $opts
-     *
-     * @return \Stripe\Treasury\InboundTransfer
+     * @param null|array $params
+     * @param null|array|\Stripe\Util\RequestOptions $opts
      *
      * @throws \Stripe\Exception\ApiErrorException if the request fails
+     *
+     * @return \Stripe\Treasury\InboundTransfer
      */
     public function succeed($id, $params = null, $opts = null)
     {

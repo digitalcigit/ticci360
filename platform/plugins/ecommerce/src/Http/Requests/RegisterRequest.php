@@ -2,34 +2,29 @@
 
 namespace Botble\Ecommerce\Http\Requests;
 
-use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Rules\EmailRule;
-use Botble\Ecommerce\Facades\EcommerceHelper;
-use Botble\Ecommerce\Models\Customer;
+use Botble\Captcha\Facades\Captcha;
 use Botble\Support\Http\Requests\Request;
-use Illuminate\Validation\Rule;
 
 class RegisterRequest extends Request
 {
     public function rules(): array
     {
         $rules = [
-            'name' => ['required', 'max:120', 'min:2'],
-            'email' => [
-                'nullable',
-                Rule::requiredIf(! EcommerceHelper::isLoginUsingPhone()),
-                new EmailRule(),
-                Rule::unique((new Customer())->getTable()),
-            ],
-            'phone' => [
-                'nullable',
-                Rule::requiredIf(EcommerceHelper::isLoginUsingPhone() || get_ecommerce_setting('make_customer_phone_number_required', false)),
-                ...explode('|', BaseHelper::getPhoneValidationRule()),
-                Rule::unique((new Customer())->getTable(), 'phone'),
-            ],
-            'password' => ['required', 'min:6', 'confirmed'],
-            'agree_terms_and_policy' => ['sometimes', 'accepted:1'],
+            'name' => 'required|max:120|min:2',
+            'email' => 'required|max:120|min:6|email|unique:ec_customers',
+            'password' => 'required|min:6|confirmed',
+            'agree_terms_and_policy' => 'sometimes|accepted:1',
         ];
+
+        if (is_plugin_active('captcha')) {
+            if (get_ecommerce_setting('enable_recaptcha_in_register_page', 0)) {
+                $rules += Captcha::rules();
+            }
+
+            if (get_ecommerce_setting('enable_math_captcha_in_register_page', 0)) {
+                $rules += Captcha::mathCaptchaRules();
+            }
+        }
 
         return apply_filters('ecommerce_customer_registration_form_validation_rules', $rules);
     }
@@ -40,9 +35,8 @@ class RegisterRequest extends Request
             'name' => __('Name'),
             'email' => __('Email'),
             'password' => __('Password'),
-            'phone' => __('Phone'),
             'agree_terms_and_policy' => __('Term and Policy'),
-        ]);
+        ] + (is_plugin_active('captcha') ? Captcha::attributes() : []));
     }
 
     public function messages(): array

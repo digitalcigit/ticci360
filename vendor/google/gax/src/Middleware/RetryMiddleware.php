@@ -40,29 +40,25 @@ use GuzzleHttp\Promise\PromiseInterface;
 /**
  * Middleware that adds retry functionality.
  */
-class RetryMiddleware implements MiddlewareInterface
+class RetryMiddleware
 {
     /** @var callable */
     private $nextHandler;
-    private RetrySettings $retrySettings;
-    private ?float $deadlineMs;
 
-    /*
-     * The number of retries that have already been attempted.
-     * The original API call will have $retryAttempts set to 0.
-     */
-    private int $retryAttempts;
+    /** @var RetrySettings */
+    private $retrySettings;
+
+    /** @var float|null */
+    private $deadlineMs;
 
     public function __construct(
         callable $nextHandler,
         RetrySettings $retrySettings,
-        $deadlineMs = null,
-        $retryAttempts = 0
+        $deadlineMs = null
     ) {
         $this->nextHandler = $nextHandler;
         $this->retrySettings = $retrySettings;
         $this->deadlineMs = $deadlineMs;
-        $this->retryAttempts = $retryAttempts;
     }
 
     /**
@@ -84,34 +80,20 @@ class RetryMiddleware implements MiddlewareInterface
             }
         }
 
-        // Setting the retry attempt for logging
-        if ($this->retryAttempts > 0) {
-            $options['retryAttempt'] = $this->retryAttempts;
-        }
-
         // Call the handler immediately if retry settings are disabled.
         if (!$this->retrySettings->retriesEnabled()) {
             return $nextHandler($call, $options);
         }
 
         return $nextHandler($call, $options)->then(null, function ($e) use ($call, $options) {
-            $retryFunction = $this->getRetryFunction();
-
-            // If the number of retries has surpassed the max allowed retries
-            // then throw the exception as we normally would.
-            // If the maxRetries is set to 0, then we don't check this condition.
-            if (0 !== $this->retrySettings->getMaxRetries()
-                && $this->retryAttempts >= $this->retrySettings->getMaxRetries()
-            ) {
-                throw $e;
-            }
-            // If the retry function returns false then throw the
-            // exception as we normally would.
-            if (!$retryFunction($e, $options)) {
+            if (!$e instanceof ApiException) {
                 throw $e;
             }
 
-            // Retry function returned true, so we attempt another retry
+            if (!in_array($e->getStatus(), $this->retrySettings->getRetryableCodes())) {
+                throw $e;
+            }
+
             return $this->retry($call, $options, $e->getStatus());
         });
     }
@@ -157,8 +139,7 @@ class RetryMiddleware implements MiddlewareInterface
             $this->retrySettings->with([
                 'initialRetryDelayMillis' => $delayMs,
             ]),
-            $deadlineMs,
-            $this->retryAttempts + 1
+            $deadlineMs
         );
 
         // Set the timeout for the call
@@ -173,27 +154,5 @@ class RetryMiddleware implements MiddlewareInterface
     protected function getCurrentTimeMs()
     {
         return microtime(true) * 1000.0;
-    }
-
-    /**
-     * This is the default retry behaviour.
-     */
-    private function getRetryFunction()
-    {
-        return $this->retrySettings->getRetryFunction() ??
-            function (\Throwable $e, array $options): bool {
-                // This is the default retry behaviour, i.e. we don't retry an ApiException
-                // and for other exception types, we only retry when the error code is in
-                // the list of retryable error codes.
-                if (!$e instanceof ApiException) {
-                    return false;
-                }
-
-                if (!in_array($e->getStatus(), $this->retrySettings->getRetryableCodes())) {
-                    return false;
-                }
-
-                return true;
-            };
     }
 }

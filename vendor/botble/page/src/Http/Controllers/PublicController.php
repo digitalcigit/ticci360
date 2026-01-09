@@ -2,20 +2,22 @@
 
 namespace Botble\Page\Http\Controllers;
 
-use Botble\Base\Http\Controllers\BaseController;
 use Botble\Page\Models\Page;
 use Botble\Page\Services\PageService;
-use Botble\Slug\Facades\SlugHelper;
 use Botble\Theme\Events\RenderingSingleEvent;
+use Illuminate\Routing\Controller;
+use Botble\Slug\Facades\SlugHelper;
 use Botble\Theme\Facades\Theme;
 
-class PublicController extends BaseController
+class PublicController extends Controller
 {
     public function getPage(string $slug, PageService $pageService)
     {
         $slug = SlugHelper::getSlug($slug, SlugHelper::getPrefix(Page::class));
 
-        abort_unless($slug, 404);
+        if (! $slug) {
+            abort(404);
+        }
 
         $data = $pageService->handleFrontRoutes($slug);
 

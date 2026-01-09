@@ -1,21 +1,11 @@
 <div class="table-actions">
     @if ($item->vendor_can_edit)
-        <a
-            class="btn btn-icon btn-sm btn-primary"
-            data-bs-toggle="tooltip"
-            data-bs-original-title="{{ trans('core/base::tables.edit') }}"
-            href="{{ route('marketplace.vendor.withdrawals.edit', $item->id) }}"
-        >
-            <x-core::icon name="ti ti-edit" />
+        <a href="{{ route('marketplace.vendor.withdrawals.edit', $item->id) }}" class="btn btn-icon btn-sm btn-primary" data-bs-toggle="tooltip" data-bs-original-title="{{ trans('core/base::tables.edit') }}">
+            <i class="fa fa-edit"></i>
         </a>
     @else
-        <a
-            class="btn btn-icon btn-sm btn-success"
-            data-bs-toggle="tooltip"
-            data-bs-original-title="{{ __('Show') }}"
-            href="{{ route('marketplace.vendor.withdrawals.show', $item->id) }}"
-        >
-            <x-core::icon name="ti ti-eye"></x-core::icon>
+        <a href="{{ route('marketplace.vendor.withdrawals.show', $item->id) }}" class="btn btn-icon btn-sm btn-success" data-bs-toggle="tooltip" data-bs-original-title="{{ __('Show') }}">
+            <i class="fa fa-eye"></i>
         </a>
     @endif
 </div>

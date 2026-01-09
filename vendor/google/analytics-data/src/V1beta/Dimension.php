@@ -21,16 +21,7 @@ class Dimension extends \Google\Protobuf\Internal\Message
     /**
      * The name of the dimension. See the [API
      * Dimensions](https://developers.google.com/analytics/devguides/reporting/data/v1/api-schema#dimensions)
-     * for the list of dimension names supported by core reporting methods such
-     * as `runReport` and `batchRunReports`. See
-     * [Realtime
-     * Dimensions](https://developers.google.com/analytics/devguides/reporting/data/v1/realtime-api-schema#dimensions)
-     * for the list of dimension names supported by the `runRealtimeReport`
-     * method. See
-     * [Funnel
-     * Dimensions](https://developers.google.com/analytics/devguides/reporting/data/v1/exploration-api-schema#dimensions)
-     * for the list of dimension names supported by the `runFunnelReport`
-     * method.
+     * for the list of dimension names.
      * If `dimensionExpression` is specified, `name` can be any string that you
      * would like within the allowed character set. For example if a
      * `dimensionExpression` concatenates `country` and `city`, you could call
@@ -41,14 +32,14 @@ class Dimension extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>string name = 1;</code>
      */
-    protected $name = '';
+    private $name = '';
     /**
      * One dimension can be the result of an expression of multiple dimensions.
      * For example, dimension "country, city": concatenate(country, ", ", city).
      *
      * Generated from protobuf field <code>.google.analytics.data.v1beta.DimensionExpression dimension_expression = 2;</code>
      */
-    protected $dimension_expression = null;
+    private $dimension_expression = null;
 
     /**
      * Constructor.
@@ -59,16 +50,7 @@ class Dimension extends \Google\Protobuf\Internal\Message
      *     @type string $name
      *           The name of the dimension. See the [API
      *           Dimensions](https://developers.google.com/analytics/devguides/reporting/data/v1/api-schema#dimensions)
-     *           for the list of dimension names supported by core reporting methods such
-     *           as `runReport` and `batchRunReports`. See
-     *           [Realtime
-     *           Dimensions](https://developers.google.com/analytics/devguides/reporting/data/v1/realtime-api-schema#dimensions)
-     *           for the list of dimension names supported by the `runRealtimeReport`
-     *           method. See
-     *           [Funnel
-     *           Dimensions](https://developers.google.com/analytics/devguides/reporting/data/v1/exploration-api-schema#dimensions)
-     *           for the list of dimension names supported by the `runFunnelReport`
-     *           method.
+     *           for the list of dimension names.
      *           If `dimensionExpression` is specified, `name` can be any string that you
      *           would like within the allowed character set. For example if a
      *           `dimensionExpression` concatenates `country` and `city`, you could call
@@ -89,16 +71,7 @@ class Dimension extends \Google\Protobuf\Internal\Message
     /**
      * The name of the dimension. See the [API
      * Dimensions](https://developers.google.com/analytics/devguides/reporting/data/v1/api-schema#dimensions)
-     * for the list of dimension names supported by core reporting methods such
-     * as `runReport` and `batchRunReports`. See
-     * [Realtime
-     * Dimensions](https://developers.google.com/analytics/devguides/reporting/data/v1/realtime-api-schema#dimensions)
-     * for the list of dimension names supported by the `runRealtimeReport`
-     * method. See
-     * [Funnel
-     * Dimensions](https://developers.google.com/analytics/devguides/reporting/data/v1/exploration-api-schema#dimensions)
-     * for the list of dimension names supported by the `runFunnelReport`
-     * method.
+     * for the list of dimension names.
      * If `dimensionExpression` is specified, `name` can be any string that you
      * would like within the allowed character set. For example if a
      * `dimensionExpression` concatenates `country` and `city`, you could call
@@ -118,16 +91,7 @@ class Dimension extends \Google\Protobuf\Internal\Message
     /**
      * The name of the dimension. See the [API
      * Dimensions](https://developers.google.com/analytics/devguides/reporting/data/v1/api-schema#dimensions)
-     * for the list of dimension names supported by core reporting methods such
-     * as `runReport` and `batchRunReports`. See
-     * [Realtime
-     * Dimensions](https://developers.google.com/analytics/devguides/reporting/data/v1/realtime-api-schema#dimensions)
-     * for the list of dimension names supported by the `runRealtimeReport`
-     * method. See
-     * [Funnel
-     * Dimensions](https://developers.google.com/analytics/devguides/reporting/data/v1/exploration-api-schema#dimensions)
-     * for the list of dimension names supported by the `runFunnelReport`
-     * method.
+     * for the list of dimension names.
      * If `dimensionExpression` is specified, `name` can be any string that you
      * would like within the allowed character set. For example if a
      * `dimensionExpression` concatenates `country` and `city`, you could call

@@ -2,12 +2,22 @@
 
 namespace Botble\Menu\Repositories\Interfaces;
 
-use Botble\Base\Models\BaseModel;
 use Botble\Support\Repositories\Interfaces\RepositoryInterface;
 
 interface MenuInterface extends RepositoryInterface
 {
-    public function findBySlug(string $slug, bool $active, array $select = [], array $with = []): ?BaseModel;
+    /**
+     * @param string $slug
+     * @param bool $active
+     * @param array $select
+     * @param array $with
+     * @return mixed
+     */
+    public function findBySlug($slug, $active, array $select = [], array $with = []);
 
-    public function createSlug(string $name): string;
+    /**
+     * @param string $name
+     * @return mixed
+     */
+    public function createSlug($name);
 }

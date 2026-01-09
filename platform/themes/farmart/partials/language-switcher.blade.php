@@ -2,11 +2,11 @@
     $supportedLocales = Language::getSupportedLocales();
     if (empty($options)) {
         $options = [
-            'before' => '',
-            'lang_flag' => true,
+            'before'    => '',
+            'lang_flag'  => true,
             'lang_name' => true,
-            'class' => '',
-            'after' => '',
+            'class'     => '',
+            'after'     => '',
         ];
     }
 @endphp
@@ -19,21 +19,18 @@
         <li>
             {!! Arr::get($options, 'before') !!}
             <span class="language-dropdown-active">
-                @if (Arr::get($options, 'lang_flag', true) && ($languageDisplay == 'all' || $languageDisplay == 'flag'))
+                    @if (Arr::get($options, 'lang_flag', true) && ($languageDisplay == 'all' || $languageDisplay == 'flag'))
                     {!! language_flag(Language::getCurrentLocaleFlag(), Language::getCurrentLocaleName()) !!}
                 @endif
                 @if (Arr::get($options, 'lang_name', true) && ($languageDisplay == 'all' || $languageDisplay == 'name'))
                     {{ Language::getCurrentLocaleName() }}
                 @endif
-                <span class="svg-icon">
-                    <svg>
-                        <use
-                            href="#svg-icon-chevron-down"
-                            xlink:href="#svg-icon-chevron-down"
-                        ></use>
-                    </svg>
+                    <span class="svg-icon">
+                        <svg>
+                            <use href="#svg-icon-chevron-down" xlink:href="#svg-icon-chevron-down"></use>
+                        </svg>
+                    </span>
                 </span>
-            </span>
             <ul class="language-dropdown {{ Arr::get($options, 'class') }}">
                 @foreach ($supportedLocales as $localeCode => $properties)
                     @if ($localeCode != Language::getCurrentLocale())

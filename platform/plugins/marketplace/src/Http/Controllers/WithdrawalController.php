@@ -5,55 +5,50 @@ namespace Botble\Marketplace\Http\Controllers;
 use Botble\Base\Events\BeforeEditContentEvent;
 use Botble\Base\Events\DeletedContentEvent;
 use Botble\Base\Events\UpdatedContentEvent;
-use Botble\Base\Facades\EmailHandler;
-use Botble\Base\Supports\Breadcrumb;
+use Botble\Base\Facades\PageTitle;
+use Botble\Base\Forms\FormBuilder;
+use Botble\Base\Http\Controllers\BaseController;
+use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Marketplace\Enums\WithdrawalStatusEnum;
 use Botble\Marketplace\Forms\WithdrawalForm;
 use Botble\Marketplace\Http\Requests\WithdrawalRequest;
-use Botble\Marketplace\Models\Withdrawal;
+use Botble\Marketplace\Repositories\Interfaces\WithdrawalInterface;
 use Botble\Marketplace\Tables\WithdrawalTable;
+use Botble\Base\Facades\EmailHandler;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class WithdrawalController extends BaseController
 {
-    protected function breadcrumb(): Breadcrumb
+    public function __construct(protected WithdrawalInterface $withdrawalRepository)
     {
-        return parent::breadcrumb()
-            ->add(trans('plugins/marketplace::withdrawal.name'), route('marketplace.withdrawal.index'));
     }
 
     public function index(WithdrawalTable $table)
     {
-        $this->pageTitle(trans('plugins/marketplace::withdrawal.name'));
+        PageTitle::setTitle(trans('plugins/marketplace::withdrawal.name'));
 
         return $table->renderTable();
     }
 
-    public function edit(int|string $id, Request $request)
+    public function edit(int|string $id, FormBuilder $formBuilder, Request $request)
     {
-        /**
-         * @var Withdrawal $withdrawal
-         */
-        $withdrawal = Withdrawal::query()->findOrFail($id);
+        $withdrawal = $this->withdrawalRepository->findOrFail($id);
 
         event(new BeforeEditContentEvent($request, $withdrawal));
 
-        $this->pageTitle(trans('core/base::forms.edit_item', ['name' => $withdrawal->customer->name]));
+        PageTitle::setTitle(trans('core/base::forms.edit_item', ['name' => $withdrawal->name]));
 
-        return WithdrawalForm::createFromModel($withdrawal)->renderForm();
+        return $formBuilder->create(WithdrawalForm::class, ['model' => $withdrawal])->renderForm();
     }
 
-    public function update(int|string $id, WithdrawalRequest $request)
+    public function update(int|string $id, WithdrawalRequest $request, BaseHttpResponse $response)
     {
-        /**
-         * @var Withdrawal $withdrawal
-         */
-        $withdrawal = Withdrawal::query()->findOrFail($id);
+        $withdrawal = $this->withdrawalRepository->findOrFail($id);
 
         $data = [
-            'images' => array_filter((array) $request->input('images', [])),
+            'images' => array_filter($request->input('images', [])),
             'user_id' => Auth::id(),
             'description' => $request->input('description'),
             'payment_channel' => $request->input('payment_channel'),
@@ -78,33 +73,48 @@ class WithdrawalController extends BaseController
         }
 
         $withdrawal->fill($data);
-        $withdrawal->save();
+
+        $this->withdrawalRepository->createOrUpdate($withdrawal);
 
         event(new UpdatedContentEvent(WITHDRAWAL_MODULE_SCREEN_NAME, $request, $withdrawal));
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setPreviousUrl(route('marketplace.withdrawal.index'))
-            ->withUpdatedSuccessMessage();
+            ->setMessage(trans('core/base::notices.update_success_message'));
     }
 
-    public function destroy(int|string $id, Request $request)
+    public function destroy(int|string $id, Request $request, BaseHttpResponse $response)
     {
         try {
-            $withdrawal = Withdrawal::query()->findOrFail($id);
+            $withdrawal = $this->withdrawalRepository->findOrFail($id);
 
-            $withdrawal->delete();
+            $this->withdrawalRepository->delete($withdrawal);
 
             event(new DeletedContentEvent(WITHDRAWAL_MODULE_SCREEN_NAME, $request, $withdrawal));
 
-            return $this
-                ->httpResponse()
-                ->setMessage(trans('core/base::notices.delete_success_message'));
+            return $response->setMessage(trans('core/base::notices.delete_success_message'));
         } catch (Exception $exception) {
-            return $this
-                ->httpResponse()
+            return $response
                 ->setError()
                 ->setMessage($exception->getMessage());
         }
+    }
+
+    public function deletes(Request $request, BaseHttpResponse $response)
+    {
+        $ids = $request->input('ids');
+        if (empty($ids)) {
+            return $response
+                ->setError()
+                ->setMessage(trans('core/base::notices.no_select'));
+        }
+
+        foreach ($ids as $id) {
+            $withdrawal = $this->withdrawalRepository->findOrFail($id);
+            $this->withdrawalRepository->delete($withdrawal);
+            event(new DeletedContentEvent(WITHDRAWAL_MODULE_SCREEN_NAME, $request, $withdrawal));
+        }
+
+        return $response->setMessage(trans('core/base::notices.delete_success_message'));
     }
 }

@@ -2,8 +2,8 @@
 
 namespace Botble\Ecommerce\Enums;
 
-use Botble\Base\Facades\BaseHelper;
 use Botble\Base\Supports\Enum;
+use Botble\Base\Facades\Html;
 use Illuminate\Support\HtmlString;
 
 /**
@@ -13,19 +13,18 @@ use Illuminate\Support\HtmlString;
 class ShippingCodStatusEnum extends Enum
 {
     public const PENDING = 'pending';
-
     public const COMPLETED = 'completed';
 
     public static $langPath = 'plugins/ecommerce::shipping.cod_statuses';
 
     public function toHtml(): HtmlString|string
     {
-        $color = match ($this->value) {
-            self::PENDING => 'warning',
-            self::COMPLETED => 'success',
-            default => 'primary',
+        return match ($this->value) {
+            self::PENDING => Html::tag('span', self::PENDING()->label(), ['class' => 'label-warning status-label'])
+                ->toHtml(),
+            self::COMPLETED => Html::tag('span', self::COMPLETED()->label(), ['class' => 'label-success status-label'])
+                ->toHtml(),
+            default => parent::toHtml(),
         };
-
-        return BaseHelper::renderBadge($this->label(), $color);
     }
 }

@@ -11,7 +11,6 @@ use Illuminate\Contracts\Validation\Rule as RuleContract;
 use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Contracts\Validation\ValidatorAwareRule;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Fluent;
 use Illuminate\Support\MessageBag;
 use Illuminate\Support\Str;
@@ -188,7 +187,6 @@ class Validator implements ValidatorContract
     protected $fileRules = [
         'Between',
         'Dimensions',
-        'Extensions',
         'File',
         'Image',
         'Max',
@@ -215,14 +213,9 @@ class Validator implements ValidatorContract
         'MissingWith',
         'MissingWithAll',
         'Present',
-        'PresentIf',
-        'PresentUnless',
-        'PresentWith',
-        'PresentWithAll',
         'Required',
         'RequiredIf',
         'RequiredIfAccepted',
-        'RequiredIfDeclined',
         'RequiredUnless',
         'RequiredWith',
         'RequiredWithAll',
@@ -254,26 +247,15 @@ class Validator implements ValidatorContract
         'DeclinedIf',
         'RequiredIf',
         'RequiredIfAccepted',
-        'RequiredIfDeclined',
         'RequiredUnless',
         'RequiredWith',
         'RequiredWithAll',
         'RequiredWithout',
         'RequiredWithoutAll',
-        'PresentIf',
-        'PresentUnless',
-        'PresentWith',
-        'PresentWithAll',
         'Prohibited',
         'ProhibitedIf',
-        'ProhibitedIfAccepted',
-        'ProhibitedIfDeclined',
         'ProhibitedUnless',
         'Prohibits',
-        'MissingIf',
-        'MissingUnless',
-        'MissingWith',
-        'MissingWithAll',
         'Same',
         'Unique',
     ];
@@ -300,32 +282,18 @@ class Validator implements ValidatorContract
     protected $numericRules = ['Numeric', 'Integer', 'Decimal'];
 
     /**
-     * The default numeric related validation rules.
-     *
-     * @var string[]
-     */
-    protected $defaultNumericRules = ['Numeric', 'Integer', 'Decimal'];
-
-    /**
-     * The current random hash for the validator.
+     * The current placeholder for dots in rule keys.
      *
      * @var string
      */
-    protected static $placeholderHash;
+    protected $dotPlaceholder;
 
     /**
      * The exception to throw upon failure.
      *
-     * @var class-string<\Illuminate\Validation\ValidationException>
+     * @var string
      */
     protected $exception = ValidationException::class;
-
-    /**
-     * The custom callback to determine if an exponent is within allowed range.
-     *
-     * @var callable|null
-     */
-    protected $ensureExponentWithinAllowedRangeUsing;
 
     /**
      * Create a new Validator instance.
@@ -334,24 +302,19 @@ class Validator implements ValidatorContract
      * @param  array  $data
      * @param  array  $rules
      * @param  array  $messages
-     * @param  array  $attributes
+     * @param  array  $customAttributes
+     * @return void
      */
-    public function __construct(
-        Translator $translator,
-        array $data,
-        array $rules,
-        array $messages = [],
-        array $attributes = [],
-    ) {
-        if (! isset(static::$placeholderHash)) {
-            static::$placeholderHash = Str::random();
-        }
+    public function __construct(Translator $translator, array $data, array $rules,
+                                array $messages = [], array $customAttributes = [])
+    {
+        $this->dotPlaceholder = Str::random();
 
         $this->initialRules = $rules;
         $this->translator = $translator;
         $this->customMessages = $messages;
         $this->data = $this->parseData($data);
-        $this->customAttributes = $attributes;
+        $this->customAttributes = $customAttributes;
 
         $this->setRules($rules);
     }
@@ -373,7 +336,7 @@ class Validator implements ValidatorContract
 
             $key = str_replace(
                 ['.', '*'],
-                ['__dot__'.static::$placeholderHash, '__asterisk__'.static::$placeholderHash],
+                [$this->dotPlaceholder, '__asterisk__'],
                 $key
             );
 
@@ -395,8 +358,8 @@ class Validator implements ValidatorContract
 
         foreach ($data as $key => $value) {
             $originalData[$this->replacePlaceholderInString($key)] = is_array($value)
-                ? $this->replacePlaceholders($value)
-                : $value;
+                        ? $this->replacePlaceholders($value)
+                        : $value;
         }
 
         return $originalData;
@@ -411,41 +374,20 @@ class Validator implements ValidatorContract
     protected function replacePlaceholderInString(string $value)
     {
         return str_replace(
-            ['__dot__'.static::$placeholderHash, '__asterisk__'.static::$placeholderHash],
+            [$this->dotPlaceholder, '__asterisk__'],
             ['.', '*'],
             $value
         );
     }
 
     /**
-     * Replace each field parameter dot placeholder with dot.
-     *
-     * @param  array  $parameters
-     * @return array
-     */
-    protected function replaceDotPlaceholderInParameters(array $parameters)
-    {
-        return array_map(function ($field) {
-            return str_replace('__dot__'.static::$placeholderHash, '.', $field);
-        }, $parameters);
-    }
-
-    /**
      * Add an after validation callback.
      *
-     * @param  callable|array|string  $callback
+     * @param  callable|string  $callback
      * @return $this
      */
     public function after($callback)
     {
-        if (is_array($callback) && ! is_callable($callback)) {
-            foreach ($callback as $rule) {
-                $this->after(method_exists($rule, 'after') ? $rule->after(...) : $rule);
-            }
-
-            return $this;
-        }
-
         $this->after[] = fn () => $callback($this);
 
         return $this;
@@ -480,18 +422,14 @@ class Validator implements ValidatorContract
                 $this->validateAttribute($attribute, $rule);
 
                 if ($this->shouldBeExcluded($attribute)) {
+                    $this->removeAttribute($attribute);
+
                     break;
                 }
 
                 if ($this->shouldStopValidating($attribute)) {
                     break;
                 }
-            }
-        }
-
-        foreach ($this->rules as $attribute => $rules) {
-            if ($this->shouldBeExcluded($attribute)) {
-                $this->removeAttribute($attribute);
             }
         }
 
@@ -584,11 +522,11 @@ class Validator implements ValidatorContract
      * @param  array|null  $keys
      * @return \Illuminate\Support\ValidatedInput|array
      */
-    public function safe(?array $keys = null)
+    public function safe(array $keys = null)
     {
         return is_array($keys)
-            ? (new ValidatedInput($this->validated()))->only($keys)
-            : new ValidatedInput($this->validated());
+                ? (new ValidatedInput($this->validated()))->only($keys)
+                : new ValidatedInput($this->validated());
     }
 
     /**
@@ -600,25 +538,20 @@ class Validator implements ValidatorContract
      */
     public function validated()
     {
-        if (! $this->messages) {
-            $this->passes();
-        }
-
-        throw_if($this->messages->isNotEmpty(), $this->exception, $this);
+        throw_if($this->invalid(), $this->exception, $this);
 
         $results = [];
 
         $missingValue = new stdClass;
 
         foreach ($this->getRules() as $key => $rules) {
-            $value = data_get($this->getData(), $key, $missingValue);
-
             if ($this->excludeUnvalidatedArrayKeys &&
-                (in_array('array', $rules) || in_array('list', $rules)) &&
-                $value !== null &&
+                in_array('array', $rules) &&
                 ! empty(preg_grep('/^'.preg_quote($key, '/').'\.+/', array_keys($this->getRules())))) {
                 continue;
             }
+
+            $value = data_get($this->getData(), $key, $missingValue);
 
             if ($value !== $missingValue) {
                 Arr::set($results, $key, $value);
@@ -674,13 +607,11 @@ class Validator implements ValidatorContract
 
         if ($rule instanceof RuleContract) {
             return $validatable
-                ? $this->validateUsingCustomRule($attribute, $value, $rule)
-                : null;
+                    ? $this->validateUsingCustomRule($attribute, $value, $rule)
+                    : null;
         }
 
         $method = "validate{$rule}";
-
-        $this->numericRules = $this->defaultNumericRules;
 
         if ($validatable && ! $this->$method($attribute, $value, $parameters, $this)) {
             $this->addFailure($attribute, $rule, $parameters);
@@ -747,7 +678,7 @@ class Validator implements ValidatorContract
     protected function replaceDotInParameters(array $parameters)
     {
         return array_map(function ($field) {
-            return str_replace('\.', '__dot__'.static::$placeholderHash, $field);
+            return str_replace('\.', $this->dotPlaceholder, $field);
         }, $parameters);
     }
 
@@ -873,24 +804,11 @@ class Validator implements ValidatorContract
      */
     protected function validateUsingCustomRule($attribute, $value, $rule)
     {
-        $originalAttribute = $this->replacePlaceholderInString($attribute);
-
-        $attribute = match (true) {
-            $rule instanceof Rules\Email => $attribute,
-            $rule instanceof Rules\File => $attribute,
-            $rule instanceof Rules\Password => $attribute,
-            default => $originalAttribute,
-        };
+        $attribute = $this->replacePlaceholderInString($attribute);
 
         $value = is_array($value) ? $this->replacePlaceholders($value) : $value;
 
         if ($rule instanceof ValidatorAwareRule) {
-            if ($attribute !== $originalAttribute) {
-                $this->addCustomAttributes([
-                    $attribute => $this->customAttributes[$originalAttribute] ?? $originalAttribute,
-                ]);
-            }
-
             $rule->setValidator($this);
         }
 
@@ -903,14 +821,14 @@ class Validator implements ValidatorContract
                 get_class($rule->invokable()) :
                 get_class($rule);
 
-            $this->failedRules[$originalAttribute][$ruleClass] = [];
+            $this->failedRules[$attribute][$ruleClass] = [];
 
-            $messages = $this->getFromLocalArray($originalAttribute, $ruleClass) ?? $rule->message();
+            $messages = $this->getFromLocalArray($attribute, $ruleClass) ?? $rule->message();
 
             $messages = $messages ? (array) $messages : [$ruleClass];
 
             foreach ($messages as $key => $message) {
-                $key = is_string($key) ? $key : $originalAttribute;
+                $key = is_string($key) ? $key : $attribute;
 
                 $this->messages->add($key, $this->makeReplacements(
                     $message, $key, $ruleClass, []
@@ -966,10 +884,6 @@ class Validator implements ValidatorContract
 
         if (in_array($rule, $this->excludeRules)) {
             return $this->excludeAttribute($attribute);
-        }
-
-        if ($this->dependsOnOtherFields($rule)) {
-            $parameters = $this->replaceDotPlaceholderInParameters($parameters);
         }
 
         $this->messages->add($attribute, $this->makeReplacements(
@@ -1041,11 +955,9 @@ class Validator implements ValidatorContract
      */
     protected function attributesThatHaveMessages()
     {
-        return (new Collection($this->messages()->toArray()))
-            ->map(fn ($message, $key) => explode('.', $key)[0])
-            ->unique()
-            ->flip()
-            ->all();
+        return collect($this->messages()->toArray())->map(function ($message, $key) {
+            return explode('.', $key)[0];
+        })->unique()->flip()->all();
     }
 
     /**
@@ -1169,21 +1081,9 @@ class Validator implements ValidatorContract
      * @param  string  $attribute
      * @return mixed
      */
-    public function getValue($attribute)
+    protected function getValue($attribute)
     {
         return Arr::get($this->data, $attribute);
-    }
-
-    /**
-     * Set the value of a given attribute.
-     *
-     * @param  string  $attribute
-     * @param  mixed  $value
-     * @return void
-     */
-    public function setValue($attribute, $value)
-    {
-        Arr::set($this->data, $attribute, $value);
     }
 
     /**
@@ -1203,9 +1103,9 @@ class Validator implements ValidatorContract
      */
     public function getRulesWithoutPlaceholders()
     {
-        return (new Collection($this->rules))
+        return collect($this->rules)
             ->mapWithKeys(fn ($value, $key) => [
-                str_replace('__dot__'.static::$placeholderHash, '\\.', $key) => $value,
+                str_replace($this->dotPlaceholder, '\\.', $key) => $value,
             ])
             ->all();
     }
@@ -1218,11 +1118,9 @@ class Validator implements ValidatorContract
      */
     public function setRules(array $rules)
     {
-        $rules = (new Collection($rules))
-            ->mapWithKeys(function ($value, $key) {
-                return [str_replace('\.', '__dot__'.static::$placeholderHash, $key) => $value];
-            })
-            ->toArray();
+        $rules = collect($rules)->mapWithKeys(function ($value, $key) {
+            return [str_replace('\.', $this->dotPlaceholder, $key) => $value];
+        })->toArray();
 
         $this->initialRules = $rules;
 
@@ -1245,11 +1143,11 @@ class Validator implements ValidatorContract
         // of the explicit rules needed for the given data. For example the rule
         // names.* would get expanded to names.0, names.1, etc. for this data.
         $response = (new ValidationRuleParser($this->data))
-            ->explode(ValidationRuleParser::filterConditionalRules($rules, $this->data));
+                            ->explode(ValidationRuleParser::filterConditionalRules($rules, $this->data));
 
-        foreach ($response->rules as $key => $rule) {
-            $this->rules[$key] = array_merge($this->rules[$key] ?? [], $rule);
-        }
+        $this->rules = array_merge_recursive(
+            $this->rules, $response->rules
+        );
 
         $this->implicitAttributes = array_merge(
             $this->implicitAttributes, $response->implicitAttributes
@@ -1294,8 +1192,8 @@ class Validator implements ValidatorContract
         $lastSegmentOfAttribute = strrchr($attribute, '.');
 
         $attribute = $lastSegmentOfAttribute && $removeLastSegmentOfAttribute
-            ? Str::replaceLast($lastSegmentOfAttribute, '', $attribute)
-            : $attribute;
+                    ? Str::replaceLast($lastSegmentOfAttribute, '', $attribute)
+                    : $attribute;
 
         return is_array($data = data_get($this->data, $attribute))
             ? new Fluent($data)
@@ -1324,7 +1222,7 @@ class Validator implements ValidatorContract
     public function addExtensions(array $extensions)
     {
         if ($extensions) {
-            $keys = array_map(Str::snake(...), array_keys($extensions));
+            $keys = array_map([Str::class, 'snake'], array_keys($extensions));
 
             $extensions = array_combine($keys, array_values($extensions));
         }
@@ -1411,7 +1309,7 @@ class Validator implements ValidatorContract
     public function addReplacers(array $replacers)
     {
         if ($replacers) {
-            $keys = array_map(Str::snake(...), array_keys($replacers));
+            $keys = array_map([Str::class, 'snake'], array_keys($replacers));
 
             $replacers = array_combine($keys, array_values($replacers));
         }
@@ -1460,12 +1358,12 @@ class Validator implements ValidatorContract
     /**
      * Add custom attributes to the validator.
      *
-     * @param  array  $attributes
+     * @param  array  $customAttributes
      * @return $this
      */
-    public function addCustomAttributes(array $attributes)
+    public function addCustomAttributes(array $customAttributes)
     {
-        $this->customAttributes = array_merge($this->customAttributes, $attributes);
+        $this->customAttributes = array_merge($this->customAttributes, $customAttributes);
 
         return $this;
     }
@@ -1476,7 +1374,7 @@ class Validator implements ValidatorContract
      * @param  callable|null  $formatter
      * @return $this
      */
-    public function setImplicitAttributesFormatter(?callable $formatter = null)
+    public function setImplicitAttributesFormatter(callable $formatter = null)
     {
         $this->implicitAttributesFormatter = $formatter;
 
@@ -1553,19 +1451,9 @@ class Validator implements ValidatorContract
     }
 
     /**
-     * Get the exception to throw upon failed validation.
-     *
-     * @return class-string<\Illuminate\Validation\ValidationException>
-     */
-    public function getException()
-    {
-        return $this->exception;
-    }
-
-    /**
      * Set the exception to throw upon failed validation.
      *
-     * @param  class-string<\Illuminate\Validation\ValidationException>  $exception
+     * @param  string  $exception
      * @return $this
      *
      * @throws \InvalidArgumentException
@@ -1579,19 +1467,6 @@ class Validator implements ValidatorContract
         }
 
         $this->exception = $exception;
-
-        return $this;
-    }
-
-    /**
-     * Ensure exponents are within range using the given callback.
-     *
-     * @param  callable(int $scale, string $attribute, mixed $value)  $callback
-     * @return $this
-     */
-    public function ensureExponentWithinAllowedRangeUsing($callback)
-    {
-        $this->ensureExponentWithinAllowedRangeUsing = $callback;
 
         return $this;
     }

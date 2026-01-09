@@ -15,9 +15,10 @@ use Yajra\DataTables\Html\Builder as HtmlBuilder;
 class DummyClass extends DataTable
 {
     /**
-     * Build the DataTable class.
+     * Build DataTable class.
      *
-     * @param QueryBuilder<ModelName> $query Results from query() method.
+     * @param QueryBuilder $query Results from query() method.
+     * @return \Yajra\DataTables\EloquentDataTable
      */
     public function dataTable(QueryBuilder $query): EloquentDataTable
     {
@@ -27,9 +28,10 @@ class DummyClass extends DataTable
     }
 
     /**
-     * Get the query source of dataTable.
+     * Get query source of dataTable.
      *
-     * @return QueryBuilder<ModelName>
+     * @param \DummyModel $model
+     * @return \Illuminate\Database\Eloquent\Builder
      */
     public function query(ModelName $model): QueryBuilder
     {
@@ -37,7 +39,9 @@ class DummyClass extends DataTable
     }
 
     /**
-     * Optional method if you want to use the html builder.
+     * Optional method if you want to use html builder.
+     *
+     * @return \Yajra\DataTables\Html\Builder
      */
     public function html(): HtmlBuilder
     {
@@ -45,6 +49,7 @@ class DummyClass extends DataTable
                     ->setTableId('DummyTableId')
                     ->columns($this->getColumns())
                     ->minifiedAjax()
+                    //->dom('DummyDOM')
                     ->orderBy(1)
                     ->selectStyleSingle()
                     ->buttons([
@@ -54,6 +59,8 @@ class DummyClass extends DataTable
 
     /**
      * Get the dataTable columns definition.
+     *
+     * @return array
      */
     public function getColumns(): array
     {
@@ -68,7 +75,9 @@ class DummyClass extends DataTable
     }
 
     /**
-     * Get the filename for export.
+     * Get filename for export.
+     *
+     * @return string
      */
     protected function filename(): string
     {

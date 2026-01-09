@@ -26,15 +26,20 @@ use Symfony\Contracts\Service\ResetInterface;
  */
 final class TraceableHttpClient implements HttpClientInterface, ResetInterface, LoggerAwareInterface
 {
+    private $client;
+    private $stopwatch;
     private \ArrayObject $tracedRequests;
 
-    public function __construct(
-        private HttpClientInterface $client,
-        private ?Stopwatch $stopwatch = null,
-    ) {
+    public function __construct(HttpClientInterface $client, Stopwatch $stopwatch = null)
+    {
+        $this->client = $client;
+        $this->stopwatch = $stopwatch;
         $this->tracedRequests = new \ArrayObject();
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public function request(string $method, string $url, array $options = []): ResponseInterface
     {
         $content = null;
@@ -61,10 +66,13 @@ final class TraceableHttpClient implements HttpClientInterface, ResetInterface, 
             }
         };
 
-        return new TraceableResponse($this->client, $this->client->request($method, $url, $options), $content, $this->stopwatch?->start("$method $url", 'http_client'));
+        return new TraceableResponse($this->client, $this->client->request($method, $url, $options), $content, null === $this->stopwatch ? null : $this->stopwatch->start("$method $url", 'http_client'));
     }
 
-    public function stream(ResponseInterface|iterable $responses, ?float $timeout = null): ResponseStreamInterface
+    /**
+     * {@inheritdoc}
+     */
+    public function stream(ResponseInterface|iterable $responses, float $timeout = null): ResponseStreamInterface
     {
         if ($responses instanceof TraceableResponse) {
             $responses = [$responses];
@@ -78,7 +86,7 @@ final class TraceableHttpClient implements HttpClientInterface, ResetInterface, 
         return $this->tracedRequests->getArrayCopy();
     }
 
-    public function reset(): void
+    public function reset()
     {
         if ($this->client instanceof ResetInterface) {
             $this->client->reset();
@@ -88,17 +96,18 @@ final class TraceableHttpClient implements HttpClientInterface, ResetInterface, 
     }
 
     /**
-     * @deprecated since Symfony 7.1, configure the logger on the wrapped HTTP client directly instead
+     * {@inheritdoc}
      */
     public function setLogger(LoggerInterface $logger): void
     {
-        trigger_deprecation('symfony/http-client', '7.1', 'Configure the logger on the wrapped HTTP client directly instead.');
-
         if ($this->client instanceof LoggerAwareInterface) {
             $this->client->setLogger($logger);
         }
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public function withOptions(array $options): static
     {
         $clone = clone $this;

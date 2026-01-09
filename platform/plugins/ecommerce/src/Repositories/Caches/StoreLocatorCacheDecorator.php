@@ -2,11 +2,9 @@
 
 namespace Botble\Ecommerce\Repositories\Caches;
 
-use Botble\Ecommerce\Repositories\Eloquent\StoreLocatorRepository;
+use Botble\Ecommerce\Repositories\Interfaces\StoreLocatorInterface;
+use Botble\Support\Repositories\Caches\CacheAbstractDecorator;
 
-/**
- * @deprecated
- */
-class StoreLocatorCacheDecorator extends StoreLocatorRepository
+class StoreLocatorCacheDecorator extends CacheAbstractDecorator implements StoreLocatorInterface
 {
 }

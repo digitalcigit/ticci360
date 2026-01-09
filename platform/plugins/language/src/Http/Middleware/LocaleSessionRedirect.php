@@ -2,13 +2,11 @@
 
 namespace Botble\Language\Http\Middleware;
 
-use Botble\Language\Facades\Language;
 use Botble\Language\LanguageNegotiator;
 use Closure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\App;
-use Illuminate\Support\Facades\Session;
+use Botble\Language\Facades\Language;
 
 class LocaleSessionRedirect extends LaravelLocalizationMiddlewareBase
 {
@@ -20,37 +18,27 @@ class LocaleSessionRedirect extends LaravelLocalizationMiddlewareBase
         }
 
         $params = array_filter(explode('/', $request->path()));
-        $paramLocale = $params[0] ?? null;
 
-        if (count($params) > 0 && Language::checkLocaleInSupportedLocales($paramLocale)) {
-            $this->updatePreviousLanguage($paramLocale);
+        if (count($params) > 0 && Language::checkLocaleInSupportedLocales($params[0])) {
+            session(['language' => $params[0]]);
 
-            Session::put(['language' => $paramLocale]);
-
-            App::setLocale($paramLocale);
+            app()->setLocale(session('language'));
 
             return $next($request);
         }
 
-        $locale = Session::get('language', false);
+        $locale = session('language', false);
 
-        $defaultLocale = Language::getDefaultLocale();
-
-        if (! empty($params) && ! Language::checkLocaleInSupportedLocales($paramLocale)) {
-            $locale = $defaultLocale;
+        if (! empty($params) && ! Language::checkLocaleInSupportedLocales($params[0])) {
+            $locale = Language::getDefaultLocale();
         }
 
-        if (
-            empty($locale) &&
-            empty($params) &&
-            Language::hideDefaultLocaleInURL() &&
-            Language::useAcceptLanguageHeader()
-        ) {
+        if (empty($locale) && empty($params) && Language::hideDefaultLocaleInURL() && Language::useAcceptLanguageHeader()) {
             // When default locale is hidden and accept language header is true,
             // then compute browser language when no session has been set.
             // Once the session has been set, there is no need to negotiate language from browser again.
             $negotiator = new LanguageNegotiator(
-                $defaultLocale,
+                Language::getDefaultLocale(),
                 Language::getSupportedLocales(),
                 $request
             );
@@ -58,34 +46,16 @@ class LocaleSessionRedirect extends LaravelLocalizationMiddlewareBase
             $locale = $negotiator->negotiateLanguage();
         }
 
-        $this->updatePreviousLanguage($defaultLocale);
+        session(['language' => Language::getDefaultLocale()]);
+        app()->setLocale(session('language'));
 
-        $locale = $locale ?: $defaultLocale;
-
-        Session::put(['language' => $locale]);
-
-        App::setLocale($locale);
-
-        if (
-            $locale
-            && Language::checkLocaleInSupportedLocales($locale)
-            && (! ($defaultLocale === $locale) && Language::hideDefaultLocaleInURL())
-        ) {
-            Session::reflash();
-
+        if ($locale && Language::checkLocaleInSupportedLocales($locale) && ! (Language::getDefaultLocale() === $locale && Language::hideDefaultLocaleInURL())) {
+            app('session')->reflash();
             $redirection = Language::getLocalizedURL($locale, null, [], false);
 
             return new RedirectResponse($redirection, 302, ['Vary' => 'Accept-Language']);
         }
 
         return $next($request);
-    }
-
-    protected function updatePreviousLanguage(string $language): void
-    {
-        if (Session::has('language')
-            && ($sessionLanguage = Session::get('language')) !== $language) {
-            Session::put(['previous_language' => $sessionLanguage]);
-        }
     }
 }

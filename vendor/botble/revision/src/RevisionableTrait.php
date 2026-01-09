@@ -39,19 +39,19 @@ trait RevisionableTrait
      */
     public static function bootRevisionableTrait(): void
     {
-        static::saving(function ($model): void {
+        static::saving(function ($model) {
             $model->preSave();
         });
 
-        static::saved(function ($model): void {
+        static::saved(function ($model) {
             $model->postSave();
         });
 
-        static::created(function ($model): void {
+        static::created(function ($model) {
             $model->postCreate();
         });
 
-        static::deleted(function ($model): void {
+        static::deleted(function ($model) {
             $model->preSave();
             $model->postDelete();
         });
@@ -62,8 +62,7 @@ trait RevisionableTrait
      */
     public static function classRevisionHistory(int $limit = 100, string $order = 'desc')
     {
-        return Revision::query()
-            ->where('revisionable_type', get_called_class())
+        return Revision::where('revisionable_type', get_called_class())
             ->orderBy('updated_at', $order)->limit($limit)->get();
     }
 
@@ -130,7 +129,8 @@ trait RevisionableTrait
             $revisions = [];
 
             foreach ($changesToRecord as $key => $change) {
-                $data = [
+                $revisions[] = [
+                    'id' => BaseModel::determineIfUsingUuidsForId() ? BaseModel::newUniqueId() : null,
                     'revisionable_type' => $this->getMorphClass(),
                     'revisionable_id' => $this->getKey(),
                     'key' => $key,
@@ -140,12 +140,6 @@ trait RevisionableTrait
                     'created_at' => new DateTime(),
                     'updated_at' => new DateTime(),
                 ];
-
-                if (BaseModel::isUsingStringId()) {
-                    $data['id'] = (new BaseModel())->newUniqueId();
-                }
-
-                $revisions[] = $data;
             }
 
             if (count($revisions) > 0) {
@@ -220,8 +214,8 @@ trait RevisionableTrait
     public function getSystemUserId(): int|string|null
     {
         try {
-            if (Auth::guard()->check()) {
-                return Auth::guard()->id();
+            if (Auth::check()) {
+                return Auth::id();
             }
         } catch (Exception) {
             return null;
@@ -306,12 +300,12 @@ trait RevisionableTrait
         return false;
     }
 
-    public function getRevisionFormattedFields(): ?array
+    public function getRevisionFormattedFields(): array|null
     {
         return $this->revisionFormattedFields;
     }
 
-    public function getRevisionFormattedFieldNames(): ?array
+    public function getRevisionFormattedFieldNames(): array|null
     {
         return $this->revisionFormattedFieldNames;
     }

@@ -2,20 +2,22 @@
 
 namespace Botble\Slug\Listeners;
 
-use Botble\Base\Contracts\BaseModel;
 use Botble\Base\Events\CreatedContentEvent;
-use Botble\Base\Facades\BaseHelper;
-use Botble\Slug\Facades\SlugHelper;
-use Botble\Slug\Models\Slug;
+use Botble\Slug\Repositories\Interfaces\SlugInterface;
 use Botble\Slug\Services\SlugService;
 use Exception;
 use Illuminate\Support\Str;
+use Botble\Slug\Facades\SlugHelper;
 
 class CreatedContentListener
 {
+    public function __construct(protected SlugInterface $slugRepository)
+    {
+    }
+
     public function handle(CreatedContentEvent $event): void
     {
-        if ($event->data instanceof BaseModel && SlugHelper::isSupportedModel($class = $event->data::class) && $event->request->input('is_slug_editable', 0)) {
+        if (SlugHelper::isSupportedModel(get_class($event->data)) && $event->request->input('is_slug_editable', 0)) {
             try {
                 $slug = $event->request->input('slug');
 
@@ -37,16 +39,16 @@ class CreatedContentListener
                     $slug = time();
                 }
 
-                $slugService = new SlugService();
+                $slugService = new SlugService($this->slugRepository);
 
-                Slug::query()->create([
-                    'key' => $slugService->create($slug, (int) $event->data->slug_id, $class),
-                    'reference_type' => $class,
-                    'reference_id' => $event->data->getKey(),
-                    'prefix' => SlugHelper::getPrefix($class, '', false),
+                $this->slugRepository->createOrUpdate([
+                    'key' => $slugService->create($slug, (int)$event->data->slug_id, get_class($event->data)),
+                    'reference_type' => get_class($event->data),
+                    'reference_id' => $event->data->id,
+                    'prefix' => SlugHelper::getPrefix(get_class($event->data)),
                 ]);
             } catch (Exception $exception) {
-                BaseHelper::logError($exception);
+                info($exception->getMessage());
             }
         }
     }

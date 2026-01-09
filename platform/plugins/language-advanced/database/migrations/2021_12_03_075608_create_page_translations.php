@@ -7,19 +7,17 @@ use Illuminate\Support\Facades\Schema;
 return new class () extends Migration {
     public function up(): void
     {
-        if (Schema::hasTable('pages_translations')) {
-            return;
+        if (! Schema::hasTable('pages_translations')) {
+            Schema::create('pages_translations', function (Blueprint $table) {
+                $table->string('lang_code');
+                $table->foreignId('pages_id');
+                $table->string('name', 255)->nullable();
+                $table->string('description', 400)->nullable();
+                $table->longText('content')->nullable();
+
+                $table->primary(['lang_code', 'pages_id'], 'pages_translations_primary');
+            });
         }
-
-        Schema::create('pages_translations', function (Blueprint $table): void {
-            $table->string('lang_code', 20);
-            $table->foreignId('pages_id');
-            $table->string('name')->nullable();
-            $table->string('description', 400)->nullable();
-            $table->longText('content')->nullable();
-
-            $table->primary(['lang_code', 'pages_id'], 'pages_translations_primary');
-        });
     }
 
     public function down(): void

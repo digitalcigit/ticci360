@@ -2,11 +2,11 @@
 
 namespace Botble\Ecommerce\Http\Middleware;
 
-use Botble\Ecommerce\Services\Footprints\TrackingFilterInterface;
-
-use Botble\Ecommerce\Services\Footprints\TrackingLoggerInterface;
 use Closure;
+
 use Illuminate\Http\Request;
+use Botble\Ecommerce\Services\Footprints\TrackingFilterInterface;
+use Botble\Ecommerce\Services\Footprints\TrackingLoggerInterface;
 
 class CaptureFootprintsMiddleware
 {

@@ -6,14 +6,11 @@ use Botble\ACL\Traits\PermissionTrait;
 use Botble\Base\Casts\SafeContent;
 use Botble\Base\Facades\BaseHelper;
 use Botble\Base\Models\BaseModel;
-use Botble\Base\Models\Concerns\HasSlug;
-use Botble\Base\Supports\Helper;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Role extends BaseModel
 {
-    use HasSlug;
     use PermissionTrait;
 
     protected $table = 'roles';
@@ -32,23 +29,9 @@ class Role extends BaseModel
         'permissions' => 'json',
         'name' => SafeContent::class,
         'description' => SafeContent::class,
-        'is_default' => 'bool',
     ];
 
-    protected static function booted(): void
-    {
-        self::saving(function (self $model): void {
-            $model->slug = self::createSlug($model->slug ?: $model->name, $model->getKey());
-        });
-
-        self::deleted(function (self $model): void {
-            $model->users()->detach();
-
-            Helper::clearCache();
-        });
-    }
-
-    public function delete(): ?bool
+    public function delete(): bool|null
     {
         if ($this->exists) {
             $this->users()->detach();
@@ -86,6 +69,6 @@ class Role extends BaseModel
             }
         }
 
-        return apply_filters('core_acl_role_permissions', $permissions);
+        return $permissions;
     }
 }

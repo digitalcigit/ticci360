@@ -6,10 +6,8 @@ use Botble\Base\Supports\PageTitle as PageTitleSupport;
 use Illuminate\Support\Facades\Facade;
 
 /**
- * @method static void setSiteName(string $siteName)
- * @method static void setSeparator(string $separator)
  * @method static void setTitle(string $title)
- * @method static string|null getTitle(bool $withSiteName = true)
+ * @method static string|null getTitle(bool $full = true)
  *
  * @see \Botble\Base\Supports\PageTitle
  */

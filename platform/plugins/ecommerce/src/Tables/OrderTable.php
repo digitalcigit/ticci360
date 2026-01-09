@@ -3,28 +3,16 @@
 namespace Botble\Ecommerce\Tables;
 
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Facades\Html;
-use Botble\Ecommerce\Enums\OrderHistoryActionEnum;
 use Botble\Ecommerce\Enums\OrderStatusEnum;
 use Botble\Ecommerce\Enums\ShippingMethodEnum;
-use Botble\Ecommerce\Facades\EcommerceHelper;
-use Botble\Ecommerce\Facades\OrderHelper;
 use Botble\Ecommerce\Models\Order;
-use Botble\Ecommerce\Models\OrderHistory;
-use Botble\Ecommerce\Tables\Formatters\PriceFormatter;
+use Botble\Ecommerce\Repositories\Interfaces\OrderHistoryInterface;
+use Botble\Ecommerce\Repositories\Interfaces\OrderInterface;
 use Botble\Payment\Enums\PaymentMethodEnum;
 use Botble\Payment\Enums\PaymentStatusEnum;
 use Botble\Table\Abstracts\TableAbstract;
-use Botble\Table\Actions\DeleteAction;
-use Botble\Table\Actions\EditAction;
-use Botble\Table\BulkActions\DeleteBulkAction;
-use Botble\Table\Columns\Column;
-use Botble\Table\Columns\CreatedAtColumn;
-use Botble\Table\Columns\FormattedColumn;
-use Botble\Table\Columns\IdColumn;
-use Botble\Table\Columns\StatusColumn;
-use Botble\Theme\Facades\Theme;
-use Exception;
+use Botble\Ecommerce\Facades\EcommerceHelper;
+use Illuminate\Contracts\Routing\UrlGenerator;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -33,26 +21,40 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Botble\Ecommerce\Facades\OrderHelper;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
+use Botble\Table\DataTables;
 
 class OrderTable extends TableAbstract
 {
-    public function setup(): void
+    protected $hasActions = true;
+
+    protected $hasFilter = true;
+
+    public function __construct(DataTables $table, UrlGenerator $urlGenerator, OrderInterface $orderRepository)
     {
-        $this
-            ->model(Order::class)
-            ->addActions([
-                EditAction::make()->route('orders.edit'),
-                DeleteAction::make()->route('orders.destroy'),
-            ]);
+        parent::__construct($table, $urlGenerator);
+
+        $this->repository = $orderRepository;
+
+        if (! Auth::user()->hasPermission('orders.edit')) {
+            $this->hasOperations = false;
+            $this->hasActions = false;
+        }
     }
 
     public function ajax(): JsonResponse
     {
         $data = $this->table
             ->eloquent($this->query())
-            ->editColumn('payment_status', function (Order $item) {
+            ->editColumn('checkbox', function ($item) {
+                return $this->getCheckbox($item->id);
+            })
+            ->editColumn('status', function ($item) {
+                return BaseHelper::clean($item->status->toHtml());
+            })
+            ->editColumn('payment_status', function ($item) {
                 if (! is_plugin_active('payment')) {
                     return '&mdash;';
                 }
@@ -61,25 +63,61 @@ class OrderTable extends TableAbstract
                     $item->payment->status->toHtml()
                 ) : '&mdash;';
             })
-            ->editColumn('payment_method', function (Order $item) {
+            ->editColumn('payment_method', function ($item) {
                 if (! is_plugin_active('payment')) {
                     return '&mdash;';
                 }
 
                 return BaseHelper::clean($item->payment->payment_channel->label() ?: '&mdash;');
             })
-            ->formatColumn('amount', PriceFormatter::class)
-            ->editColumn('shipping_amount', function (Order $item) {
-                return $item->shipment->exists() ? $item->shipping_amount : '&mdash;';
+            ->editColumn('amount', function ($item) {
+                return format_price($item->amount);
+            })
+            ->editColumn('shipping_amount', function ($item) {
+                return format_price($item->shipping_amount);
+            })
+            ->editColumn('user_id', function ($item) {
+                return BaseHelper::clean($item->user->name ?: $item->address->name);
+            })
+            ->editColumn('customer_email', function ($item) {
+                return BaseHelper::clean($item->user->email ?: $item->address->email);
+            })
+            ->editColumn('customer_phone', function ($item) {
+                return BaseHelper::clean($item->user->phone ?: $item->address->phone);
+            })
+            ->editColumn('created_at', function ($item) {
+                return BaseHelper::formatDate($item->created_at);
             });
 
         if (EcommerceHelper::isTaxEnabled()) {
-            $data = $data->formatColumn('tax_amount', PriceFormatter::class);
+            $data = $data->editColumn('tax_amount', function ($item) {
+                return format_price($item->tax_amount);
+            });
         }
 
         $data = $data
+            ->addColumn('operations', function ($item) {
+                return $this->getOperations('orders.edit', 'orders.destroy', $item);
+            })
             ->filter(function ($query) {
-                return $this->filterOrders($query);
+                if ($keyword = $this->request->input('search.value')) {
+                    return $query
+                        ->whereHas('address', function ($subQuery) use ($keyword) {
+                            return $subQuery
+                                ->where('name', 'LIKE', '%' . $keyword . '%')
+                                ->orWhere('email', 'LIKE', '%' . $keyword . '%')
+                                ->orWhere('phone', 'LIKE', '%' . $keyword . '%');
+                        })
+                        ->orWhereHas('user', function ($subQuery) use ($keyword) {
+                            return $subQuery
+                                ->where('name', 'LIKE', '%' . $keyword . '%')
+                                ->orWhere('email', 'LIKE', '%' . $keyword . '%')
+                                ->orWhere('phone', 'LIKE', '%' . $keyword . '%');
+                        })
+                        ->orWhere('code', 'LIKE', '%' . $keyword . '%');
+                }
+
+                return $query;
             });
 
         return $this->toJson($data);
@@ -87,15 +125,13 @@ class OrderTable extends TableAbstract
 
     public function query(): Relation|Builder|QueryBuilder
     {
-        $with = ['user', 'shipment', 'address'];
+        $with = ['user'];
 
         if (is_plugin_active('payment')) {
             $with[] = 'payment';
         }
 
-        $query = $this
-            ->getModel()
-            ->query()
+        $query = $this->repository->getModel()
             ->with($with)
             ->select([
                 'id',
@@ -115,54 +151,65 @@ class OrderTable extends TableAbstract
     public function columns(): array
     {
         $columns = [
-            IdColumn::make(),
-            FormattedColumn::make('user_id')
-                ->title(trans('plugins/ecommerce::order.email'))
-                ->alignStart()
-                ->orderable(false)
-                ->renderUsing(function (FormattedColumn $column) {
-                    $item = $column->getItem();
-
-                    return sprintf(
-                        '%s <br> %s <br> %s',
-                        $item->user->name ?: $item->address->name,
-                        Html::mailto($item->user->email ?: $item->address->email, obfuscate: false),
-                        $item->user->phone ?: $item->address->phone
-                    );
-                }),
-            Column::formatted('amount')
-                ->title(trans('plugins/ecommerce::order.amount')),
+            'id' => [
+                'title' => trans('core/base::tables.id'),
+                'width' => '20px',
+                'class' => 'text-start',
+            ],
+            'user_id' => [
+                'title' => trans('plugins/ecommerce::order.customer_label'),
+                'class' => 'text-start',
+            ],
+            'customer_email' => [
+                'title' => trans('plugins/ecommerce::customer.email'),
+                'class' => 'text-start',
+                'sortable' => false,
+            ],
+            'customer_phone' => [
+                'title' => trans('plugins/ecommerce::customer.phone'),
+                'class' => 'text-start',
+                'sortable' => false,
+            ],
+            'amount' => [
+                'title' => trans('plugins/ecommerce::order.amount'),
+                'class' => 'text-center',
+            ],
         ];
 
-        if (is_plugin_active('payment')) {
-            $columns = array_merge($columns, [
-                Column::make('payment_method')
-                    ->name('payment_id')
-                    ->title(trans('plugins/ecommerce::order.payment_method'))
-                    ->alignStart(),
-                Column::make('payment_status')
-                    ->name('payment_id')
-                    ->title(trans('plugins/ecommerce::order.payment_status_label')),
-            ]);
-        }
-
-        $columns[] = StatusColumn::make()->alignStart();
-
         if (EcommerceHelper::isTaxEnabled()) {
-            $columns = array_merge($columns, [
-                Column::formatted('tax_amount')
-                    ->title(trans('plugins/ecommerce::order.tax_amount')),
-            ]);
+            $columns['tax_amount'] = [
+                'title' => trans('plugins/ecommerce::order.tax_amount'),
+                'class' => 'text-center',
+            ];
         }
 
-        $columns = array_merge($columns, [
-            Column::make('shipping_amount')
-                ->title(trans('plugins/ecommerce::order.shipping_amount')),
-        ]);
+        $columns += [
+            'shipping_amount' => [
+                'title' => trans('plugins/ecommerce::order.shipping_amount'),
+                'class' => 'text-center',
+            ],
+            'payment_method' => [
+                'name' => 'payment_id',
+                'title' => trans('plugins/ecommerce::order.payment_method'),
+                'class' => 'text-start',
+            ],
+            'payment_status' => [
+                'name' => 'payment_id',
+                'title' => trans('plugins/ecommerce::order.payment_status_label'),
+                'class' => 'text-center',
+            ],
+            'status' => [
+                'title' => trans('core/base::tables.status'),
+                'class' => 'text-center',
+            ],
+            'created_at' => [
+                'title' => trans('core/base::tables.created_at'),
+                'width' => '100px',
+                'class' => 'text-start',
+            ],
+        ];
 
-        return array_merge($columns, [
-            CreatedAtColumn::make(),
-        ]);
+        return $columns;
     }
 
     public function buttons(): array
@@ -172,9 +219,7 @@ class OrderTable extends TableAbstract
 
     public function bulkActions(): array
     {
-        return [
-            DeleteBulkAction::make()->permission('orders.destroy'),
-        ];
+        return $this->addDeleteAction(route('orders.deletes'), 'orders.destroy', parent::bulkActions());
     }
 
     public function getBulkChanges(): array
@@ -240,7 +285,7 @@ class OrderTable extends TableAbstract
             $filters['store_id'] = [
                 'title' => trans('plugins/marketplace::store.forms.store'),
                 'type' => 'select-search',
-                'choices' => [-1 => Theme::getSiteTitle()] + DB::table('mp_stores')->pluck('name', 'id')->all(),
+                'choices' => [-1 => theme_option('site_title')] + DB::table('mp_stores')->pluck('name', 'id')->all(),
             ];
         }
 
@@ -249,7 +294,10 @@ class OrderTable extends TableAbstract
 
     public function renderTable($data = [], $mergeData = []): View|Factory|Response
     {
-        if ($this->isEmpty()) {
+        if ($this->query()->count() === 0 &&
+            ! $this->request()->wantsJson() &&
+            $this->request()->input('filter_table_id') !== $this->getOption('id') && ! $this->request()->ajax()
+        ) {
             return view('plugins/ecommerce::orders.intro');
         }
 
@@ -258,7 +306,10 @@ class OrderTable extends TableAbstract
 
     public function getDefaultButtons(): array
     {
-        return array_merge(['export'], parent::getDefaultButtons());
+        return [
+            'export',
+            'reload',
+        ];
     }
 
     public function saveBulkChangeItem(Model|Order $item, string $inputKey, ?string $inputValue): Model|bool
@@ -268,15 +319,15 @@ class OrderTable extends TableAbstract
              * @var Order $item
              */
             if (! $item->canBeCanceledByAdmin()) {
-                throw new Exception(trans('plugins/ecommerce::order.order_cannot_be_canceled'));
+                return $item;
             }
 
             OrderHelper::cancelOrder($item);
 
-            OrderHistory::query()->create([
-                'action' => OrderHistoryActionEnum::CANCEL_ORDER,
+            app(OrderHistoryInterface::class)->createOrUpdate([
+                'action' => 'cancel_order',
                 'description' => trans('plugins/ecommerce::order.order_was_canceled_by'),
-                'order_id' => $item->getKey(),
+                'order_id' => $item->id,
                 'user_id' => Auth::id(),
             ]);
 
@@ -286,12 +337,8 @@ class OrderTable extends TableAbstract
         return parent::saveBulkChangeItem($item, $inputKey, $inputValue);
     }
 
-    public function applyFilterCondition(
-        Builder|QueryBuilder|Relation $query,
-        string $key,
-        string $operator,
-        ?string $value
-    ): Builder|QueryBuilder|Relation {
+    public function applyFilterCondition(Builder|QueryBuilder|Relation $query, string $key, string $operator, ?string $value): Builder|QueryBuilder|Relation
+    {
         switch ($key) {
             case 'customer_name':
                 if (! $value) {
@@ -332,7 +379,7 @@ class OrderTable extends TableAbstract
                     return $query;
                 }
 
-                return $query->whereHas('payment', function ($subQuery) use ($value): void {
+                return $query->whereHas('payment', function ($subQuery) use ($value) {
                     $subQuery->where('payment_channel', $value);
                 });
 
@@ -341,7 +388,7 @@ class OrderTable extends TableAbstract
                     return $query;
                 }
 
-                return $query->whereHas('payment', function ($subQuery) use ($value): void {
+                return $query->whereHas('payment', function ($subQuery) use ($value) {
                     $subQuery->where('status', $value);
                 });
             case 'store_id':
@@ -349,7 +396,7 @@ class OrderTable extends TableAbstract
                     return $query;
                 }
                 if ($value == -1) {
-                    return $query->where(function ($subQuery): void {
+                    return $query->where(function ($subQuery) {
                         $subQuery->whereNull('store_id')
                             ->orWhere('store_id', 0);
                     });
@@ -359,12 +406,8 @@ class OrderTable extends TableAbstract
         return parent::applyFilterCondition($query, $key, $operator, $value);
     }
 
-    protected function filterByCustomer(
-        Builder|QueryBuilder|Relation $query,
-        string $column,
-        string $operator,
-        ?string $value
-    ): Builder|QueryBuilder|Relation {
+    protected function filterByCustomer(Builder|QueryBuilder|Relation $query, string $column, string $operator, ?string $value): Builder|QueryBuilder|Relation
+    {
         if ($operator === 'like') {
             $value = '%' . $value . '%';
         } elseif ($operator !== '=') {
@@ -372,42 +415,14 @@ class OrderTable extends TableAbstract
         }
 
         return $query
-            ->where(function ($query) use ($column, $operator, $value): void {
+            ->where(function ($query) use ($column, $operator, $value) {
                 $query
-                    ->whereHas('user', function ($subQuery) use ($column, $operator, $value): void {
+                    ->whereHas('user', function ($subQuery) use ($column, $operator, $value) {
                         $subQuery->where($column, $operator, $value);
                     })
-                    ->orWhereHas('address', function ($subQuery) use ($column, $operator, $value): void {
+                    ->orWhereHas('address', function ($subQuery) use ($column, $operator, $value) {
                         $subQuery->where($column, $operator, $value);
                     });
             });
-    }
-
-    protected function filterOrders($query, bool $finished = true): Builder|QueryBuilder|Relation
-    {
-        if ($keyword = $this->request->input('search.value')) {
-            $keyword = '%' . $keyword . '%';
-
-            return $query
-                ->where(function ($query) use ($keyword) {
-                    $query
-                        ->whereHas('address', function ($subQuery) use ($keyword) {
-                            return $subQuery
-                                ->where('name', 'LIKE', $keyword)
-                                ->orWhere('email', 'LIKE', $keyword)
-                                ->orWhere('phone', 'LIKE', $keyword);
-                        })
-                        ->orWhereHas('user', function ($subQuery) use ($keyword) {
-                            return $subQuery
-                                ->where('name', 'LIKE', $keyword)
-                                ->orWhere('email', 'LIKE', $keyword)
-                                ->orWhere('phone', 'LIKE', $keyword);
-                        })
-                        ->orWhere('code', 'LIKE', $keyword);
-                })
-                ->where('is_finished', $finished);
-        }
-
-        return $query;
     }
 }

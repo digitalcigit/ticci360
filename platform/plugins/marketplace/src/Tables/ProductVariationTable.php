@@ -2,10 +2,10 @@
 
 namespace Botble\Marketplace\Tables;
 
-use Botble\Base\Facades\Form;
-use Botble\Base\Facades\Html;
 use Botble\Ecommerce\Models\ProductVariation;
 use Botble\Ecommerce\Tables\ProductVariationTable as EcommerceProductVariationTable;
+use Botble\Base\Facades\Form;
+use Botble\Base\Facades\Html;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -13,25 +13,21 @@ use Illuminate\Http\JsonResponse;
 
 class ProductVariationTable extends EcommerceProductVariationTable
 {
+    protected $hasCheckbox = false;
+
     public function ajax(): JsonResponse
     {
         $data = $this->loadDataTable();
         $data
             ->editColumn('is_default', function (ProductVariation $item) {
-                return Html::tag(
-                    'label',
-                    Form::radio('variation_default_id', $item->getKey(), $item->is_default, [
-                        'data-url' => route('marketplace.vendor.products.set-default-product-variation', $item->getKey()),
-                        'data-bs-toggle' => 'tooltip',
-                        'title' => trans('plugins/ecommerce::products.set_this_variant_as_default'),
-                        'class' => 'form-check-input',
-                    ])
-                );
+                return Html::tag('label', Form::radio('variation_default_id', $item->id, $item->is_default, [
+                    'data-url' => route('marketplace.vendor.products.set-default-product-variation', $item->id),
+                ]));
             })
             ->editColumn('operations', function (ProductVariation $item) {
-                $update = route('marketplace.vendor.products.update-version', $item->getKey());
-                $loadForm = route('marketplace.vendor.products.get-version-form', $item->getKey());
-                $delete = route('marketplace.vendor.products.delete-version', $item->getKey());
+                $update = route('marketplace.vendor.products.update-version', $item->id);
+                $loadForm = route('marketplace.vendor.products.get-version-form', $item->id);
+                $delete = route('marketplace.vendor.products.delete-version', $item->id);
 
                 return view('plugins/ecommerce::products.variations.actions', compact('update', 'loadForm', 'delete', 'item'));
             });
@@ -41,14 +37,13 @@ class ProductVariationTable extends EcommerceProductVariationTable
 
     protected function baseQuery(): Relation|Builder|QueryBuilder
     {
-        return $this
+        return $this->repository
             ->getModel()
-            ->query()
-            ->whereHas('configurableProduct', function (Builder $query): void {
+            ->whereHas('configurableProduct', function (Builder $query) {
                 $query
                     ->where([
                         'configurable_product_id' => $this->productId,
-                        'store_id' => auth('customer')->user()->store?->id,
+                        'store_id' => auth('customer')->user()->store->id,
                     ]);
             });
     }

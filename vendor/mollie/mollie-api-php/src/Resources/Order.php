@@ -3,11 +3,15 @@
 namespace Mollie\Api\Resources;
 
 use Mollie\Api\Exceptions\ApiException;
+use Mollie\Api\MollieApiClient;
 use Mollie\Api\Types\OrderStatus;
 
 class Order extends BaseResource
 {
-    use HasPresetOptions;
+    /**
+     * @var string
+     */
+    public $resource;
 
     /**
      * Id of the order.
@@ -82,7 +86,7 @@ class Order extends BaseResource
     public $orderNumber;
 
     /**
-     * The person and the address the order is shipped to.
+     * The person and the address the order is billed to.
      *
      * @var \stdClass
      */
@@ -475,7 +479,18 @@ class Order extends BaseResource
      */
     public function refunds()
     {
-        return $this->client->orderRefunds->pageFor($this);
+        if (! isset($this->_links->refunds->href)) {
+            return new RefundCollection($this->client, 0, null);
+        }
+
+        $result = $this->client->performHttpCallToFullUrl(MollieApiClient::HTTP_GET, $this->_links->refunds->href);
+
+        return ResourceFactory::createCursorResourceCollection(
+            $this->client,
+            $result->_embedded->refunds,
+            Refund::class,
+            $result->_links
+        );
     }
 
     /**
@@ -530,5 +545,31 @@ class Order extends BaseResource
             $this->_embedded->payments,
             Payment::class
         );
+    }
+
+    /**
+     * When accessed by oAuth we want to pass the testmode by default
+     *
+     * @return array
+     */
+    private function getPresetOptions()
+    {
+        $options = [];
+        if ($this->client->usesOAuth()) {
+            $options["testmode"] = $this->mode === "test" ? true : false;
+        }
+
+        return $options;
+    }
+
+    /**
+     * Apply the preset options.
+     *
+     * @param array $options
+     * @return array
+     */
+    private function withPresetOptions(array $options)
+    {
+        return array_merge($this->getPresetOptions(), $options);
     }
 }

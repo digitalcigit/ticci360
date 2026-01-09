@@ -1,6 +1,8 @@
 <?php
 
 use Botble\Ecommerce\Models\Address;
+use Botble\Ecommerce\Repositories\Interfaces\AddressInterface;
+use Botble\Ecommerce\Repositories\Interfaces\WishlistInterface;
 use Illuminate\Support\Collection;
 
 if (! function_exists('is_added_to_wishlist')) {
@@ -10,11 +12,10 @@ if (! function_exists('is_added_to_wishlist')) {
             return false;
         }
 
-        return auth('customer')
-            ->user()
-            ->wishlist()
-            ->where('product_id', $productId)
-            ->exists();
+        return app(WishlistInterface::class)->count([
+                'product_id' => $productId,
+                'customer_id' => auth('customer')->id(),
+            ]) > 0;
     }
 }
 
@@ -25,7 +26,7 @@ if (! function_exists('count_customer_addresses')) {
             return 0;
         }
 
-        return Address::query()->where('customer_id', auth('customer')->id())->count();
+        return app(AddressInterface::class)->count(['customer_id' => auth('customer')->id()]);
     }
 }
 
@@ -36,10 +37,14 @@ if (! function_exists('get_customer_addresses')) {
             return collect();
         }
 
-        return Address::query()
-            ->where('customer_id', auth('customer')->id())
-            ->orderByDesc('created_at')
-            ->get();
+        return app(AddressInterface::class)->advancedGet([
+            'condition' => [
+                'customer_id' => auth('customer')->id(),
+            ],
+            'order_by' => [
+                'is_default' => 'DESC',
+            ],
+        ]);
     }
 }
 
@@ -50,16 +55,9 @@ if (! function_exists('get_default_customer_address')) {
             return null;
         }
 
-        /**
-         * @var Address $address
-         */
-        $address = Address::query()
-            ->where([
-                'is_default' => 1,
-                'customer_id' => auth('customer')->id(),
-            ])
-            ->first();
-
-        return $address;
+        return app(AddressInterface::class)->getFirstBy([
+            'is_default' => 1,
+            'customer_id' => auth('customer')->id(),
+        ]);
     }
 }

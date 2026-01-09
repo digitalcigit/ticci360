@@ -1,23 +1,21 @@
 'use strict'
-$(() => {
-    const jsOption = {
+$(document).ready(function() {
+    let jsOption = {
         currentType: 'N/A',
         init() {
             this.initFormFields($('.option-type').val())
             this.eventListeners()
             $('.option-sortable').sortable({
-                stop: function () {
+                stop: function() {
                     let idsInOrder = $('.option-sortable').sortable('toArray', { attribute: 'data-index' })
-                    idsInOrder.map(function (id, index) {
-                        $('.option-row[data-index="' + id + '"]')
-                            .find('.option-order')
-                            .val(index)
+                    idsInOrder.map(function(id, index) {
+                        $('.option-row[data-index="' + id + '"]').find('.option-order').val(index)
                     })
                 },
             })
         },
         addNewRow() {
-            $(document).on('click', '.add-new-row', function (e) {
+            $('.add-new-row').click(function() {
                 let table = $(this).parent().find('table tbody')
                 let tr = table.find('tr').last().clone()
                 let labelName = 'options[' + table.find('tr').length + '][option_value]',
@@ -32,7 +30,7 @@ $(() => {
             return this
         },
         removeRow() {
-            $('.option-setting-tab').on('click', '.remove-row', function () {
+            $('.option-setting-tab').on('click', '.remove-row', function() {
                 let table = $(this).parent().parent().parent()
                 if (table.find('tr').length > 1) {
                     $(this).parent().parent().remove()
@@ -48,10 +46,11 @@ $(() => {
         },
         onOptionChange() {
             let self = this
-            $('.option-type').change(function () {
+            $('.option-type').change(function() {
                 let value = $(this).val()
                 this.currentType = value
                 self.initFormFields(value)
+
             })
         },
         initFormFields(value) {
@@ -68,6 +67,5 @@ $(() => {
             }
         },
     }
-
     jsOption.init()
 })

@@ -20,7 +20,7 @@ class MetricOrderBy extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>string metric_name = 1;</code>
      */
-    protected $metric_name = '';
+    private $metric_name = '';
 
     /**
      * Constructor.

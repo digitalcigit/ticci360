@@ -2,9 +2,7 @@
 
 namespace Botble\PayPal\Services\Abstracts;
 
-use Botble\Payment\Models\Payment;
 use Botble\Payment\Services\Traits\PaymentErrorTrait;
-use Botble\Theme\Facades\Theme;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -15,7 +13,6 @@ use PayPalCheckoutSdk\Orders\OrdersCaptureRequest;
 use PayPalCheckoutSdk\Orders\OrdersCreateRequest;
 use PayPalCheckoutSdk\Orders\OrdersGetRequest;
 use PayPalCheckoutSdk\Payments\CapturesRefundRequest;
-use PayPalHttp\HttpResponse;
 
 abstract class PayPalPaymentAbstract
 {
@@ -153,9 +150,19 @@ abstract class PayPalPaymentAbstract
         }
 
         // issue https://developer.paypal.com/docs/api/orders/v2/#error-DECIMAL_PRECISION
-        $this->totalAmount = round((float) $this->totalAmount, $this->isSupportedDecimals() ? 2 : 0);
+        $this->totalAmount = round((float)$this->totalAmount, $this->isSupportedDecimals() ? 2 : 0);
 
         return $this;
+    }
+
+    public function getItemList(): array
+    {
+        return $this->itemList;
+    }
+
+    public function getTotalAmount(): float
+    {
+        return $this->totalAmount;
     }
 
     public function setReturnUrl(string $url): self
@@ -165,11 +172,21 @@ abstract class PayPalPaymentAbstract
         return $this;
     }
 
+    public function getReturnUrl(): string
+    {
+        return $this->returnUrl;
+    }
+
     public function setCancelUrl(string $url): self
     {
         $this->cancelUrl = $url;
 
         return $this;
+    }
+
+    public function getCancelUrl(): string
+    {
+        return $this->cancelUrl;
     }
 
     /**
@@ -183,7 +200,7 @@ abstract class PayPalPaymentAbstract
             'application_context' => [
                 'return_url' => $this->returnUrl,
                 'cancel_url' => $this->cancelUrl ?: $this->returnUrl,
-                'brand_name' => Theme::getSiteTitle(),
+                'brand_name' => theme_option('site_title'),
             ],
             'purchase_units' => [
                 0 => [
@@ -191,7 +208,7 @@ abstract class PayPalPaymentAbstract
                     'custom_id' => $this->customer,
                     'amount' => [
                         'currency_code' => $this->paymentCurrency,
-                        'value' => (string) $this->totalAmount,
+                        'value' => (string)$this->totalAmount,
                     ],
                 ],
             ],
@@ -209,18 +226,11 @@ abstract class PayPalPaymentAbstract
         $paymentId = null;
 
         try {
-            do_action('payment_before_making_api_request', PAYPAL_PAYMENT_METHOD_NAME, $orderRequest);
-
             // Call API with your client and get a response for your call
             $response = $this->client->execute($orderRequest);
-
-            do_action('payment_after_api_response', PAYPAL_PAYMENT_METHOD_NAME, (array) $orderRequest, (array) $response);
-
             if ($response && $response->statusCode == 201) {
-                // @phpstan-ignore-next-line
                 $paymentId = $response->result->id;
 
-                // @phpstan-ignore-next-line
                 foreach ($response->result->links as $link) {
                     if ($link->rel == 'approve') {
                         $checkoutUrl = $link->href;
@@ -228,8 +238,6 @@ abstract class PayPalPaymentAbstract
                 }
             }
         } catch (Exception $exception) {
-            do_action('payment_after_api_response', PAYPAL_PAYMENT_METHOD_NAME, (array) $exception);
-
             $this->setErrorMessageAndLogging($exception, 1);
 
             return false;
@@ -246,6 +254,12 @@ abstract class PayPalPaymentAbstract
         return null;
     }
 
+    /**
+     * Get payment status
+     *
+     * @param Request $request
+     * @return mixed Object payment details or false
+     */
     public function getPaymentStatus(Request $request)
     {
         if (empty($request->input('PayerID')) || empty($request->input('token'))) {
@@ -258,15 +272,8 @@ abstract class PayPalPaymentAbstract
             $orderRequest = new OrdersCaptureRequest($paymentId);
             $orderRequest->prefer('return=representation');
 
-            do_action('payment_before_making_api_request', PAYPAL_PAYMENT_METHOD_NAME, $orderRequest);
-
             $response = $this->client->execute($orderRequest);
-
-            do_action('payment_after_api_response', PAYPAL_PAYMENT_METHOD_NAME, (array) $orderRequest, (array) $response);
-
-            // @phpstan-ignore-next-line
             if ($response && $response->statusCode == 201 && $response->result->status == 'COMPLETED') {
-                // @phpstan-ignore-next-line
                 return $response->result->status;
             }
         } catch (Exception $exception) {
@@ -276,16 +283,15 @@ abstract class PayPalPaymentAbstract
         return false;
     }
 
-    public function getPaymentDetails(string $paymentId): bool|HttpResponse
+    /**
+     * Get payment details
+     *
+     * @return mixed Object payment details
+     */
+    public function getPaymentDetails(string $paymentId)
     {
         try {
-            $orderRequest = new OrdersGetRequest($paymentId);
-
-            do_action('payment_before_making_api_request', PAYPAL_PAYMENT_METHOD_NAME, $orderRequest);
-
-            $response = $this->client->execute($orderRequest);
-
-            do_action('payment_after_api_response', PAYPAL_PAYMENT_METHOD_NAME, (array) $orderRequest, (array) $response);
+            $response = $this->client->execute(new OrdersGetRequest($paymentId));
         } catch (Exception $exception) {
             $this->setErrorMessageAndLogging($exception, 1);
 
@@ -317,71 +323,36 @@ abstract class PayPalPaymentAbstract
     {
         try {
             $detail = $this->getPaymentDetails($paymentId);
-
-            // @phpstan-ignore-next-line
-            $purchaseUnits = $detail->result->purchase_units;
-            $purchaseUnit = Arr::get($purchaseUnits, 0);
-
-            $refunds = null;
-            $payments = $purchaseUnit->payments;
-            if ($payments && ! empty($payments->refunds)) {
-                $refunds = $payments->refunds;
-            }
-
-            if ($detail && ! $refunds) {
-                // @phpstan-ignore-next-line
-                $purchase = Arr::first($detail->result->purchase_units);
-                $capture = Arr::first($purchase->payments->captures);
-
-                if (! $capture) {
-                    return [
-                        'error' => true,
-                        'message' => trans('plugins/payment::payment.cannot_found_capture_id'),
-                    ];
-                }
-
+            $captureId = null;
+            if ($detail) {
+                $purchase = Arr::get($detail->result->purchase_units, 0);
+                $capture = Arr::get($purchase->payments->captures, 0);
                 $captureId = $capture->id;
+            }
+            if ($captureId) {
+                $refundRequest = new CapturesRefundRequest($captureId);
+                $refundRequest->body = $this->buildRefundRequestBody($totalAmount);
+                $refundRequest->prefer('return=representation');
+                $response = $this->client->execute($refundRequest);
 
-                if ($captureId && $capture->status != 'DECLINED') {
-                    $payment = Payment::query()->where('charge_id', $paymentId)->firstOrFail();
-                    $paymentCurrency = $purchase->amount->currency_code;
-
-                    if ($payment->currency !== $paymentCurrency) {
-
-                        $currency = cms_currency()->currencies()->where('title', $paymentCurrency)->first();
-
-                        if ($currency) {
-                            $totalAmount = $totalAmount * $currency->exchange_rate;
-                            $this->paymentCurrency = $paymentCurrency;
-                        }
-                    }
-
-                    $refundRequest = new CapturesRefundRequest($captureId);
-                    $refundRequest->body = $this->buildRefundRequestBody($totalAmount);
-                    $refundRequest->prefer('return=representation');
-                    $response = $this->client->execute($refundRequest);
-
-                    // @phpstan-ignore-next-line
-                    if ($response && $response->statusCode == 201 && $response->result->status == 'COMPLETED') {
-                        return [
-                            'error' => false, // @phpstan-ignore-next-line
-                            'status' => $response->result->status,
-                            'data' => (array) $response->result,
-                        ];
-                    }
-
+                if ($response && $response->statusCode == 201 && $response->result->status == 'COMPLETED') {
                     return [
-                        'error' => true,
-                        'status' => $response->statusCode,
-                        'message' => trans('plugins/payment::payment.status_is_not_completed'),
+                        'error' => false,
+                        'status' => $response->result->status,
+                        'data' => (array) $response->result,
                     ];
                 }
+
+                return [
+                    'error' => true,
+                    'status' => $response->statusCode,
+                    'message' => trans('plugins/payment::payment.status_is_not_completed'),
+                ];
             }
 
             return [
-                'error' => false,
-                'status' => true,
-                'data' => [],
+                'error' => true,
+                'message' => trans('plugins/payment::payment.cannot_found_capture_id'),
             ];
         } catch (Exception $exception) {
             $this->setErrorMessageAndLogging($exception, 1);
@@ -393,6 +364,11 @@ abstract class PayPalPaymentAbstract
         }
     }
 
+    /**
+     * Execute main service
+     *
+     * @return mixed
+     */
     public function execute(array $data)
     {
         try {
@@ -459,7 +435,17 @@ abstract class PayPalPaymentAbstract
         ];
     }
 
+    /**
+     * Make a payment
+     *
+     * @return mixed
+     */
     abstract public function makePayment(array $data);
 
+    /**
+     * Use this function to perform more logic after user has made a payment
+     *
+     * @return mixed
+     */
     abstract public function afterMakePayment(array $data);
 }

@@ -16,7 +16,7 @@ use Google\Protobuf\Internal\GPBUtil;
 class RunPivotReportRequest extends \Google\Protobuf\Internal\Message
 {
     /**
-     * A Google Analytics property identifier whose events are tracked.
+     * A Google Analytics GA4 property identifier whose events are tracked.
      * Specified in the URL path and not the body. To learn more, see [where to
      * find your Property
      * ID](https://developers.google.com/analytics/devguides/reporting/data/v1/property-id).
@@ -26,7 +26,7 @@ class RunPivotReportRequest extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>string property = 1;</code>
      */
-    protected $property = '';
+    private $property = '';
     /**
      * The dimensions requested. All defined dimensions must be used by one of the
      * following: dimension_expression, dimension_filter, pivots, order_bys.
@@ -67,7 +67,7 @@ class RunPivotReportRequest extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>.google.analytics.data.v1beta.FilterExpression dimension_filter = 6;</code>
      */
-    protected $dimension_filter = null;
+    private $dimension_filter = null;
     /**
      * The filter clause of metrics. Applied at post aggregation phase, similar to
      * SQL having-clause. Metrics must be requested to be used in this filter.
@@ -75,49 +75,36 @@ class RunPivotReportRequest extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>.google.analytics.data.v1beta.FilterExpression metric_filter = 7;</code>
      */
-    protected $metric_filter = null;
+    private $metric_filter = null;
     /**
      * A currency code in ISO4217 format, such as "AED", "USD", "JPY".
      * If the field is empty, the report uses the property's default currency.
      *
      * Generated from protobuf field <code>string currency_code = 8;</code>
      */
-    protected $currency_code = '';
+    private $currency_code = '';
     /**
      * Cohort group associated with this request. If there is a cohort group
      * in the request the 'cohort' dimension must be present.
      *
      * Generated from protobuf field <code>.google.analytics.data.v1beta.CohortSpec cohort_spec = 9;</code>
      */
-    protected $cohort_spec = null;
+    private $cohort_spec = null;
     /**
      * If false or unspecified, each row with all metrics equal to 0 will not be
      * returned. If true, these rows will be returned if they are not separately
      * removed by a filter.
-     * Regardless of this `keep_empty_rows` setting, only data recorded by the
-     * Google Analytics property can be displayed in a report.
-     * For example if a property never logs a `purchase` event, then a query for
-     * the `eventName` dimension and  `eventCount` metric will not have a row
-     * eventName: "purchase" and eventCount: 0.
      *
      * Generated from protobuf field <code>bool keep_empty_rows = 10;</code>
      */
-    protected $keep_empty_rows = false;
+    private $keep_empty_rows = false;
     /**
-     * Toggles whether to return the current state of this Google Analytics
-     * property's quota. Quota is returned in [PropertyQuota](#PropertyQuota).
+     * Toggles whether to return the current state of this Analytics Property's
+     * quota. Quota is returned in [PropertyQuota](#PropertyQuota).
      *
      * Generated from protobuf field <code>bool return_property_quota = 11;</code>
      */
-    protected $return_property_quota = false;
-    /**
-     * Optional. The configuration of comparisons requested and displayed. The
-     * request requires both a comparisons field and a comparisons dimension to
-     * receive a comparison column in the response.
-     *
-     * Generated from protobuf field <code>repeated .google.analytics.data.v1beta.Comparison comparisons = 12 [(.google.api.field_behavior) = OPTIONAL];</code>
-     */
-    private $comparisons;
+    private $return_property_quota = false;
 
     /**
      * Constructor.
@@ -126,7 +113,7 @@ class RunPivotReportRequest extends \Google\Protobuf\Internal\Message
      *     Optional. Data for populating the Message object.
      *
      *     @type string $property
-     *           A Google Analytics property identifier whose events are tracked.
+     *           A Google Analytics GA4 property identifier whose events are tracked.
      *           Specified in the URL path and not the body. To learn more, see [where to
      *           find your Property
      *           ID](https://developers.google.com/analytics/devguides/reporting/data/v1/property-id).
@@ -168,18 +155,9 @@ class RunPivotReportRequest extends \Google\Protobuf\Internal\Message
      *           If false or unspecified, each row with all metrics equal to 0 will not be
      *           returned. If true, these rows will be returned if they are not separately
      *           removed by a filter.
-     *           Regardless of this `keep_empty_rows` setting, only data recorded by the
-     *           Google Analytics property can be displayed in a report.
-     *           For example if a property never logs a `purchase` event, then a query for
-     *           the `eventName` dimension and  `eventCount` metric will not have a row
-     *           eventName: "purchase" and eventCount: 0.
      *     @type bool $return_property_quota
-     *           Toggles whether to return the current state of this Google Analytics
-     *           property's quota. Quota is returned in [PropertyQuota](#PropertyQuota).
-     *     @type array<\Google\Analytics\Data\V1beta\Comparison>|\Google\Protobuf\Internal\RepeatedField $comparisons
-     *           Optional. The configuration of comparisons requested and displayed. The
-     *           request requires both a comparisons field and a comparisons dimension to
-     *           receive a comparison column in the response.
+     *           Toggles whether to return the current state of this Analytics Property's
+     *           quota. Quota is returned in [PropertyQuota](#PropertyQuota).
      * }
      */
     public function __construct($data = NULL) {
@@ -188,7 +166,7 @@ class RunPivotReportRequest extends \Google\Protobuf\Internal\Message
     }
 
     /**
-     * A Google Analytics property identifier whose events are tracked.
+     * A Google Analytics GA4 property identifier whose events are tracked.
      * Specified in the URL path and not the body. To learn more, see [where to
      * find your Property
      * ID](https://developers.google.com/analytics/devguides/reporting/data/v1/property-id).
@@ -205,7 +183,7 @@ class RunPivotReportRequest extends \Google\Protobuf\Internal\Message
     }
 
     /**
-     * A Google Analytics property identifier whose events are tracked.
+     * A Google Analytics GA4 property identifier whose events are tracked.
      * Specified in the URL path and not the body. To learn more, see [where to
      * find your Property
      * ID](https://developers.google.com/analytics/devguides/reporting/data/v1/property-id).
@@ -497,11 +475,6 @@ class RunPivotReportRequest extends \Google\Protobuf\Internal\Message
      * If false or unspecified, each row with all metrics equal to 0 will not be
      * returned. If true, these rows will be returned if they are not separately
      * removed by a filter.
-     * Regardless of this `keep_empty_rows` setting, only data recorded by the
-     * Google Analytics property can be displayed in a report.
-     * For example if a property never logs a `purchase` event, then a query for
-     * the `eventName` dimension and  `eventCount` metric will not have a row
-     * eventName: "purchase" and eventCount: 0.
      *
      * Generated from protobuf field <code>bool keep_empty_rows = 10;</code>
      * @return bool
@@ -515,11 +488,6 @@ class RunPivotReportRequest extends \Google\Protobuf\Internal\Message
      * If false or unspecified, each row with all metrics equal to 0 will not be
      * returned. If true, these rows will be returned if they are not separately
      * removed by a filter.
-     * Regardless of this `keep_empty_rows` setting, only data recorded by the
-     * Google Analytics property can be displayed in a report.
-     * For example if a property never logs a `purchase` event, then a query for
-     * the `eventName` dimension and  `eventCount` metric will not have a row
-     * eventName: "purchase" and eventCount: 0.
      *
      * Generated from protobuf field <code>bool keep_empty_rows = 10;</code>
      * @param bool $var
@@ -534,8 +502,8 @@ class RunPivotReportRequest extends \Google\Protobuf\Internal\Message
     }
 
     /**
-     * Toggles whether to return the current state of this Google Analytics
-     * property's quota. Quota is returned in [PropertyQuota](#PropertyQuota).
+     * Toggles whether to return the current state of this Analytics Property's
+     * quota. Quota is returned in [PropertyQuota](#PropertyQuota).
      *
      * Generated from protobuf field <code>bool return_property_quota = 11;</code>
      * @return bool
@@ -546,8 +514,8 @@ class RunPivotReportRequest extends \Google\Protobuf\Internal\Message
     }
 
     /**
-     * Toggles whether to return the current state of this Google Analytics
-     * property's quota. Quota is returned in [PropertyQuota](#PropertyQuota).
+     * Toggles whether to return the current state of this Analytics Property's
+     * quota. Quota is returned in [PropertyQuota](#PropertyQuota).
      *
      * Generated from protobuf field <code>bool return_property_quota = 11;</code>
      * @param bool $var
@@ -557,36 +525,6 @@ class RunPivotReportRequest extends \Google\Protobuf\Internal\Message
     {
         GPBUtil::checkBool($var);
         $this->return_property_quota = $var;
-
-        return $this;
-    }
-
-    /**
-     * Optional. The configuration of comparisons requested and displayed. The
-     * request requires both a comparisons field and a comparisons dimension to
-     * receive a comparison column in the response.
-     *
-     * Generated from protobuf field <code>repeated .google.analytics.data.v1beta.Comparison comparisons = 12 [(.google.api.field_behavior) = OPTIONAL];</code>
-     * @return \Google\Protobuf\Internal\RepeatedField
-     */
-    public function getComparisons()
-    {
-        return $this->comparisons;
-    }
-
-    /**
-     * Optional. The configuration of comparisons requested and displayed. The
-     * request requires both a comparisons field and a comparisons dimension to
-     * receive a comparison column in the response.
-     *
-     * Generated from protobuf field <code>repeated .google.analytics.data.v1beta.Comparison comparisons = 12 [(.google.api.field_behavior) = OPTIONAL];</code>
-     * @param array<\Google\Analytics\Data\V1beta\Comparison>|\Google\Protobuf\Internal\RepeatedField $var
-     * @return $this
-     */
-    public function setComparisons($var)
-    {
-        $arr = GPBUtil::checkRepeatedField($var, \Google\Protobuf\Internal\GPBType::MESSAGE, \Google\Analytics\Data\V1beta\Comparison::class);
-        $this->comparisons = $arr;
 
         return $this;
     }

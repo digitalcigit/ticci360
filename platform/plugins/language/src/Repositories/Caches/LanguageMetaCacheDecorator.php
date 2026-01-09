@@ -2,11 +2,9 @@
 
 namespace Botble\Language\Repositories\Caches;
 
-use Botble\Language\Repositories\Eloquent\LanguageMetaRepository;
+use Botble\Support\Repositories\Caches\CacheAbstractDecorator;
+use Botble\Language\Repositories\Interfaces\LanguageMetaInterface;
 
-/**
- * @deprecated
- */
-class LanguageMetaCacheDecorator extends LanguageMetaRepository
+class LanguageMetaCacheDecorator extends CacheAbstractDecorator implements LanguageMetaInterface
 {
 }

@@ -16,14 +16,14 @@ class CategoryRepository extends RepositoriesAbstract implements CategoryInterfa
     {
         $data = $this->model
             ->with('slugable')
-            ->wherePublished()
+            ->where('status', BaseStatusEnum::PUBLISHED)
             ->select(['id', 'name', 'updated_at'])
-            ->orderByDesc('created_at');
+            ->orderBy('created_at', 'desc');
 
         return $this->applyBeforeExecuteQuery($data)->get();
     }
 
-    public function getFeaturedCategories(?int $limit, array $with = []): Collection
+    public function getFeaturedCategories(int|null $limit, array $with = []): Collection
     {
         $data = $this->model
             ->with(array_merge(['slugable'], $with))
@@ -37,8 +37,7 @@ class CategoryRepository extends RepositoriesAbstract implements CategoryInterfa
                 'description',
                 'icon',
             ])
-            ->oldest('order')
-            ->latest()
+            ->orderBy('order')
             ->limit($limit);
 
         return $this->applyBeforeExecuteQuery($data)->get();
@@ -52,9 +51,9 @@ class CategoryRepository extends RepositoriesAbstract implements CategoryInterfa
         }
 
         $data = $data
-            ->wherePublished()
-            ->oldest('order')
-            ->latest();
+            ->where('status', BaseStatusEnum::PUBLISHED)
+            ->orderBy('order', 'DESC')
+            ->orderBy('created_at', 'DESC');
 
         if ($with) {
             $data = $data->with($with);
@@ -84,7 +83,7 @@ class CategoryRepository extends RepositoriesAbstract implements CategoryInterfa
         }
 
         foreach ($orderBy as $by => $direction) {
-            $data = $data->oldest($by);
+            $data = $data->orderBy($by, $direction);
         }
 
         return $this->applyBeforeExecuteQuery($data)->get();
@@ -130,11 +129,11 @@ class CategoryRepository extends RepositoriesAbstract implements CategoryInterfa
     {
         $orderBy = $filters['order_by'] ?? 'created_at';
 
-        $order = $filters['order'] ?? 'ASC';
+        $order = $filters['order'] ?? 'desc';
 
-        $data = $this->model->wherePublished()->orderBy($orderBy, $order);
+        $data = $this->model->where('status', BaseStatusEnum::PUBLISHED)->orderBy($orderBy, $order);
 
-        return $this->applyBeforeExecuteQuery($data)->paginate((int) $filters['per_page']);
+        return $this->applyBeforeExecuteQuery($data)->paginate((int)$filters['per_page']);
     }
 
     public function getPopularCategories(int $limit, array $with = ['slugable'], array $withCount = ['posts']): Collection
@@ -142,10 +141,8 @@ class CategoryRepository extends RepositoriesAbstract implements CategoryInterfa
         $data = $this->model
             ->with($with)
             ->withCount($withCount)
-            ->latest('posts_count')
-            ->oldest('order')
-            ->latest()
-            ->wherePublished()
+            ->orderBy('posts_count', 'desc')
+            ->where('status', BaseStatusEnum::PUBLISHED)
             ->limit($limit);
 
         return $this->applyBeforeExecuteQuery($data)->get();

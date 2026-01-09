@@ -4,7 +4,6 @@ namespace Botble\Ecommerce\Models;
 
 use Botble\ACL\Models\User;
 use Botble\Base\Models\BaseModel;
-use Botble\Ecommerce\Enums\OrderHistoryActionEnum;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -20,10 +19,6 @@ class OrderHistory extends BaseModel
         'extras',
     ];
 
-    protected $casts = [
-        'action' => OrderHistoryActionEnum::class,
-    ];
-
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id')->withDefault();
@@ -36,6 +31,10 @@ class OrderHistory extends BaseModel
 
     protected function extras(): Attribute
     {
-        return Attribute::get(fn (?string $value): array => json_decode($value, true) ?: []);
+        return Attribute::make(
+            get: function (?string $value): array {
+                return json_decode($value, true) ?: [];
+            }
+        );
     }
 }

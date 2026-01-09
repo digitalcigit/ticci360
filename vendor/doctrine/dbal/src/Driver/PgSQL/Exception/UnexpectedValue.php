@@ -9,6 +9,7 @@ use UnexpectedValueException;
 
 use function sprintf;
 
+/** @psalm-immutable */
 final class UnexpectedValue extends UnexpectedValueException implements Exception
 {
     public static function new(string $value, string $type): self
@@ -21,7 +22,7 @@ final class UnexpectedValue extends UnexpectedValueException implements Exceptio
     }
 
     /** @return null */
-    public function getSQLState(): string|null
+    public function getSQLState()
     {
         return null;
     }

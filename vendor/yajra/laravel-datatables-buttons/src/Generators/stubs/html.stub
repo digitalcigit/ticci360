@@ -2,7 +2,6 @@
 
 namespace DummyNamespace;
 
-use Yajra\DataTables\Html\Builder;
 use Yajra\DataTables\Html\Button;
 use Yajra\DataTables\Html\Column;
 use Yajra\DataTables\Html\DataTableHtml;
@@ -14,23 +13,26 @@ class DummyClass extends DataTableHtml
     /**
      * Build the html builder.
      *
+     * @return \Yajra\DataTables\Html\Builder
      * @throws \Exception
      */
     public function handle(): Builder
     {
-        return $this->getHtmlBuilder()
-            ->setTableId('DummyTableId')
-            ->columns($this->getColumns())
-            ->minifiedAjax()
-            ->orderBy(1)
-            ->selectStyleSingle()
-            ->buttons([
-                DummyButtons
-            ]);
+        return $this->setTableId('DummyTableId')
+                    ->columns($this->getColumns())
+                    ->minifiedAjax()
+                    //->dom('DummyDOM')
+                    ->orderBy(1)
+                    ->selectStyleSingle()
+                    ->buttons([
+                        DummyButtons
+                    ]);
     }
 
     /**
      * Get the dataTable columns definition.
+     *
+     * @return array
      */
     public function getColumns(): array
     {

@@ -2,16 +2,13 @@
 
 namespace Botble\ACL\Models;
 
-use Botble\ACL\Concerns\HasPreferences;
-use Botble\ACL\Contracts\HasPermissions as HasPermissionsContract;
-use Botble\ACL\Contracts\HasPreferences as HasPreferencesContract;
 use Botble\ACL\Notifications\ResetPasswordNotification;
 use Botble\ACL\Traits\PermissionTrait;
 use Botble\Base\Casts\SafeContent;
 use Botble\Base\Models\BaseModel;
 use Botble\Base\Supports\Avatar;
-use Botble\Media\Facades\RvMedia;
 use Botble\Media\Models\MediaFile;
+use Exception;
 use Illuminate\Auth\Authenticatable;
 use Illuminate\Auth\Passwords\CanResetPassword;
 use Illuminate\Contracts\Auth\Access\Authorizable as AuthorizableContract;
@@ -25,26 +22,20 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\Access\Authorizable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use Throwable;
+use Botble\Media\Facades\RvMedia;
 
 class User extends BaseModel implements
-    HasPermissionsContract,
     AuthenticatableContract,
     AuthorizableContract,
-    CanResetPasswordContract,
-    HasPreferencesContract
+    CanResetPasswordContract
 {
     use Authenticatable;
     use Authorizable;
     use CanResetPassword;
     use HasApiTokens;
     use HasFactory;
-    use PermissionTrait {
-        PermissionTrait::hasPermission as traitHasPermission;
-        PermissionTrait::hasAnyPermission as traitHasAnyPermission;
-    }
+    use PermissionTrait;
     use Notifiable;
-    use HasPreferences;
 
     protected $table = 'users';
 
@@ -56,7 +47,6 @@ class User extends BaseModel implements
         'password',
         'avatar_id',
         'permissions',
-        'last_login',
     ];
 
     protected $hidden = [
@@ -65,14 +55,52 @@ class User extends BaseModel implements
     ];
 
     protected $casts = [
-        'password' => 'hashed',
         'email_verified_at' => 'datetime',
         'permissions' => 'json',
         'username' => SafeContent::class,
         'first_name' => SafeContent::class,
         'last_name' => SafeContent::class,
-        'last_login' => 'datetime',
     ];
+
+    protected function firstName(): Attribute
+    {
+        return Attribute::make(
+            get: fn ($value) => ucfirst((string)$value),
+            set: fn ($value) => ucfirst((string)$value),
+        );
+    }
+
+    protected function lastName(): Attribute
+    {
+        return Attribute::make(
+            get: fn ($value) => ucfirst((string)$value),
+            set: fn ($value) => ucfirst((string)$value),
+        );
+    }
+
+    protected function name(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->first_name . ' ' . $this->last_name,
+        );
+    }
+
+    protected function avatarUrl(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                if ($this->avatar->url) {
+                    return RvMedia::url($this->avatar->url);
+                }
+
+                try {
+                    return (new Avatar())->create($this->name)->toBase64();
+                } catch (Exception) {
+                    return RvMedia::getDefaultImage();
+                }
+            },
+        );
+    }
 
     public function avatar(): BelongsTo
     {
@@ -86,77 +114,27 @@ class User extends BaseModel implements
             ->withTimestamps();
     }
 
-    protected function firstName(): Attribute
-    {
-        return Attribute::make(
-            get: fn ($value) => ucfirst((string) $value),
-            set: fn ($value) => ucfirst((string) $value),
-        );
-    }
-
-    protected function lastName(): Attribute
-    {
-        return Attribute::make(
-            get: fn ($value) => ucfirst((string) $value),
-            set: fn ($value) => ucfirst((string) $value),
-        );
-    }
-
-    protected function name(): Attribute
-    {
-        return Attribute::make(
-            get: fn () => $this->first_name . ' ' . $this->last_name,
-        );
-    }
-
-    protected function url(): Attribute
-    {
-        return Attribute::make(
-            get: fn () => $this->getKey() ? route('users.profile.view', $this->getKey()) : null,
-        );
-    }
-
-    protected function activated(): Attribute
-    {
-        return Attribute::get(fn (): bool => $this->activations()->where('completed', true)->exists());
-    }
-
-    protected function avatarUrl(): Attribute
-    {
-        return Attribute::get(function () {
-            if ($this->avatar && $this->avatar->url) {
-                return RvMedia::url($this->avatar->url);
-            }
-
-            try {
-                return Avatar::createBase64Image($this->name);
-            } catch (Throwable) {
-                return RvMedia::getDefaultImage();
-            }
-        });
-    }
-
     public function isSuperUser(): bool
     {
-        return $this->super_user || $this->traitHasPermission(ACL_ROLE_SUPER_USER);
+        return $this->super_user || $this->hasAccess(ACL_ROLE_SUPER_USER);
     }
 
-    public function hasPermission(string|array $permissions): bool
+    public function hasPermission(string $permission): bool
     {
         if ($this->isSuperUser()) {
             return true;
         }
 
-        return $this->traitHasPermission($permissions);
+        return $this->hasAccess($permission);
     }
 
-    public function hasAnyPermission(string|array $permissions): bool
+    public function hasAnyPermission(array $permissions): bool
     {
         if ($this->isSuperUser()) {
             return true;
         }
 
-        return $this->traitHasAnyPermission($permissions);
+        return $this->hasAnyAccess($permissions);
     }
 
     public function sendPasswordResetNotification($token): void
@@ -189,7 +167,7 @@ class User extends BaseModel implements
         return false;
     }
 
-    public function delete(): ?bool
+    public function delete(): bool|null
     {
         if ($this->exists) {
             $this->activations()->delete();

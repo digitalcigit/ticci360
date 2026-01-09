@@ -4,12 +4,9 @@ namespace Botble\PluginManagement\Commands;
 
 use Botble\Base\Facades\BaseHelper;
 use Botble\PluginManagement\Services\PluginService;
+use Illuminate\Support\Facades\File;
 use Illuminate\Console\Command;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\File;
-
-use function Laravel\Prompts\table;
-
 use Symfony\Component\Console\Attribute\AsCommand;
 use Throwable;
 
@@ -23,13 +20,21 @@ class PluginListCommand extends Command
 
     public function handle(): int
     {
+        $header = [
+            'Name',
+            'Alias',
+            'Version',
+            'Provider',
+            'Status',
+            'Author',
+        ];
         $result = [];
 
         $plugins = BaseHelper::scanFolder(plugin_path());
         if (! empty($plugins)) {
             $installed = get_active_plugins();
             foreach ($plugins as $plugin) {
-                $configFile = plugin_path("$plugin/plugin.json");
+                $configFile = plugin_path($plugin . '/plugin.json');
                 if (! File::exists($configFile)) {
                     continue;
                 }
@@ -37,8 +42,8 @@ class PluginListCommand extends Command
                 try {
                     $this->pluginService->validatePlugin($plugin, true);
                 } catch (Throwable $exception) {
-                    $this->components->error(sprintf('Plugin %s is invalid!', $plugin));
-                    $this->components->error($exception->getMessage());
+                    $this->error('Plugin ' . $plugin . ' is invalid!');
+                    $this->error($exception->getMessage());
                 }
 
                 $content = BaseHelper::getFileData($configFile);
@@ -48,21 +53,14 @@ class PluginListCommand extends Command
                         $plugin,
                         Arr::get($content, 'version'),
                         Arr::get($content, 'provider'),
-                        in_array($plugin, $installed) ? '<fg=green>✓</> Active' : '<fg=red>✗</> Inactive',
+                        in_array($plugin, $installed) ? '✓ active' : '✘ inactive',
                         Arr::get($content, 'author'),
                     ];
                 }
             }
         }
 
-        table([
-            'Name',
-            'Alias',
-            'Version',
-            'Provider',
-            'Status',
-            'Author',
-        ], $result);
+        $this->table($header, $result);
 
         return self::SUCCESS;
     }

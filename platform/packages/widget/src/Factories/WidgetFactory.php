@@ -29,13 +29,13 @@ class WidgetFactory extends AbstractWidgetFactory
         try {
             $this->instantiateWidget($args);
         } catch (InvalidWidgetClassException | Exception $exception) {
-            return (app()->hasDebugModeEnabled() && ! app()->isProduction()) ? $exception->getMessage() : null;
+            return app()->hasDebugModeEnabled() ? $exception->getMessage() : null;
         }
 
         return $this->convertToViewExpression($this->getContent());
     }
 
-    protected function getContent(): ?string
+    protected function getContent(): string|null
     {
         $content = $this->app->call([$this->widget, 'run'], $this->widgetParams);
 

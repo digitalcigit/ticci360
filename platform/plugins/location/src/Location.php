@@ -3,87 +3,76 @@
 namespace Botble\Location;
 
 use Botble\Base\Enums\BaseStatusEnum;
+use Botble\Base\Events\CreatedContentEvent;
 use Botble\Base\Models\BaseQueryBuilder;
-use Botble\Base\Supports\Helper;
-use Botble\Base\Supports\Zipper;
-use Botble\Language\Facades\Language;
-use Botble\Location\Events\DownloadedCities;
-use Botble\Location\Events\DownloadedCountry;
-use Botble\Location\Events\DownloadedStates;
+use Botble\Base\Supports\PclZip as Zip;
 use Botble\Location\Models\City;
 use Botble\Location\Models\Country;
 use Botble\Location\Models\State;
-use Carbon\Carbon;
+use Botble\Location\Repositories\Interfaces\CityInterface;
+use Botble\Location\Repositories\Interfaces\StateInterface;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Str;
 use Throwable;
+use ZipArchive;
 
 class Location
 {
+    public function __construct(protected StateInterface $stateRepository, protected CityInterface $cityRepository)
+    {
+    }
+
     public function getStates(): array
     {
-        return State::query()
-            ->wherePublished()
-            ->oldest('order')
-            ->oldest('name')
-            ->pluck('name', 'id')
-            ->all();
+        $states = $this->stateRepository->advancedGet([
+            'condition' => [
+                'status' => BaseStatusEnum::PUBLISHED,
+            ],
+            'order_by' => ['order' => 'ASC', 'name' => 'ASC'],
+        ]);
+
+        return $states->pluck('name', 'id')->all();
     }
 
-    public function getCitiesByState(int|string|null $stateId): array
+    public function getCitiesByState($stateId): array
     {
-        if (! $stateId) {
-            return [];
-        }
+        $cities = $this->cityRepository->advancedGet([
+            'condition' => [
+                'status' => BaseStatusEnum::PUBLISHED,
+                'state_id' => $stateId,
+            ],
+            'order_by' => ['order' => 'ASC', 'name' => 'ASC'],
+        ]);
 
-        return City::query()
-            ->wherePublished()
-            ->where('state_id', $stateId)
-            ->oldest('order')
-            ->oldest('name')
-            ->pluck('name', 'id')
-            ->all();
+        return $cities->pluck('name', 'id')->all();
     }
 
-    public function getCityById(int|string|null $cityId): City|Model|null
+    public function getCityById($cityId): ?City
     {
-        if (! $cityId) {
-            return null;
-        }
-
-        return City::query()->where([
+        return $this->cityRepository->getFirstBy([
             'id' => $cityId,
             'status' => BaseStatusEnum::PUBLISHED,
-        ])->first();
+        ]);
     }
 
-    public function getCityNameById(int|string|null $cityId): ?string
+    public function getCityNameById($cityId): string|null
     {
-        if (! $cityId) {
-            return null;
-        }
-
         $city = $this->getCityById($cityId);
 
         return $city?->name;
     }
 
-    public function getStateNameById(int|string|null $stateId): ?string
+    public function getStateNameById($stateId): string|null
     {
-        if (! $stateId) {
-            return null;
-        }
+        $state = $this->stateRepository->getFirstBy([
+            'id' => $stateId,
+            'status' => BaseStatusEnum::PUBLISHED,
+        ]);
 
-        return State::query()
-            ->wherePublished()
-            ->where('id', $stateId)
-            ->value('name');
+        return $state ? $state->name : null;
     }
 
     public function isSupported(string|object $model): bool
@@ -111,7 +100,7 @@ class Location
         }
 
         if (is_object($model)) {
-            $model = $model::class;
+            $model = get_class($model);
         }
 
         return Arr::get(config('plugins.location.general.supported', []), $model, []);
@@ -137,24 +126,20 @@ class Location
     public function getRemoteAvailableLocations(): array
     {
         try {
-            $url = 'https://api.github.com/repos/botble/locations/git/trees/master';
+            $info = Http::withoutVerifying()
+                ->asJson()
+                ->acceptJson()
+                ->get('https://api.github.com/repos/botble/locations/git/trees/master');
 
-            $data = Cache::remember($url, 60 * 60, function () use ($url) {
-                $response = Http::withoutVerifying()
-                    ->asJson()
-                    ->acceptJson()
-                    ->get($url);
+            if (! $info->ok()) {
+                return ['us', 'ca', 'vn'];
+            }
 
-                if ($response->failed()) {
-                    return ['us', 'ca', 'vn'];
-                }
-
-                return $response->json('tree');
-            });
+            $info = $info->json();
 
             $availableLocations = [];
 
-            foreach ($data as $tree) {
+            foreach ($info['tree'] as $tree) {
                 if (in_array($tree['path'], ['.gitignore', 'README.md'])) {
                     continue;
                 }
@@ -168,7 +153,7 @@ class Location
         return $availableLocations;
     }
 
-    public function downloadRemoteLocation(string $countryCode, bool $continue = false): array
+    public function downloadRemoteLocation(string $countryCode): array
     {
         $repository = 'https://github.com/botble/locations';
 
@@ -183,111 +168,90 @@ class Location
             ];
         }
 
-        if (! File::exists($destination)) {
-            try {
-                $response = Http::withoutVerifying()
-                    ->sink(Utils::tryFopen($destination, 'w'))
-                    ->get($repository . '/archive/refs/heads/master.zip');
+        try {
+            $response = Http::withoutVerifying()
+                ->sink(Utils::tryFopen($destination, 'w'))
+                ->get($repository . '/archive/refs/heads/master.zip');
 
-                if (! $response->ok()) {
-                    return [
-                        'error' => true,
-                        'message' => $response->reason(),
-                    ];
-                }
-            } catch (Throwable $exception) {
+            if (! $response->ok()) {
                 return [
                     'error' => true,
-                    'message' => $exception->getMessage(),
+                    'message' => $response->reason(),
                 ];
             }
+        } catch (Throwable $exception) {
+            return [
+                'error' => true,
+                'message' => $exception->getMessage(),
+            ];
+        }
 
-            $zip = new Zipper();
+        if (class_exists('ZipArchive', false)) {
+            $zip = new ZipArchive();
+            $res = $zip->open($destination);
+            if ($res === true) {
+                $zip->extractTo(storage_path('app'));
+                $zip->close();
+            } else {
+                return [
+                    'error' => true,
+                    'message' => 'Extract location files failed!',
+                ];
+            }
+        } else {
+            $archive = new Zip($destination);
+            $archive->extract(PCLZIP_OPT_PATH, storage_path('app'));
+        }
 
-            $zip->extract($destination, storage_path('app'));
-
+        if (File::exists($destination)) {
             File::delete($destination);
         }
 
         $dataPath = storage_path('app/locations-master/' . $countryCode);
 
         if (! File::isDirectory($dataPath)) {
-            return [
-                'error' => true,
-                'message' => trans('plugins/location::bulk-import.cant_download_location_at_this_time'),
-            ];
+            abort(404);
         }
 
         $country = file_get_contents($dataPath . '/country.json');
         $country = json_decode($country, true);
 
-        $country = Country::query()->create($country);
+        $country = Country::create($country);
 
-        if ($country) {
-            event(new DownloadedCountry());
-        }
+        event(new CreatedContentEvent(COUNTRY_MODULE_SCREEN_NAME, request(), $country));
 
         $states = file_get_contents($dataPath . '/states.json');
         $states = json_decode($states, true);
-
-        $statesForInserting = [];
-
-        $now = Carbon::now();
-
         foreach ($states as $state) {
             $state['country_id'] = $country->id;
 
-            $statesForInserting[] = array_merge($state, [
-                'slug' => Str::slug($state['name']),
-                'country_id' => $country->id,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
-        }
+            $state = State::create($state);
 
-        if (! empty($statesForInserting)) {
-            collect($statesForInserting)
-                ->chunk(1000)
-                ->each(fn ($items) => State::query()->insertOrIgnore($items->toArray()));
-
-            event(new DownloadedStates());
+            event(new CreatedContentEvent(STATE_MODULE_SCREEN_NAME, request(), $state));
         }
 
         $cities = file_get_contents($dataPath . '/cities.json');
         $cities = json_decode($cities, true);
-
-        $citiesForInserting = [];
-
         foreach ($cities as $item) {
-            $stateId = State::query()->where('name', $item['name'])->value('id');
-
-            if (! $stateId) {
+            $state = State::where('name', $item['name'])->first();
+            if (! $state) {
                 continue;
             }
 
             foreach ($item['cities'] as $cityName) {
-                $citiesForInserting[] = [
+                $city = [
                     'name' => $cityName,
-                    'slug' => Str::slug($cityName),
-                    'state_id' => $stateId,
+                    'state_id' => $state->id,
                     'country_id' => $country->id,
-                    'created_at' => $now,
-                    'updated_at' => $now,
                 ];
+
+                $city = City::create($city);
+
+                event(new CreatedContentEvent(CITY_MODULE_SCREEN_NAME, request(), $city));
             }
         }
 
-        if (! empty($citiesForInserting)) {
-            collect($citiesForInserting)
-                ->chunk(1000)
-                ->each(fn ($items) => City::query()->insertOrIgnore($items->toArray()));
-
-            event(new DownloadedCities());
-        }
-
-        if (! $continue) {
-            File::deleteDirectory(storage_path('app/locations-master'));
-        }
+        File::deleteDirectory(storage_path('app/locations-master'));
 
         return [
             'error' => false,
@@ -295,84 +259,40 @@ class Location
         ];
     }
 
-    public function filter($model, int|string $cityId = null, string $location = null, int|string $stateId = null)
+    public function filter($model, int|string $cityId = null, string $location = null)
     {
-        if ($model instanceof BaseQueryBuilder) {
-            $className = $model->getModel()::class;
-        } else {
-            $className = $model::class;
+        $className = get_class($model);
+        if ($className == BaseQueryBuilder::class) {
+            $className = get_class($model->getModel());
         }
 
         if ($this->isSupported($className)) {
             if ($cityId) {
                 $model = $model->where('city_id', $cityId);
-            } elseif ($stateId) {
-                $model = $model->where('state_id', $stateId);
             } elseif ($location) {
                 $locationData = explode(',', $location);
 
-                $cityRelation = 'city';
-                $stateRelation = 'state';
-
-                if (
-                    is_plugin_active('language') &&
-                    is_plugin_active('language-advanced') &&
-                    Language::getCurrentLocale() != Language::getDefaultLocale()
-                ) {
-                    $cityRelation = 'city.translations';
-                    $stateRelation = 'state.translations';
-                }
-
                 if (count($locationData) > 1) {
                     $model = $model
-                        ->whereHas($cityRelation, function ($query) use ($locationData): void {
+                        ->whereHas('city', function ($query) use ($locationData) {
                             $query->where('name', 'LIKE', '%' . trim($locationData[0]) . '%');
                         })
-                        ->whereHas($stateRelation, function ($query) use ($locationData): void {
+                        ->whereHas('state', function ($query) use ($locationData) {
                             $query->where('name', 'LIKE', '%' . trim($locationData[1]) . '%');
                         });
                 } else {
                     $model = $model
-                        ->where(function (Builder $query) use ($cityRelation, $stateRelation, $location): void {
-                            $query
-                                ->whereHas($cityRelation, function ($query) use ($location): void {
-                                    $query->where('name', 'LIKE', '%' . $location . '%');
-                                })
-                                ->orWhereHas($stateRelation, function ($query) use ($location): void {
-                                    $query->where('name', 'LIKE', '%' . $location . '%');
-                                });
+                        ->where(function (Builder $query) use ($location) {
+                            $query->whereHas('city', function ($q) use ($location) {
+                                $q->where('name', 'LIKE', '%' . $location . '%');
+                            })->orWhereHas('state', function ($q) use ($location) {
+                                $q->where('name', 'LIKE', '%' . $location . '%');
+                            });
                         });
                 }
             }
         }
 
         return $model;
-    }
-
-    public function getAvailableCountries(): array
-    {
-        $remoteLocations = $this->getRemoteAvailableLocations();
-
-        $availableLocations = Country::query()->pluck('code')->all();
-
-        $listCountries = Helper::countries();
-
-        $locations = [];
-
-        foreach ($remoteLocations as $location) {
-            $location = strtoupper($location);
-
-            if (in_array($location, $availableLocations)) {
-                continue;
-            }
-
-            foreach ($listCountries as $key => $country) {
-                if ($location === strtoupper($key)) {
-                    $locations[$location] = $country;
-                }
-            }
-        }
-
-        return array_unique($locations);
     }
 }

@@ -1,35 +1,31 @@
 @props([
     'title' => null,
     'description' => null,
-    'footer' => null,
+    'preFooter' => null,
     'extraDescription' => null,
-    'card' => true,
 ])
 
-<div class="row mb-5 d-block d-md-flex">
-    <div class="col-12 col-md-3">
-        @if ($title)
-            <h2>{{ $title }}</h2>
+<div class="flexbox-annotated-section">
+    <div class="flexbox-annotated-section-annotation">
+        @if($title)
+            <div class="annotated-section-title pd-all-20">
+                <h2>{!! $title !!}</h2>
+            </div>
+        @endif
+        @if($description)
+            <div class="annotated-section-description pd-all-20 p-none-t">
+                <p class="color-note">{!! $description !!}</p>
+            </div>
         @endif
 
-        @if ($description)
-            <p class="text-muted">{!! BaseHelper::clean($description) !!}</p>
-        @endif
-
-        {!! BaseHelper::clean($extraDescription) !!}
+        {!! $extraDescription ?: null !!}
     </div>
 
-    <div class="col-12 col-md-9">
-        @if ($card)
-            <x-core::card {{ $attributes }}>
-                <x-core::card.body>
-                    {{ $slot }}
-                </x-core::card.body>
-            </x-core::card>
-        @else
+    <div class="flexbox-annotated-section-content">
+        <div class="wrapper-content pd-all-20">
             {{ $slot }}
-        @endif
+        </div>
 
-        {{ $footer }}
+        {!! $preFooter ?: null !!}
     </div>
 </div>

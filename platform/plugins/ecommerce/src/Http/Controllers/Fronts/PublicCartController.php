@@ -2,73 +2,33 @@
 
 namespace Botble\Ecommerce\Http\Controllers\Fronts;
 
-use Botble\Base\Http\Controllers\BaseController;
-use Botble\Ecommerce\AdsTracking\FacebookPixel;
-use Botble\Ecommerce\AdsTracking\GoogleTagManager;
-use Botble\Ecommerce\Enums\DiscountTypeEnum;
-use Botble\Ecommerce\Facades\Cart;
-use Botble\Ecommerce\Facades\EcommerceHelper;
-use Botble\Ecommerce\Facades\OrderHelper;
+use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Ecommerce\Http\Requests\CartRequest;
 use Botble\Ecommerce\Http\Requests\UpdateCartRequest;
-use Botble\Ecommerce\Models\Discount;
-use Botble\Ecommerce\Models\Product;
-use Botble\Ecommerce\Services\HandleApplyCouponService;
+use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
 use Botble\Ecommerce\Services\HandleApplyPromotionsService;
+use Botble\Ecommerce\Facades\Cart;
+use Botble\Ecommerce\Facades\EcommerceHelper;
+use Exception;
+use Illuminate\Routing\Controller;
+use Illuminate\Support\Arr;
+use Botble\Ecommerce\Facades\OrderHelper;
 use Botble\SeoHelper\Facades\SeoHelper;
 use Botble\Theme\Facades\Theme;
-use Exception;
-use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Route;
-use Throwable;
 
-class PublicCartController extends BaseController
+class PublicCartController extends Controller
 {
-    public function __construct(
-        protected HandleApplyPromotionsService $applyPromotionsService,
-        protected HandleApplyCouponService $handleApplyCouponService
-    ) {
+    public function __construct(protected ProductInterface $productRepository)
+    {
     }
 
-    public function index()
+    public function store(CartRequest $request, BaseHttpResponse $response)
     {
-        $promotionDiscountAmount = 0;
-        $couponDiscountAmount = 0;
-
-        $products = new Collection();
-        $crossSellProducts = new Collection();
-
-        if (Cart::instance('cart')->isNotEmpty()) {
-            [$products, $promotionDiscountAmount, $couponDiscountAmount] = $this->getCartData();
-
-            $crossSellProducts = get_cart_cross_sale_products(
-                $products->pluck('original_product.id')->all(),
-                (int) theme_option('number_of_cross_sale_product', 4)
-            ) ?: new Collection();
+        if (! EcommerceHelper::isCartEnabled()) {
+            abort(404);
         }
 
-        $title = __('Shopping Cart');
-
-        SeoHelper::setTitle(theme_option('ecommerce_cart_seo_title') ?: $title)
-            ->setDescription(theme_option('ecommerce_cart_seo_description'));
-
-        Theme::breadcrumb()->add($title, route('public.cart'));
-
-        app(GoogleTagManager::class)->viewCart();
-
-        return Theme::scope(
-            'ecommerce.cart',
-            compact('promotionDiscountAmount', 'couponDiscountAmount', 'products', 'crossSellProducts'),
-            'plugins/ecommerce::themes.cart'
-        )->render();
-    }
-
-    public function store(CartRequest $request)
-    {
-        $response = $this->httpResponse();
-
-        $product = Product::query()->find($request->input('id'));
+        $product = $this->productRepository->findById($request->input('id'));
 
         if (! $product) {
             return $response
@@ -76,52 +36,31 @@ class PublicCartController extends BaseController
                 ->setMessage(__('This product is out of stock or not exists!'));
         }
 
-        if ($product->variations->count() > 0 && ! $product->is_variation && $product->defaultVariation->product->id) {
+        if ($product->variations->count() > 0 && ! $product->is_variation) {
             $product = $product->defaultVariation->product;
         }
-
-        $originalProduct = $product->original_product;
 
         if ($product->isOutOfStock()) {
             return $response
                 ->setError()
-                ->setMessage(
-                    __(
-                        'Product :product is out of stock!',
-                        ['product' => $originalProduct->name ?: $product->name]
-                    )
-                );
+                ->setMessage(__('Product :product is out of stock!', ['product' => $product->original_product->name ?: $product->name]));
         }
 
-        try {
-            do_action('ecommerce_before_add_to_cart', $product);
-        } catch (Exception $e) {
+        $maxQuantity = $product->quantity;
+
+        if (! $product->canAddToCart($request->input('qty', 1))) {
             return $response
                 ->setError()
-                ->setMessage($e->getMessage());
+                ->setMessage(__('Maximum quantity is :max!', ['max' => $maxQuantity]));
         }
 
-        $maxQuantity = $product->max_cart_quantity;
-
-        $requestQuantity = $request->integer('qty', 1);
-
-        $existingAddedToCart = Cart::instance('cart')->content()->firstWhere('id', $product->id);
-
-        if ($existingAddedToCart) {
-            $requestQuantity += $existingAddedToCart->qty;
-        }
-
-        if (! $product->canAddToCart($requestQuantity)) {
-            return $response
-                ->setError()
-                ->setMessage(__('Sorry, you can only order a maximum of :quantity units of :product at a time. Please adjust the quantity and try again.', ['quantity' => $maxQuantity, 'product' => $product->name]));
-        }
+        $product->quantity -= $request->input('qty', 1);
 
         $outOfQuantity = false;
         foreach (Cart::instance('cart')->content() as $item) {
             if ($item->id == $product->id) {
                 $originalQuantity = $product->quantity;
-                $product->quantity = (int) $product->quantity - $item->qty;
+                $product->quantity = (int)$product->quantity - $item->qty;
 
                 if ($product->quantity < 0) {
                     $product->quantity = 0;
@@ -137,29 +76,24 @@ class PublicCartController extends BaseController
             }
         }
 
-        $product->quantity = (int) $product->quantity - $request->integer('qty', 1);
-
         if (
             EcommerceHelper::isEnabledProductOptions() &&
-            $originalProduct->options()->where('required', true)->exists()
+            $product->original_product->options()->where('required', true)->exists()
         ) {
             if (! $request->input('options')) {
                 return $response
                     ->setError()
-                    ->setData(['next_url' => $originalProduct->url])
+                    ->setData(['next_url' => $product->original_product->url])
                     ->setMessage(__('Please select product options!'));
             }
 
-            $requiredOptions = $originalProduct->options()->where('required', true)->get();
+            $requiredOptions = $product->original_product->options()->where('required', true)->get();
 
             $message = null;
 
             foreach ($requiredOptions as $requiredOption) {
                 if (! $request->input('options.' . $requiredOption->id . '.values')) {
-                    $message .= trans(
-                        'plugins/ecommerce::product-option.add_to_cart_value_required',
-                        ['value' => $requiredOption->name]
-                    );
+                    $message .= trans('plugins/ecommerce::product-option.add_to_cart_value_required', ['value' => $requiredOption->name]);
                 }
             }
 
@@ -173,39 +107,19 @@ class PublicCartController extends BaseController
         if ($outOfQuantity) {
             return $response
                 ->setError()
-                ->setMessage(__(
-                    'Product :product is out of stock!',
-                    ['product' => $originalProduct->name ?: $product->name]
-                ));
+                ->setMessage(__('Product :product is out of stock!', ['product' => $product->original_product->name ?: $product->name]));
         }
 
         $cartItems = OrderHelper::handleAddCart($product, $request);
 
-        $cartItem = Arr::first(array_filter($cartItems, fn ($item) => $item['id'] == $product->id));
-
-        $response->setMessage(__(
-            'Added product :product to cart successfully!',
-            ['product' => $originalProduct->name ?: $product->name]
-        ));
-
-        $responseData = [
-            'status' => true,
-            'content' => $cartItems,
-        ];
-
-        app(GoogleTagManager::class)->addToCart(
-            $originalProduct,
-            $cartItem['qty'],
-            $cartItem['subtotal'],
-        );
-
-        app(FacebookPixel::class)->addToCart(
-            $originalProduct,
-            $cartItem['qty'],
-            $cartItem['subtotal'],
-        );
+        $response
+            ->setMessage(__(
+                'Added product :product to cart successfully!',
+                ['product' => $product->original_product->name ?: $product->name]
+            ));
 
         $token = OrderHelper::getOrderSessionToken();
+
         $nextUrl = route('public.checkout.information', $token);
 
         if (EcommerceHelper::getQuickBuyButtonTarget() == 'cart') {
@@ -213,36 +127,78 @@ class PublicCartController extends BaseController
         }
 
         if ($request->input('checkout')) {
-            Cart::instance('cart')->refresh();
-
-            $responseData['next_url'] = $nextUrl;
-
-            $this->applyAutoCouponCode();
+            $response->setData(['next_url' => $nextUrl]);
 
             if ($request->ajax() && $request->wantsJson()) {
-                return $response->setData($responseData);
+                return $response;
             }
 
             return $response
-                ->setData($responseData)
                 ->setNextUrl($nextUrl);
         }
 
         return $response
             ->setData([
-                ...$this->getDataForResponse(),
-                ...$responseData,
+                'status' => true,
+                'count' => Cart::instance('cart')->count(),
+                'total_price' => format_price(Cart::instance('cart')->rawSubTotal()),
+                'content' => $cartItems,
             ]);
     }
 
-    public function update(UpdateCartRequest $request)
+    public function getView(HandleApplyPromotionsService $applyPromotionsService)
     {
+        if (! EcommerceHelper::isCartEnabled()) {
+            abort(404);
+        }
+
+        Theme::asset()
+            ->container('footer')
+            ->add('ecommerce-checkout-js', 'vendor/core/plugins/ecommerce/js/checkout.js', ['jquery']);
+
+        $promotionDiscountAmount = 0;
+        $couponDiscountAmount = 0;
+
+        $products = [];
+        $crossSellProducts = collect();
+
+        if (Cart::instance('cart')->count() > 0) {
+            $products = Cart::instance('cart')->products();
+
+            $promotionDiscountAmount = $applyPromotionsService->execute();
+
+            $sessionData = OrderHelper::getOrderSessionData();
+
+            if (session()->has('applied_coupon_code')) {
+                $couponDiscountAmount = Arr::get($sessionData, 'coupon_discount_amount', 0);
+            }
+
+            $parentIds = $products->pluck('original_product.id')->toArray();
+
+            $crossSellProducts = get_cart_cross_sale_products($parentIds, (int)theme_option('number_of_cross_sale_product', 4));
+        }
+
+        SeoHelper::setTitle(__('Shopping Cart'));
+
+        Theme::breadcrumb()->add(__('Home'), route('public.index'))->add(__('Shopping Cart'), route('public.cart'));
+
+        return Theme::scope(
+            'ecommerce.cart',
+            compact('promotionDiscountAmount', 'couponDiscountAmount', 'products', 'crossSellProducts'),
+            'plugins/ecommerce::themes.cart'
+        )->render();
+    }
+
+    public function postUpdate(UpdateCartRequest $request, BaseHttpResponse $response)
+    {
+        if (! EcommerceHelper::isCartEnabled()) {
+            abort(404);
+        }
+
         if ($request->has('checkout')) {
             $token = OrderHelper::getOrderSessionToken();
 
-            return $this
-                ->httpResponse()
-                ->setNextUrl(route('public.checkout.information', $token));
+            return $response->setNextUrl(route('public.checkout.information', $token));
         }
 
         $data = $request->input('items', []);
@@ -255,14 +211,11 @@ class PublicCartController extends BaseController
                 continue;
             }
 
-            /**
-             * @var Product $product
-             */
-            $product = Product::query()->find($cartItem->id);
+            $product = $this->productRepository->findById($cartItem->id);
 
             if ($product) {
                 $originalQuantity = $product->quantity;
-                $product->quantity = (int) $product->quantity - (int) Arr::get($item, 'values.qty', 0) + 1;
+                $product->quantity = (int)$product->quantity - (int)Arr::get($item, 'values.qty', 0) + 1;
 
                 if ($product->quantity < 0) {
                     $product->quantity = 0;
@@ -279,118 +232,56 @@ class PublicCartController extends BaseController
         }
 
         if ($outOfQuantity) {
-            return $this
-                ->httpResponse()
+            return $response
                 ->setError()
-                ->setData($this->getDataForResponse())
+                ->setData([
+                    'count' => Cart::instance('cart')->count(),
+                    'total_price' => format_price(Cart::instance('cart')->rawSubTotal()),
+                    'content' => Cart::instance('cart')->content(),
+                ])
                 ->setMessage(__('One or all products are not enough quantity so cannot update!'));
         }
 
-        return $this
-            ->httpResponse()
-            ->setData($this->getDataForResponse())
+        return $response
+            ->setData([
+                'count' => Cart::instance('cart')->count(),
+                'total_price' => format_price(Cart::instance('cart')->rawSubTotal()),
+                'content' => Cart::instance('cart')->content(),
+            ])
             ->setMessage(__('Update cart successfully!'));
     }
 
-    public function destroy(string $id)
+    public function getRemove(string $id, BaseHttpResponse $response)
     {
-        try {
-            $cartItem = Cart::instance('cart')->get($id);
-            app(GoogleTagManager::class)->removeFromCart($cartItem);
-
-            Cart::instance('cart')->remove($id);
-
-            $responseData = [
-                ...$this->getDataForResponse(),
-            ];
-
-            return $this
-                ->httpResponse()
-                ->setData($responseData)
-                ->setMessage(__('Removed item from cart successfully!'));
-        } catch (Throwable) {
-            return $this
-                ->httpResponse()
-                ->setError()
-                ->setMessage(__('Cart item is not existed!'));
+        if (! EcommerceHelper::isCartEnabled()) {
+            abort(404);
         }
+
+        try {
+            Cart::instance('cart')->remove($id);
+        } catch (Exception) {
+            return $response->setError()->setMessage(__('Cart item is not existed!'));
+        }
+
+        return $response
+            ->setData([
+                'count' => Cart::instance('cart')->count(),
+                'total_price' => format_price(Cart::instance('cart')->rawSubTotal()),
+                'content' => Cart::instance('cart')->content(),
+            ])
+            ->setMessage(__('Removed item from cart successfully!'));
     }
 
-    public function empty()
+    public function getDestroy(BaseHttpResponse $response)
     {
+        if (! EcommerceHelper::isCartEnabled()) {
+            abort(404);
+        }
+
         Cart::instance('cart')->destroy();
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setData(Cart::instance('cart')->content())
             ->setMessage(__('Empty cart successfully!'));
-    }
-
-    protected function getCartData(): array
-    {
-        $products = Cart::instance('cart')->products();
-
-        $promotionDiscountAmount = $this->applyPromotionsService->execute();
-
-        $couponDiscountAmount = $this->applyAutoCouponCode();
-
-        $sessionData = OrderHelper::getOrderSessionData();
-
-        if (session()->has('applied_coupon_code')) {
-            $couponDiscountAmount = (float) Arr::get($sessionData, 'coupon_discount_amount', 0);
-        }
-
-        return [$products, $promotionDiscountAmount, $couponDiscountAmount];
-    }
-
-    protected function getDataForResponse(): array
-    {
-        $cartContent = null;
-
-        $cartData = $this->getCartData();
-
-        [$products, $promotionDiscountAmount, $couponDiscountAmount] = $cartData;
-
-        if (Route::is('public.cart.*')) {
-            $crossSellProducts = get_cart_cross_sale_products(
-                $products->pluck('original_product.id')->all(),
-                (int) theme_option('number_of_cross_sale_product', 4)
-            ) ?: collect();
-
-            $cartContent = view(
-                EcommerceHelper::viewPath('cart'),
-                compact('products', 'promotionDiscountAmount', 'couponDiscountAmount', 'crossSellProducts')
-            )->render();
-        }
-
-        return apply_filters('ecommerce_cart_data_for_response', [
-            'count' => Cart::instance('cart')->count(),
-            'total_price' => format_price(Cart::instance('cart')->rawSubTotal()),
-            'content' => Cart::instance('cart')->content(),
-            'cart_content' => $cartContent,
-        ], $cartData);
-    }
-
-    protected function applyAutoCouponCode(): float
-    {
-        $couponDiscountAmount = 0;
-
-        if ($couponCode = session('auto_apply_coupon_code')) {
-            $coupon = Discount::query()
-                ->where('code', $couponCode)
-                ->where('apply_via_url', true)
-                ->where('type', DiscountTypeEnum::COUPON)
-                ->exists();
-
-            if ($coupon) {
-                $couponData = $this->handleApplyCouponService->execute($couponCode);
-
-                if (! Arr::get($couponData, 'error')) {
-                    $couponDiscountAmount = Arr::get($couponData, 'data.discount_amount', 0);
-                }
-            }
-        }
-
-        return (float) $couponDiscountAmount;
     }
 }

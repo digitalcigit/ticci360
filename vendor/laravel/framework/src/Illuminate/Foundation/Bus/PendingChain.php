@@ -5,15 +5,10 @@ namespace Illuminate\Foundation\Bus;
 use Closure;
 use Illuminate\Contracts\Bus\Dispatcher;
 use Illuminate\Queue\CallQueuedClosure;
-use Illuminate\Support\Traits\Conditionable;
 use Laravel\SerializableClosure\SerializableClosure;
-
-use function Illuminate\Support\enum_value;
 
 class PendingChain
 {
-    use Conditionable;
-
     /**
      * The class name of the job being dispatched.
      *
@@ -61,6 +56,7 @@ class PendingChain
      *
      * @param  mixed  $job
      * @param  array  $chain
+     * @return void
      */
     public function __construct($job, $chain)
     {
@@ -71,12 +67,12 @@ class PendingChain
     /**
      * Set the desired connection for the job.
      *
-     * @param  \UnitEnum|string|null  $connection
+     * @param  string|null  $connection
      * @return $this
      */
     public function onConnection($connection)
     {
-        $this->connection = enum_value($connection);
+        $this->connection = $connection;
 
         return $this;
     }
@@ -84,12 +80,12 @@ class PendingChain
     /**
      * Set the desired queue for the job.
      *
-     * @param  \UnitEnum|string|null  $queue
+     * @param  string|null  $queue
      * @return $this
      */
     public function onQueue($queue)
     {
-        $this->queue = enum_value($queue);
+        $this->queue = $queue;
 
         return $this;
     }
@@ -116,8 +112,8 @@ class PendingChain
     public function catch($callback)
     {
         $this->catchCallbacks[] = $callback instanceof Closure
-            ? new SerializableClosure($callback)
-            : $callback;
+                        ? new SerializableClosure($callback)
+                        : $callback;
 
         return $this;
     }
@@ -133,7 +129,7 @@ class PendingChain
     }
 
     /**
-     * Dispatch the job chain.
+     * Dispatch the job with the given arguments.
      *
      * @return \Illuminate\Foundation\Bus\PendingDispatch
      */
@@ -165,27 +161,5 @@ class PendingChain
         $firstJob->chainCatchCallbacks = $this->catchCallbacks();
 
         return app(Dispatcher::class)->dispatch($firstJob);
-    }
-
-    /**
-     * Dispatch the job chain if the given truth test passes.
-     *
-     * @param  bool|\Closure  $boolean
-     * @return \Illuminate\Foundation\Bus\PendingDispatch|null
-     */
-    public function dispatchIf($boolean)
-    {
-        return value($boolean) ? $this->dispatch() : null;
-    }
-
-    /**
-     * Dispatch the job chain unless the given truth test passes.
-     *
-     * @param  bool|\Closure  $boolean
-     * @return \Illuminate\Foundation\Bus\PendingDispatch|null
-     */
-    public function dispatchUnless($boolean)
-    {
-        return ! value($boolean) ? $this->dispatch() : null;
     }
 }

@@ -1,61 +1,37 @@
-<form
-    class="cart-form"
-    action="{{ route('public.cart.add-to-cart') }}"
-    method="POST"
->
+<form class="cart-form" action="{{ route('public.cart.add-to-cart') }}" method="POST">
     @csrf
-    @if (!empty($withVariations) && $product->variations()->count())
+    @if (!empty($withVariations) && $product->variations()->count() > 0)
         <div class="pr_switch_wrap">
             {!! render_product_swatches($product, [
                 'selected' => $selectedAttrs,
+                'view'     => Theme::getThemeNamespace() . '::views.ecommerce.attributes.swatches-renderer'
             ]) !!}
         </div>
+        <div class="number-items-available" style="display: none; margin-bottom: 10px;"></div>
     @endif
 
-    @if (isset($withProductOptions) && $withProductOptions)
-        {!! render_product_options($product) !!}
-    @endif
+    {!! render_product_options($product) !!}
 
-    <input
-        class="hidden-product-id"
-        name="id"
-        type="hidden"
-        value="{{ $product->is_variation || !$product->defaultVariation->product_id ? $product->id : $product->defaultVariation->product_id }}"
-    />
+    <input type="hidden"
+        name="id" class="hidden-product-id"
+        value="{{ ($product->is_variation || !$product->defaultVariation->product_id) ? $product->id : $product->defaultVariation->product_id }}"/>
 
     @if (EcommerceHelper::isCartEnabled() || !empty($withButtons))
         {!! apply_filters(ECOMMERCE_PRODUCT_DETAIL_EXTRA_HTML, null, $product) !!}
         <div class="product-button">
             @if (EcommerceHelper::isCartEnabled())
                 {!! Theme::partial('ecommerce.product-quantity', compact('product')) !!}
-                <button
-                    class="btn btn-primary mb-2 add-to-cart-button @if ($product->isOutOfStock()) disabled @endif"
-                    name="add_to_cart"
-                    type="submit"
-                    value="{{ $product->min_cart_quantity }}"
-                    title="{{ __('Add to cart') }}"
-                    @if ($product->isOutOfStock()) disabled @endif
-                >
+                <button type="submit" name="add_to_cart" value="1" class="btn btn-primary mb-2 add-to-cart-button @if ($product->isOutOfStock()) disabled @endif" @if ($product->isOutOfStock()) disabled @endif title="{{ __('Add to cart') }}">
                     <span class="svg-icon">
                         <svg>
-                            <use
-                                href="#svg-icon-cart"
-                                xlink:href="#svg-icon-cart"
-                            ></use>
+                            <use href="#svg-icon-cart" xlink:href="#svg-icon-cart"></use>
                         </svg>
                     </span>
                     <span class="add-to-cart-text ms-2">{{ __('Add to cart') }}</span>
                 </button>
 
                 @if (EcommerceHelper::isQuickBuyButtonEnabled() && isset($withBuyNow) && $withBuyNow)
-                    <button
-                        class="btn btn-primary btn-black mb-2 add-to-cart-button @if ($product->isOutOfStock()) disabled @endif"
-                        name="checkout"
-                        type="submit"
-                        value="{{ $product->min_cart_quantity }}"
-                        title="{{ __('Buy Now') }}"
-                        @if ($product->isOutOfStock()) disabled @endif
-                    >
+                    <button type="submit" name="checkout" value="1" class="btn btn-primary btn-black mb-2 add-to-cart-button @if ($product->isOutOfStock()) disabled @endif" @if ($product->isOutOfStock()) disabled @endif title="{{ __('Buy Now') }}">
                         <span class="add-to-cart-text ms-2">{{ __('Buy Now') }}</span>
                     </button>
                 @endif

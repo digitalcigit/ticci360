@@ -2,8 +2,6 @@
 
 namespace Illuminate\Database\Schema;
 
-use Illuminate\Database\QueryException;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
 
 class SQLiteBuilder extends Builder
@@ -27,66 +25,9 @@ class SQLiteBuilder extends Builder
      */
     public function dropDatabaseIfExists($name)
     {
-        return ! File::exists($name) || File::delete($name);
-    }
-
-    /** @inheritDoc */
-    public function getTables($schema = null)
-    {
-        try {
-            $withSize = $this->connection->scalar($this->grammar->compileDbstatExists());
-        } catch (QueryException) {
-            $withSize = false;
-        }
-
-        if (version_compare($this->connection->getServerVersion(), '3.37.0', '<')) {
-            $schema ??= array_column($this->getSchemas(), 'name');
-
-            $tables = [];
-
-            foreach (Arr::wrap($schema) as $name) {
-                $tables = array_merge($tables, $this->connection->selectFromWriteConnection(
-                    $this->grammar->compileLegacyTables($name, $withSize)
-                ));
-            }
-
-            return $this->connection->getPostProcessor()->processTables($tables);
-        }
-
-        return $this->connection->getPostProcessor()->processTables(
-            $this->connection->selectFromWriteConnection(
-                $this->grammar->compileTables($schema, $withSize)
-            )
-        );
-    }
-
-    /** @inheritDoc */
-    public function getViews($schema = null)
-    {
-        $schema ??= array_column($this->getSchemas(), 'name');
-
-        $views = [];
-
-        foreach (Arr::wrap($schema) as $name) {
-            $views = array_merge($views, $this->connection->selectFromWriteConnection(
-                $this->grammar->compileViews($name)
-            ));
-        }
-
-        return $this->connection->getPostProcessor()->processViews($views);
-    }
-
-    /** @inheritDoc */
-    public function getColumns($table)
-    {
-        [$schema, $table] = $this->parseSchemaAndTable($table);
-
-        $table = $this->connection->getTablePrefix().$table;
-
-        return $this->connection->getPostProcessor()->processColumns(
-            $this->connection->selectFromWriteConnection($this->grammar->compileColumns($schema, $table)),
-            $this->connection->scalar($this->grammar->compileSqlCreateStatement($schema, $table))
-        );
+        return File::exists($name)
+            ? File::delete($name)
+            : true;
     }
 
     /**
@@ -96,26 +37,17 @@ class SQLiteBuilder extends Builder
      */
     public function dropAllTables()
     {
-        foreach ($this->getCurrentSchemaListing() as $schema) {
-            $database = $schema === 'main'
-                ? $this->connection->getDatabaseName()
-                : (array_column($this->getSchemas(), 'path', 'name')[$schema] ?: ':memory:');
-
-            if ($database !== ':memory:' &&
-                ! str_contains($database, '?mode=memory') &&
-                ! str_contains($database, '&mode=memory')
-            ) {
-                $this->refreshDatabaseFile($database);
-            } else {
-                $this->pragma('writable_schema', 1);
-
-                $this->connection->statement($this->grammar->compileDropAllTables($schema));
-
-                $this->pragma('writable_schema', 0);
-
-                $this->connection->statement($this->grammar->compileRebuild($schema));
-            }
+        if ($this->connection->getDatabaseName() !== ':memory:') {
+            return $this->refreshDatabaseFile();
         }
+
+        $this->connection->select($this->grammar->compileEnableWriteableSchema());
+
+        $this->connection->select($this->grammar->compileDropAllTables());
+
+        $this->connection->select($this->grammar->compileDisableWriteableSchema());
+
+        $this->connection->select($this->grammar->compileRebuild());
     }
 
     /**
@@ -125,49 +57,46 @@ class SQLiteBuilder extends Builder
      */
     public function dropAllViews()
     {
-        foreach ($this->getCurrentSchemaListing() as $schema) {
-            $this->pragma('writable_schema', 1);
+        $this->connection->select($this->grammar->compileEnableWriteableSchema());
 
-            $this->connection->statement($this->grammar->compileDropAllViews($schema));
+        $this->connection->select($this->grammar->compileDropAllViews());
 
-            $this->pragma('writable_schema', 0);
+        $this->connection->select($this->grammar->compileDisableWriteableSchema());
 
-            $this->connection->statement($this->grammar->compileRebuild($schema));
-        }
+        $this->connection->select($this->grammar->compileRebuild());
     }
 
     /**
-     * Get the value for the given pragma name or set the given value.
+     * Get all of the table names for the database.
      *
-     * @param  string  $key
-     * @param  mixed  $value
-     * @return mixed
+     * @return array
      */
-    public function pragma($key, $value = null)
+    public function getAllTables()
     {
-        return is_null($value)
-            ? $this->connection->scalar($this->grammar->pragma($key))
-            : $this->connection->statement($this->grammar->pragma($key, $value));
+        return $this->connection->select(
+            $this->grammar->compileGetAllTables()
+        );
+    }
+
+    /**
+     * Get all of the view names for the database.
+     *
+     * @return array
+     */
+    public function getAllViews()
+    {
+        return $this->connection->select(
+            $this->grammar->compileGetAllViews()
+        );
     }
 
     /**
      * Empty the database file.
      *
-     * @param  string|null  $path
      * @return void
      */
-    public function refreshDatabaseFile($path = null)
+    public function refreshDatabaseFile()
     {
-        file_put_contents($path ?? $this->connection->getDatabaseName(), '');
-    }
-
-    /**
-     * Get the names of current schemas for the connection.
-     *
-     * @return string[]|null
-     */
-    public function getCurrentSchemaListing()
-    {
-        return ['main'];
+        file_put_contents($this->connection->getDatabaseName(), '');
     }
 }

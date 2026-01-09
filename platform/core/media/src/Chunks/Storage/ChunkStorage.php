@@ -3,14 +3,14 @@
 namespace Botble\Media\Chunks\Storage;
 
 use Botble\Media\Chunks\ChunkFile;
-use Botble\Media\Facades\RvMedia;
 use Carbon\Carbon;
 use Closure;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
 use League\Flysystem\Local\LocalFilesystemAdapter;
 use RuntimeException;
+use Botble\Media\Facades\RvMedia;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class ChunkStorage
@@ -108,11 +108,11 @@ class ChunkStorage
 
         // Build the timestamp
         $timeToCheck = strtotime($this->config['clear']['timestamp']);
-        $collection = collect();
+        $collection = new Collection();
 
         // Filter the collection with files that are not correct chunk file
         // Loop all current files and filter them by the time
-        $files->each(function ($file) use ($timeToCheck, $collection): void {
+        $files->each(function ($file) use ($timeToCheck, $collection) {
             // get the last modified time to check if the chunk is not new
             try {
                 $modified = $this->disk()->lastModified($file);

@@ -1,102 +1,55 @@
 @props([
     'id' => null,
+    'class' => null,
     'title' => null,
-    'blur' => true,
-    'closeButton' => true,
-    'size' => null,
-    'contentClass' => null,
-    'contentAttrs' => [],
-    'bodyClass' => null,
-    'bodyAttrs' => [],
-    'formAction' => null,
-    'formMethod' => 'POST',
-    'formAttrs' => [],
-    'hasForm' => false,
-    'type' => null,
-    'buttonId' => null,
-    'buttonClass' => null,
     'buttonLabel' => null,
-    'centered' => true,
-    'scrollable' => false,
+    'type' => 'info',
+    'size' => null,
+    'buttonClass' => null,
+    'buttonId' => null,
+    'header' => null,
+    'footer' => null,
+    'headerIcon' => null,
+    'options' => [],
 ])
 
-@php
-    $classes = Arr::toCssClasses(['modal', 'fade', 'modal-blur' => $blur]);
-
-    $hasForm = $hasForm || $formAction;
-
-    $modalContentAttributes = [...$contentAttrs, 'class' => rtrim('modal-content' . ($contentClass ? ' ' . $contentClass : ''))];
-@endphp
-
-<div
-    {{ $attributes->merge(['id' => $id, 'class' => $classes])->class($classes) }}
-    tabindex="-1"
-    role="dialog"
-    aria-hidden="true"
-    data-select2-dropdown-parent="true"
->
-    <div
-        @class([
-            'modal-dialog',
-            'modal-dialog-centered' => $centered,
-            'modal-dialog-scrollable' => $scrollable,
-            'modal-dialog-has-form' => $hasForm,
-            $size ? "modal-$size" : null,
-        ])
-        role="document"
-    >
-        <div {!! Html::attributes($modalContentAttributes) !!}>
-            @if ($hasForm)
-                <form
-                    action="{{ $formAction }}"
-                    method="{{ $formMethod }}"
-                    {!! Html::attributes($formAttrs) !!}>
-                    @csrf
-                    @endif
-
-                    @if ($title || $closeButton)
-                        <div class="modal-header">
-                            <h5 class="modal-title">{{ $title }}</h5>
-                            @if ($closeButton)
-                                <x-core::modal.close-button />
+<div @if ($id) id="{{ $id }}" @endif @class(['modal fade', $class => $class]) tabindex="-1" role="dialog" aria-labelledby="{{ $id }}"
+     aria-hidden="true" @if ($options) {!! Html::attributes(array_merge(['data-backdrop' => 'static', 'data-keyboard' => 'false'], $options)) !!} @else data-backdrop="static" data-keyboard="false" @endif>
+    <div class="modal-dialog modal-{{ str_replace('modal-', '', (string)$size) }} @if (! $size) @if (strlen($slot) < 120) xs @elseif (strlen($slot) > 1000) lg @endif @endif">
+        <div class="modal-content">
+            @if($header !== false)
+                @if($header)
+                    {!! $header !!}
+                @else
+                    <div class="modal-header bg-{{ $type }}">
+                        <h4 class="modal-title">
+                            @if ($headerIcon !== false)
+                                {!! $headerIcon !!}
+                            @else
+                                <i class="til_img"></i>
                             @endif
-                        </div>
-                    @endif
+                            @if ($title !== false)
+                                <strong>{!! $title !!}</strong>
+                            @endif
+                        </h4>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-hidden="true"></button>
+                    </div>
+                @endif
+            @endif
 
-                    @if($type)
-                        <div class="modal-status bg-{{ $type }}"></div>
-                    @endif
+            <div class="modal-body with-padding">
+                {{ $slot }}
+            </div>
 
-                    @if ($slot->isNotEmpty())
-                        <div {!! Html::attributes(array_merge($bodyAttrs, ['class' => rtrim('modal-body ' . Arr::get($bodyAttrs, 'class'))])) !!}>
-                            {{ $slot }}
-                        </div>
+            @if ($footer !== false)
+                <div class="modal-footer">
+                    @if ($footer)
+                        {!! $footer !!}
                     @else
-                        {{ $slot }}
+                        <button type="button" class="float-start btn btn-{{ $type != 'warning' ? 'warning' : 'info' }}" data-bs-dismiss="modal">{{ trans('core/base::tables.cancel') }}</button>
+                        <button type="submit" class="float-end btn btn-{{ $type }} @if ($buttonClass) {{ $buttonClass }} @endif" @if ($buttonId) id="{{ $buttonId }}" @endif>{!! $buttonLabel !!}</button>
                     @endif
-
-                    @if (!empty($footer) && $footer->isNotEmpty())
-                        <div class="modal-footer">
-                            {{ $footer }}
-                        </div>
-                    @endif
-
-                    @if($buttonId && $buttonLabel)
-                        <div class="modal-footer">
-                            <x-core::button type="button" data-bs-dismiss="modal">
-                                {{ trans('core/base::tables.cancel') }}
-                            </x-core::button>
-                            <x-core::button
-                                :id="$buttonId"
-                                @class(['ms-auto', $buttonClass => $buttonClass])
-                                :color="$type ?? 'primary'"
-                            >
-                                {{ $buttonLabel }}
-                            </x-core::button>
-                        </div>
-                    @endif
-                    @if ($hasForm)
-                </form>
+                </div>
             @endif
         </div>
     </div>

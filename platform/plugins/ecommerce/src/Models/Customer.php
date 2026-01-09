@@ -2,15 +2,11 @@
 
 namespace Botble\Ecommerce\Models;
 
-use Botble\Base\Facades\MacroableModels;
 use Botble\Base\Models\BaseModel;
-use Botble\Base\Models\BaseQueryBuilder;
 use Botble\Base\Supports\Avatar;
 use Botble\Ecommerce\Enums\CustomerStatusEnum;
-use Botble\Ecommerce\Enums\DiscountTypeEnum;
 use Botble\Ecommerce\Notifications\ConfirmEmailNotification;
 use Botble\Ecommerce\Notifications\ResetPasswordNotification;
-use Botble\Media\Facades\RvMedia;
 use Botble\Payment\Models\Payment;
 use Carbon\Carbon;
 use Exception;
@@ -23,13 +19,14 @@ use Illuminate\Contracts\Auth\CanResetPassword as CanResetPasswordContract;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\Access\Authorizable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
+use Botble\Media\Facades\RvMedia;
+use Botble\Base\Facades\MacroableModels;
+use Illuminate\Support\Str;
 
 class Customer extends BaseModel implements
     AuthenticatableContract,
@@ -51,8 +48,8 @@ class Customer extends BaseModel implements
         'password',
         'avatar',
         'phone',
+        'dob',
         'status',
-        'private_notes',
     ];
 
     protected $hidden = [
@@ -62,7 +59,6 @@ class Customer extends BaseModel implements
 
     protected $casts = [
         'status' => CustomerStatusEnum::class,
-        'dob' => 'date',
     ];
 
     public function sendPasswordResetNotification($token): void
@@ -75,23 +71,36 @@ class Customer extends BaseModel implements
         $this->notify(new ConfirmEmailNotification());
     }
 
+    protected function avatarUrl(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                if ($this->avatar) {
+                    return RvMedia::getImageUrl($this->avatar, 'thumb');
+                }
+
+                try {
+                    return (new Avatar())->create(Str::ucfirst($this->name))->toBase64();
+                } catch (Exception) {
+                    return RvMedia::getDefaultImage();
+                }
+            }
+        );
+    }
+
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class, 'user_id', 'id');
     }
 
-    public function completedOrders(): HasMany
-    {
-        return $this->orders()->whereNotNull('completed_at');
-    }
-
     public function addresses(): HasMany
     {
-        return $this
-            ->hasMany(Address::class, 'customer_id', 'id')
-            ->when(is_plugin_active('location'), function (HasMany|BaseQueryBuilder $query) {
-                return $query->with(['locationCountry', 'locationState', 'locationCity']);
-            });
+        $with = [];
+        if (is_plugin_active('location')) {
+            $with = ['locationCountry', 'locationState', 'locationCity'];
+        }
+
+        return $this->hasMany(Address::class, 'customer_id', 'id')->with($with);
     }
 
     public function payments(): HasMany
@@ -109,18 +118,20 @@ class Customer extends BaseModel implements
         return $this->hasMany(Wishlist::class, 'customer_id');
     }
 
-    protected static function booted(): void
+    protected static function boot(): void
     {
-        self::deleted(function (Customer $customer): void {
+        parent::boot();
+
+        self::deleting(function (Customer $customer) {
             $customer->discounts()->detach();
             $customer->usedCoupons()->detach();
-            $customer->orders()->update(['user_id' => 0]);
-            $customer->addresses()->delete();
-            $customer->wishlist()->delete();
-            $customer->reviews()->each(fn (Review $review) => $review->delete());
+            Review::where('customer_id', $customer->id)->delete();
+            Wishlist::where('customer_id', $customer->id)->delete();
+            Address::where('customer_id', $customer->id)->delete();
+            Order::where('user_id', $customer->id)->update(['user_id' => 0]);
         });
 
-        static::deleted(function (Customer $customer): void {
+        static::deleted(function (Customer $customer) {
             $folder = Storage::path($customer->upload_folder);
             if (File::isDirectory($folder) && Str::endsWith($customer->upload_folder, '/' . $customer->id)) {
                 File::deleteDirectory($folder);
@@ -149,7 +160,7 @@ class Customer extends BaseModel implements
     {
         return $this
             ->belongsToMany(Discount::class, 'ec_discount_customers', 'customer_id')
-            ->where('type', DiscountTypeEnum::PROMOTION)
+            ->where('type', 'promotion')
             ->where('start_date', '<=', Carbon::now())
             ->where('target', 'customer')
             ->where(function ($query) {
@@ -170,36 +181,14 @@ class Customer extends BaseModel implements
         return $this->belongsToMany(Discount::class, 'ec_customer_used_coupons');
     }
 
-    public function deletionRequest(): HasOne
-    {
-        return $this->hasOne(CustomerDeletionRequest::class, 'customer_id');
-    }
-
-    protected function avatarUrl(): Attribute
-    {
-        return Attribute::get(function () {
-            if ($this->avatar) {
-                return RvMedia::getImageUrl($this->avatar, 'thumb');
-            }
-
-            if ($defaultAvatar = get_ecommerce_setting('customer_default_avatar')) {
-                return RvMedia::getImageUrl($defaultAvatar);
-            }
-
-            try {
-                return (new Avatar())->create(Str::ucfirst($this->name))->toBase64();
-            } catch (Exception) {
-                return RvMedia::getDefaultImage();
-            }
-        });
-    }
-
     protected function uploadFolder(): Attribute
     {
-        return Attribute::get(function () {
-            $folder = $this->id ? 'customers/' . $this->id : 'customers';
+        return Attribute::make(
+            get: function () {
+                $folder = $this->id ? 'customers/' . $this->id : 'customers';
 
-            return apply_filters('ecommerce_customer_upload_folder', $folder, $this);
-        });
+                return apply_filters('ecommerce_customer_upload_folder', $folder, $this);
+            }
+        );
     }
 }

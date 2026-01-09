@@ -2,23 +2,23 @@
 
 namespace Botble\Slug\Commands;
 
-use Botble\Slug\Models\Slug;
+use Botble\Slug\Repositories\Interfaces\SlugInterface;
 use Illuminate\Console\Command;
-use Illuminate\Contracts\Console\PromptsForMissingInput;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 
 #[AsCommand('cms:slug:prefix', 'Change/set prefix for slugs')]
-class ChangeSlugPrefixCommand extends Command implements PromptsForMissingInput
+class ChangeSlugPrefixCommand extends Command
 {
     public function handle(): int
     {
-        $data = Slug::query()
-            ->where('reference_type', $this->argument('class'))
-            ->update(['prefix' => $this->option('prefix') ?? '']);
+        $data = app(SlugInterface::class)->update(
+            ['reference_type' => $this->argument('class')],
+            ['prefix' => $this->option('prefix') ?? '']
+        );
 
-        $this->components->info(sprintf('Processed %s item(s)!', number_format($data)));
+        $this->components->info('Processed ' . $data . ' item(s)!');
 
         return self::SUCCESS;
     }

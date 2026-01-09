@@ -1,16 +1,19 @@
-@php
-    Assets::removeStyles(['fontawesome', 'select2', 'toastr', 'datepicker', 'spectrum'])
-        ->removeScripts(['spectrum', 'jquery-waypoints', 'stickytableheaders', 'toastr', 'core', 'cookie', 'select2', 'datepicker', 'modernizr', 'ie8-fix', 'excanvas']);
-@endphp
+@extends('core/base::layouts.base')
 
-<x-core::layouts.base body-class="border-top-wide border-primary d-flex flex-column">
-    <x-slot:title>
-        @yield('title')
-    </x-slot:title>
+@section ('page')
+    <div class="page-wrapper">
 
-    <div class="page page-center">
-        <div class="container py-4 container-tight">
-            @yield('content')
+        @include('core/base::layouts.partials.top-header')
+        <div class="clearfix"></div>
+
+        <div class="page-container page-container-gray">
+            <div class="page-content" style="min-height: calc(100vh - 49px); height: 100%;">
+                @yield('content')
+            </div>
+            <div class="clearfix"></div>
         </div>
+
+        @include('core/base::layouts.partials.footer')
+
     </div>
-</x-core::layouts.base>
+@stop

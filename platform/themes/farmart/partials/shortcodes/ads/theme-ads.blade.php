@@ -1,17 +1,26 @@
-@if ($countAds = count($ads))
+{{-- @if (count($ads))
     <div class="widget-featured-banners py-5">
         <div class="container-xxxl">
-            <div class="row row-cols-lg-{{ $countAds }} row-cols-md-{{ $countAds - 1 > 1 ?: 1 }} row-cols-1 justify-content-center">
-                @for ($i = 0; $i < $countAds; $i++)
+            <div class="row row-cols-lg-3 row-cols-md-2 row-cols-1 justify-content-center">
+                @for($i = 0; $i < count($ads); $i++)
                     <div class="col">
                         <div class="featured-banner-item img-fluid-eq my-2">
                             <div class="img-fluid-eq__dummy"></div>
                             <div class="img-fluid-eq__wrap">
-                                {!! $ads[$i] !!}
+                                {!! BaseHelper::clean($ads[$i]) !!}
                             </div>
                         </div>
                     </div>
                 @endfor
+            </div>
+        </div>
+    </div>
+@endif --}}
+@if (count($ads))
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12 ads-spin">
+                {!! BaseHelper::clean($ads[0]) !!}
             </div>
         </div>
     </div>

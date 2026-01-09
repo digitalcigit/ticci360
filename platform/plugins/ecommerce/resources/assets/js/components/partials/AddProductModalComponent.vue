@@ -1,66 +1,48 @@
 <template>
-    <ec-modal
-        id="add-product-item"
-        :title="__('order.add_product')"
-        :ok-title="__('order.save')"
-        :cancel-title="__('order.cancel')"
-        @shown="resetProductData()"
-        @ok="$emit('create-product', $event, product)"
-    >
-        <div class="mb-3 position-relative">
-            <label class="form-label">{{ __('order.name') }}</label>
-            <input type="text" class="form-control" v-model="product.name" />
-        </div>
-        <div class="row">
-            <div class="col-6 mb-3 position-relative">
-                <label class="form-label">{{ __('order.price') }}</label>
-                <input type="text" class="form-control" v-model="product.price" />
+    <div>
+        <b-modal id='add-product-item' :title="__('order.add_product')" :ok-title="__('order.save')"
+                 :cancel-title="__('order.cancel')"
+                 @shown='resetProductData()' @ok="$emit('create-product', $event, product)">
+            <div class='form-group mb15'>
+                <label class='text-title-field'>{{ __('order.name') }}</label>
+                <input type='text' class='next-input' v-model='product.name'>
             </div>
-            <div class="col-6 mb-3 position-relative">
-                <label class="form-label">{{ __('order.sku_optional') }}</label>
-                <input type="text" class="form-control" v-model="product.sku" />
+            <div class='form-group mb15 row'>
+                <div class='col-6'>
+                    <label class='text-title-field'>{{ __('order.price') }}</label>
+                    <input type='text' class='next-input' v-model='product.price'>
+                </div>
+                <div class='col-6'>
+                    <label class='text-title-field'>{{ __('order.sku_optional') }}</label>
+                    <input type='text' class='next-input' v-model='product.sku'>
+                </div>
             </div>
-        </div>
-        <div class="mb-3 position-relative">
-            <label class="form-label">{{ __('order.status') }}</label>
-            <select class="form-select" v-model="product.status">
-                <option value="published">{{ __('order.published') }}</option>
-                <option value="draft">{{ __('order.draft') }}</option>
-                <option value="pending">{{ __('order.pending') }}</option>
-            </select>
-        </div>
-        <div :class="{ 'position-relative': true, 'mb-3': product.with_storehouse_management || store && store.id }">
-            <label class="form-check">
-                <input
-                    type="checkbox"
-                    class="form-check-input"
-                    v-model="product.with_storehouse_management"
-                    value="1"
-                />
-                <span class="form-check-label">{{ __('order.with_storehouse_management') }}</span>
-            </label>
-        </div>
-        <template v-if="product.with_storehouse_management">
-            <div class="mb-3 position-relative">
-                <label class="form-label">{{ __('order.quantity') }}</label>
-                <input type="number" min="1" class="form-control" v-model="product.quantity" />
+            <div class='form-group mb-3'>
+                <label class='next-label'>
+                    <input type='checkbox' class='hrv-checkbox' v-model='product.with_storehouse_management' value='1'>
+                    {{ __('order.with_storehouse_management') }}</label>
             </div>
-            <div :class="{ 'position-relative': true, 'mb-3': store && store.id }">
-                <label class="form-check">
-                    <input
-                        type="checkbox"
-                        class="form-check-input"
-                        v-model="product.allow_checkout_when_out_of_stock"
-                        value="1"
-                    />
-                    <span class="form-check-label">{{ __('order.allow_customer_checkout_when_this_product_out_of_stock') }}</span>
-                </label>
+            <div class='row' v-show='product.with_storehouse_management'>
+                <div class='col-8'>
+                    <div class='form-group mb-3'>
+                        <label class='text-title-field'>{{ __('order.quantity') }}</label>
+                        <input type='number' min='1' class='next-input' v-model='product.quantity'>
+                    </div>
+                    <div class='form-group mb-3'>
+                        <label class='next-label'>
+                            <input type='checkbox' class='hrv-checkbox'
+                                   v-model='product.allow_checkout_when_out_of_stock' value='1'>
+                            {{ __('order.allow_customer_checkout_when_this_product_out_of_stock') }}</label>
+                    </div>
+                </div>
             </div>
-        </template>
-        <div class="position-relative" v-if="store && store.id">
-            <label class="form-check-label">{{ __('order.store') }}: <strong class="text-primary">{{ store.name }}</strong></label>
-        </div>
-    </ec-modal>
+            <div class='form-group mb-3' v-if='store && store.id'>
+                <label class='next-label'>{{ __('order.store') }}: <strong class='text-primary'>{{
+                        store.name
+                    }}</strong></label>
+            </div>
+        </b-modal>
+    </div>
 </template>
 
 <script>
@@ -71,18 +53,17 @@ export default {
             default: () => ({}),
         },
     },
-    data: function () {
+    data: function() {
         return {
             product: {},
         }
     },
     methods: {
-        resetProductData: function () {
+        resetProductData: function() {
             this.product = {
                 name: null,
                 price: 0,
                 sku: null,
-                status: 'published',
                 with_storehouse_management: false,
                 allow_checkout_when_out_of_stock: false,
                 quantity: 0,
@@ -90,14 +71,8 @@ export default {
             }
         },
     },
-    mounted: function () {
+    mounted: function() {
         this.resetProductData()
-
-        $event.on(`ec-modal:open`, (id) => {
-            if (id === 'add-product-item') {
-                this.resetProductData()
-            }
-        })
     },
 }
 </script>

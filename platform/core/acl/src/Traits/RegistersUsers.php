@@ -3,19 +3,38 @@
 namespace Botble\ACL\Traits;
 
 use Illuminate\Auth\Events\Registered;
+use Illuminate\Contracts\Auth\StatefulGuard;
+use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Contracts\View\Factory;
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Routing\Redirector;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 trait RegistersUsers
 {
     use RedirectsUsers;
 
+    /**
+     * Show the application registration form.
+     *
+     * @return Factory|Application|View|\Response
+     */
     public function showRegistrationForm()
     {
-        return null;
+        return view('auth.register');
     }
 
+    /**
+     * Handle a registration request for the application.
+     *
+     * @param Request $request
+     * @return RedirectResponse|Response|Redirector
+     * @throws ValidationException
+     */
     public function register(Request $request)
     {
         $this->validator($request->all())->validate();
@@ -24,18 +43,32 @@ trait RegistersUsers
 
         $this->guard()->login($user);
 
-        $this->registered($request, $user);
+        if ($response = $this->registered($request, $user)) {
+            return $response;
+        }
 
         return $request->wantsJson()
             ? new Response('', 201)
             : redirect($this->redirectPath());
     }
 
+    /**
+     * Get the guard to be used during registration.
+     *
+     * @return StatefulGuard
+     */
     protected function guard()
     {
         return Auth::guard();
     }
 
+    /**
+     * The user has been registered.
+     *
+     * @param Request $request
+     * @param mixed $user
+     * @return void
+     */
     protected function registered(Request $request, $user)
     {
         //

@@ -3,10 +3,8 @@
 namespace Illuminate\View;
 
 use Illuminate\Contracts\Support\Htmlable;
-use InvalidArgumentException;
-use Stringable;
 
-class ComponentSlot implements Htmlable, Stringable
+class ComponentSlot implements Htmlable
 {
     /**
      * The slot attribute bag.
@@ -27,6 +25,7 @@ class ComponentSlot implements Htmlable, Stringable
      *
      * @param  string  $contents
      * @param  array  $attributes
+     * @return void
      */
     public function __construct($contents = '', $attributes = [])
     {
@@ -76,25 +75,6 @@ class ComponentSlot implements Htmlable, Stringable
     public function isNotEmpty()
     {
         return ! $this->isEmpty();
-    }
-
-    /**
-     * Determine if the slot has non-comment content.
-     *
-     * @param  callable|string|null  $callable
-     * @return bool
-     */
-    public function hasActualContent(callable|string|null $callable = null)
-    {
-        if (is_string($callable) && ! function_exists($callable)) {
-            throw new InvalidArgumentException('Callable does not exist.');
-        }
-
-        return filter_var(
-            $this->contents,
-            FILTER_CALLBACK,
-            ['options' => $callable ?? fn ($input) => trim(preg_replace("/<!--([\s\S]*?)-->/", '', $input))]
-        ) !== '';
     }
 
     /**

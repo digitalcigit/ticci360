@@ -2,8 +2,8 @@
 
 namespace Botble\Base\Forms\Fields;
 
-use Botble\Base\Forms\FormField;
 use Illuminate\Support\Arr;
+use Botble\Base\Forms\FormField;
 
 class CkEditorField extends FormField
 {

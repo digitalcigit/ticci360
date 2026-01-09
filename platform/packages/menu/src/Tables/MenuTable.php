@@ -3,89 +3,128 @@
 namespace Botble\Menu\Tables;
 
 use Botble\Base\Facades\BaseHelper;
-use Botble\Menu\Facades\Menu as MenuFacade;
+use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Menu\Models\Menu;
-use Botble\Menu\Models\MenuLocation;
+use Botble\Menu\Repositories\Interfaces\MenuInterface;
 use Botble\Table\Abstracts\TableAbstract;
-use Botble\Table\Actions\DeleteAction;
-use Botble\Table\Actions\EditAction;
-use Botble\Table\BulkActions\DeleteBulkAction;
-use Botble\Table\BulkChanges\CreatedAtBulkChange;
-use Botble\Table\BulkChanges\NameBulkChange;
-use Botble\Table\BulkChanges\StatusBulkChange;
-use Botble\Table\Columns\CreatedAtColumn;
-use Botble\Table\Columns\FormattedColumn;
-use Botble\Table\Columns\IdColumn;
-use Botble\Table\Columns\NameColumn;
-use Botble\Table\Columns\StatusColumn;
-use Botble\Table\HeaderActions\CreateHeaderAction;
+use Botble\Base\Facades\Html;
+use Illuminate\Contracts\Routing\UrlGenerator;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Arr;
+use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
+use Botble\Table\DataTables;
 
 class MenuTable extends TableAbstract
 {
-    public function setup(): void
+    protected $hasActions = true;
+
+    protected $hasFilter = true;
+
+    public function __construct(DataTables $table, UrlGenerator $urlGenerator, MenuInterface $menuRepository)
     {
-        $this
-            ->model(Menu::class)
-            ->addColumns([
-                IdColumn::make(),
-                NameColumn::make()->route('menus.edit'),
-                FormattedColumn::make('locations_display')
-                    ->label(trans('packages/menu::menu.locations'))
-                    ->orderable(false)
-                    ->searchable(false)
-                    ->getValueUsing(function (FormattedColumn $column) {
-                        $locations = $column
-                            ->getItem()
-                            ->locations
-                            ->sortBy('name')
-                            ->map(function (MenuLocation $location) {
-                                $locationName = Arr::get(MenuFacade::getMenuLocations(), $location->location);
+        parent::__construct($table, $urlGenerator);
 
-                                if (! $locationName) {
-                                    return null;
-                                }
+        $this->repository = $menuRepository;
 
-                                return BaseHelper::renderBadge($locationName, 'info', ['class' => 'me-1']);
-                            })
-                            ->all();
+        if (! Auth::user()->hasAnyPermission(['menus.edit', 'menus.destroy'])) {
+            $this->hasOperations = false;
+            $this->hasActions = false;
+        }
+    }
 
-                        return implode(', ', $locations);
-                    })
-                    ->withEmptyState(),
-                FormattedColumn::make('items_count')
-                    ->label(trans('packages/menu::menu.items'))
-                    ->orderable(false)
-                    ->searchable(false)
-                    ->getValueUsing(function (FormattedColumn $column) {
-                        return BaseHelper::renderIcon('ti ti-link') . ' '
-                            . number_format($column->getItem()->menu_nodes_count);
-                    }),
-                CreatedAtColumn::make(),
-                StatusColumn::make(),
-            ])
-            ->addHeaderAction(CreateHeaderAction::make()->route('menus.create'))
-            ->addActions([
-                EditAction::make()->route('menus.edit'),
-                DeleteAction::make()->route('menus.destroy'),
-            ])
-            ->addBulkAction(DeleteBulkAction::make()->permission('menus.destroy'))
-            ->addBulkChanges([
-                NameBulkChange::make(),
-                StatusBulkChange::make(),
-                CreatedAtBulkChange::make(),
-            ])
-            ->queryUsing(function (Builder $query): void {
-                $query
-                    ->select([
-                        'id',
-                        'name',
-                        'created_at',
-                        'status',
-                    ])
-                    ->with('locations')
-                    ->withCount('menuNodes');
+    public function ajax(): JsonResponse
+    {
+        $data = $this->table
+            ->eloquent($this->query())
+            ->editColumn('name', function (Menu $item) {
+                if (! Auth::user()->hasPermission('menus.edit')) {
+                    return BaseHelper::clean($item->name);
+                }
+
+                return Html::link(route('menus.edit', $item->id), BaseHelper::clean($item->name));
+            })
+            ->editColumn('checkbox', function (Menu $item) {
+                return $this->getCheckbox($item->id);
+            })
+            ->editColumn('created_at', function (Menu $item) {
+                return BaseHelper::formatDate($item->created_at);
+            })
+            ->editColumn('status', function (Menu $item) {
+                return $item->status->toHtml();
+            })
+            ->addColumn('operations', function (Menu $item) {
+                return $this->getOperations('menus.edit', 'menus.destroy', $item);
             });
+
+        return $this->toJson($data);
+    }
+
+    public function query(): Relation|Builder|QueryBuilder
+    {
+        $query = $this->repository->getModel()
+            ->select([
+                'id',
+                'name',
+                'created_at',
+                'status',
+            ]);
+
+        return $this->applyScopes($query);
+    }
+
+    public function columns(): array
+    {
+        return [
+            'id' => [
+                'title' => trans('core/base::tables.id'),
+                'width' => '20px',
+            ],
+            'name' => [
+                'title' => trans('core/base::tables.name'),
+                'class' => 'text-start',
+            ],
+            'created_at' => [
+                'title' => trans('core/base::tables.created_at'),
+                'width' => '100px',
+            ],
+            'status' => [
+                'title' => trans('core/base::tables.status'),
+                'width' => '100px',
+            ],
+        ];
+    }
+
+    public function buttons(): array
+    {
+        return $this->addCreateButton(route('menus.create'), 'menus.create');
+    }
+
+    public function bulkActions(): array
+    {
+        return $this->addDeleteAction(route('menus.deletes'), 'menus.destroy', parent::bulkActions());
+    }
+
+    public function getBulkChanges(): array
+    {
+        return [
+            'name' => [
+                'title' => trans('core/base::tables.name'),
+                'type' => 'text',
+                'validate' => 'required|max:120',
+            ],
+            'status' => [
+                'title' => trans('core/base::tables.status'),
+                'type' => 'customSelect',
+                'choices' => BaseStatusEnum::labels(),
+                'validate' => 'required|' . Rule::in(BaseStatusEnum::values()),
+            ],
+            'created_at' => [
+                'title' => trans('core/base::tables.created_at'),
+                'type' => 'datePicker',
+            ],
+        ];
     }
 }

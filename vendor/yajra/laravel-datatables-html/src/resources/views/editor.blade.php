@@ -1,4 +1,4 @@
-document.addEventListener("DOMContentLoaded", function(){
+$(function(){
     window.{{ config('datatables-html.namespace', 'LaravelDataTables') }} = window.{{ config('datatables-html.namespace', 'LaravelDataTables') }} || {};
     $.ajaxSetup({headers: {'X-CSRF-TOKEN': '{{csrf_token()}}'}});
     @foreach($editors as $editor)
@@ -10,6 +10,3 @@ document.addEventListener("DOMContentLoaded", function(){
     @endforeach
     window.{{ config('datatables-html.namespace', 'LaravelDataTables') }}["%1$s"] = $("#%1$s").DataTable(%2$s);
 });
-@foreach ($scripts as $script)
-@include($script)
-@endforeach

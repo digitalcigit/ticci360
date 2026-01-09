@@ -2,32 +2,20 @@
 
 namespace Botble\Theme;
 
-use Botble\Base\Facades\AdminHelper;
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Facades\Html;
-use Botble\Media\Facades\RvMedia;
-use Botble\Setting\Facades\Setting;
+use Botble\SeoHelper\Facades\SeoHelper;
 use Botble\Theme\Contracts\Theme as ThemeContract;
 use Botble\Theme\Exceptions\UnknownPartialFileException;
 use Botble\Theme\Exceptions\UnknownThemeException;
-use Botble\Theme\Supports\SocialLink;
-use Botble\Theme\Supports\ThemeSupport;
-use Botble\Theme\Typography\Typography;
-use Carbon\CarbonInterface;
 use Closure;
 use Illuminate\Config\Repository;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Http\Response;
-use Illuminate\Routing\Router;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\HtmlString;
 use Illuminate\View\Factory;
 use Symfony\Component\HttpFoundation\Cookie;
-use Throwable;
 
 class Theme implements ThemeContract
 {
@@ -35,9 +23,7 @@ class Theme implements ThemeContract
 
     protected array $themeConfig = [];
 
-    protected ?string $theme = null;
-
-    protected ?string $inheritTheme = null;
+    protected string|null $theme = null;
 
     protected string $layout;
 
@@ -53,12 +39,6 @@ class Theme implements ThemeContract
 
     protected array $widgets = [];
 
-    protected array $bodyAttributes = [];
-
-    protected array $htmlAttributes = [];
-
-    protected Typography $typography;
-
     public function __construct(
         protected Repository $config,
         protected Dispatcher $events,
@@ -68,6 +48,8 @@ class Theme implements ThemeContract
         protected Breadcrumb $breadcrumb
     ) {
         $this->uses($this->getThemeName())->layout(setting('layout', 'default'));
+
+        SeoHelper::meta()->setGoogle(setting('google_analytics'));
     }
 
     public function layout(string $layout): self
@@ -83,7 +65,7 @@ class Theme implements ThemeContract
     /**
      * Alias of theme method.
      */
-    public function uses(?string $theme = null): self
+    public function uses(string|null $theme = null): self
     {
         return $this->theme($theme);
     }
@@ -91,7 +73,7 @@ class Theme implements ThemeContract
     /**
      * Set up a theme name.
      */
-    public function theme(?string $theme = null): self
+    public function theme(string|null $theme = null): self
     {
         // If theme name is not set, so use default from config.
         if ($theme) {
@@ -99,15 +81,8 @@ class Theme implements ThemeContract
         }
 
         // Is theme ready?
-        if (! $this->exists($theme) && ! app()->runningInConsole() && ! AdminHelper::isInAdmin(true)) {
+        if (! $this->exists($theme) && ! app()->runningInConsole()) {
             throw new UnknownThemeException('Theme [' . $theme . '] not found.');
-        }
-
-        $this->inheritTheme = $this->getConfig('inherit');
-
-        // If inherit theme is set and not exists, so throw exception.
-        if ($this->hasInheritTheme() && ! $this->exists($this->getInheritTheme()) && ! AdminHelper::isInAdmin(true)) {
-            throw new UnknownThemeException('Parent theme [' . $this->getInheritTheme() . '] not found.');
         }
 
         // Add location to look up view.
@@ -119,27 +94,12 @@ class Theme implements ThemeContract
         // Before from a public theme config.
         $this->fire('appendBefore', $this);
 
+        $assetPath = $this->getThemeAssetsPath();
+
         // Add asset path to asset container.
-        $this->registerAssetsPath();
+        $this->asset->addPath($assetPath . '/' . $this->getConfig('containerDir.asset'));
 
         return $this;
-    }
-
-    protected function registerAssetsPath(): void
-    {
-        $assetsPath = $this->getThemeAssetsPath();
-
-        $this->asset->addPath($assetsPath . '/' . $this->getConfig('containerDir.asset'));
-    }
-
-    public function hasInheritTheme(): bool
-    {
-        return $this->inheritTheme !== null;
-    }
-
-    public function getInheritTheme(): ?string
-    {
-        return $this->inheritTheme;
     }
 
     protected function getThemeAssetsPath(): string
@@ -160,14 +120,14 @@ class Theme implements ThemeContract
     /**
      * Check theme exists.
      */
-    public function exists(?string $theme): bool
+    public function exists(string|null $theme): bool
     {
         $path = platform_path($this->path($theme)) . '/';
 
         return File::isDirectory($path);
     }
 
-    public function path(?string $forceThemeName = null): string
+    public function path(string|null $forceThemeName = null): string
     {
         $themeDir = $this->getConfig('themeDir');
 
@@ -179,50 +139,30 @@ class Theme implements ThemeContract
     /**
      * Get theme config.
      */
-    public function getConfig(?string $key = null): mixed
+    public function getConfig(string|null $key = null): mixed
     {
+        // Main package config.
         if (! $this->themeConfig) {
             $this->themeConfig = $this->config->get('packages.theme.general', []);
         }
 
-        $this->loadConfigFromTheme($this->theme);
+        // Config inside a public theme.
+        // This config having buffer by array object.
+        if ($this->theme && ! isset($this->themeConfig['themes'][$this->theme])) {
+            $this->themeConfig['themes'][$this->theme] = [];
 
+            // Require public theme config.
+            $minorConfigPath = theme_path($this->theme . '/config.php');
+
+            if ($this->files->exists($minorConfigPath)) {
+                $this->themeConfig['themes'][$this->theme] = $this->files->getRequire($minorConfigPath);
+            }
+        }
+
+        // Evaluate theme config.
         $this->themeConfig = $this->evaluateConfig($this->themeConfig);
 
         return empty($key) ? $this->themeConfig : Arr::get($this->themeConfig, $key);
-    }
-
-    public function getInheritConfig(?string $key = null): mixed
-    {
-        if (! $this->hasInheritTheme()) {
-            return null;
-        }
-
-        $this->loadConfigFromTheme($theme = $this->getInheritTheme());
-
-        if (! isset($this->themeConfig['themes'][$theme])) {
-            return null;
-        }
-
-        $config = $this->themeConfig['themes'][$theme];
-
-        return empty($key) ? $config : Arr::get($config, $key);
-    }
-
-    protected function loadConfigFromTheme(string $theme): void
-    {
-        // Config inside a public theme.
-        // This config having buffer by array object.
-        if ($theme && ! isset($this->themeConfig['themes'][$theme])) {
-            $this->themeConfig['themes'][$theme] = [];
-
-            // Require public theme config.
-            $minorConfigPath = theme_path($theme . '/config.php');
-
-            if ($this->files->exists($minorConfigPath)) {
-                $this->themeConfig['themes'][$theme] = $this->files->getRequire($minorConfigPath);
-            }
-        }
     }
 
     /**
@@ -264,8 +204,12 @@ class Theme implements ThemeContract
         $hints[] = platform_path($location);
 
         // This is nice feature to use inherit from another.
-        if ($this->hasInheritTheme()) {
-            $inheritPath = platform_path($this->path($this->getInheritTheme()));
+        if ($this->getConfig('inherit')) {
+            // Inherit from theme name.
+            $inherit = $this->getConfig('inherit');
+
+            // Inherit theme path.
+            $inheritPath = platform_path($this->path($inherit));
 
             if ($this->files->isDirectory($inheritPath)) {
                 $hints[] = $inheritPath;
@@ -328,25 +272,11 @@ class Theme implements ThemeContract
      */
     public function fire(string $event, string|array|callable|null|object $args): void
     {
-        if ($this->hasInheritTheme()) {
-            $this->asset->isInheritTheme();
-
-            $onEvent = $this->getInheritConfig('events.' . $event);
-
-            if ($onEvent instanceof Closure) {
-                $onEvent($args);
-            }
-
-            $this->asset->isInheritTheme(false);
-        }
-
         $onEvent = $this->getConfig('events.' . $event);
 
         if ($onEvent instanceof Closure) {
             $onEvent($args);
         }
-
-        $this->events->dispatch('theme.' . $event, $args);
     }
 
     /**
@@ -354,10 +284,6 @@ class Theme implements ThemeContract
      */
     public function breadcrumb(): Breadcrumb
     {
-        if (! $this->breadcrumb->getCrumbs()) {
-            $this->breadcrumb->add(__('Home'), BaseHelper::getHomepageUrl());
-        }
-
         return $this->breadcrumb;
     }
 
@@ -430,8 +356,8 @@ class Theme implements ThemeContract
         }
 
         // Passing variable to closure.
-        $events = &$this->events;
-        $bindings = &$this->bindings;
+        $events =&$this->events;
+        $bindings =&$this->bindings;
 
         // Buffer processes to save request.
         return Arr::get($this->bindings, $name, function () use (&$events, &$bindings, $name) {
@@ -463,7 +389,7 @@ class Theme implements ThemeContract
     /**
      * The same as "partial", but having prefix layout.
      */
-    public function partialWithLayout(string $view, array $args = []): ?string
+    public function partialWithLayout(string $view, array $args = []): string|null
     {
         $view = $this->getLayoutName() . '.' . $view;
 
@@ -478,7 +404,7 @@ class Theme implements ThemeContract
     /**
      * Set up a partial.
      */
-    public function partial(string $view, array $args = []): ?string
+    public function partial(string $view, array $args = []): string|null
     {
         $partialDir = $this->getThemeNamespace($this->getConfig('containerDir.partial'));
 
@@ -488,7 +414,7 @@ class Theme implements ThemeContract
     /**
      * Load a partial
      */
-    public function loadPartial(string $view, string $partialDir, array $args): ?string
+    public function loadPartial(string $view, string $partialDir, array $args): string|null
     {
         $path = $partialDir . '.' . $view;
 
@@ -508,7 +434,7 @@ class Theme implements ThemeContract
      * This method will first try to load the partial from current theme. If partial
      * is not found in theme then it loads it from app (i.e. app/views/partials)
      */
-    public function watchPartial(string $view, array $args = []): ?string
+    public function watchPartial(string $view, array $args = []): string|null
     {
         try {
             return $this->partial($view, $args);
@@ -522,11 +448,11 @@ class Theme implements ThemeContract
     /**
      * Hook a partial before rendering.
      */
-    public function partialComposer(string|array $view, Closure $callback, ?string $layout = null): void
+    public function partialComposer(string|array $view, Closure $callback, string|null $layout = null): void
     {
         $partialDir = $this->getConfig('containerDir.partial');
 
-        $view = (array) $view;
+        $view = (array)$view;
 
         // Partial path with namespace.
         $path = $this->getThemeNamespace($partialDir);
@@ -546,7 +472,7 @@ class Theme implements ThemeContract
     /**
      * Hook a partial before rendering.
      */
-    public function composer(string|array $view, Closure $callback, ?string $layout = null): void
+    public function composer(string|array $view, Closure $callback, string|null $layout = null): void
     {
         $partialDir = $this->getConfig('containerDir.view');
 
@@ -572,7 +498,7 @@ class Theme implements ThemeContract
     /**
      * Render a region.
      */
-    public function place(string $region, ?string $default = null): ?string
+    public function place(string $region, string|null $default = null): string|null
     {
         return $this->get($region, $default);
     }
@@ -580,7 +506,7 @@ class Theme implements ThemeContract
     /**
      * Render a region.
      */
-    public function get(string $region, ?string $default = null)
+    public function get(string $region, string|null $default = null)
     {
         if ($this->has($region)) {
             return $this->regions[$region];
@@ -600,7 +526,7 @@ class Theme implements ThemeContract
     /**
      * Place content in sub-view.
      */
-    public function content(): ?string
+    public function content(): string|null
     {
         return $this->regions['content'];
     }
@@ -678,17 +604,7 @@ class Theme implements ThemeContract
         // Keeping arguments.
         $this->arguments = $args;
 
-        try {
-            $content = $this->view->make($view, $args)->render();
-        } catch (Throwable $exception) {
-            if (App::hasDebugModeEnabled()) {
-                throw $exception;
-            }
-
-            report($exception);
-
-            $content = str_replace(base_path('/'), '', $exception->getMessage());
-        }
+        $content = $this->view->make($view, $args)->render();
 
         // View path of content.
         $this->content = $view;
@@ -762,7 +678,7 @@ class Theme implements ThemeContract
     /**
      * Find view location.
      */
-    public function location(bool $realPath = false): ?string
+    public function location(bool $realPath = false): string|null
     {
         if ($this->view->exists($this->content)) {
             return $realPath ? $this->view->getFinder()->find($this->content) : $this->content;
@@ -803,8 +719,8 @@ class Theme implements ThemeContract
 
         $content->withHeaders([
             'CMS-Version' => get_core_version(),
-            'Authorization-At' => Setting::get('membership_authorization_at'),
-            'Activated-License' => ! empty(Setting::get('licensed_to')) ? 'Yes' : 'No',
+            'Authorization-At' => setting('membership_authorization_at'),
+            'Activated-License' => ! empty(setting('licensed_to')) ? 'Yes' : 'No',
         ]);
 
         return $content;
@@ -812,33 +728,28 @@ class Theme implements ThemeContract
 
     public function header(): string
     {
-        if (! empty($this->breadcrumb->crumbs)) {
-            $schema = [
-                '@context' => 'https://schema.org',
-                '@type' => 'BreadcrumbList',
-                'itemListElement' => [],
+        $schema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'BreadcrumbList',
+            'itemListElement' => [],
+        ];
+
+        foreach ($this->breadcrumb->crumbs as $index => $item) {
+            $schema['itemListElement'][] = [
+                '@type' => 'ListItem',
+                'position' => $index + 1,
+                'name' => BaseHelper::clean($item['label']),
+                'item' => $item['url'],
             ];
-
-            $index = 1;
-
-            foreach ($this->breadcrumb->crumbs as $item) {
-                $schema['itemListElement'][] = [
-                    '@type' => 'ListItem',
-                    'position' => $index,
-                    'name' => BaseHelper::clean($item['label']),
-                    'item' => $item['url'],
-                ];
-
-                $index++;
-            }
-
-            $schema = json_encode($schema, JSON_UNESCAPED_UNICODE);
-
-            $this
-                ->asset()
-                ->container('header')
-                ->writeScript('breadcrumb-schema', $schema, attributes: ['type' => 'application/ld+json']);
         }
+
+        $schema = json_encode($schema);
+
+        $this->asset()->container('header')->writeScript(
+            'breadcrumb-schema',
+            $schema,
+            attributes: ['type' => 'application/ld+json']
+        );
 
         return $this->view->make('packages/theme::partials.header')->render();
     }
@@ -870,13 +781,6 @@ class Theme implements ThemeContract
         require package_path('theme/routes/public.php');
     }
 
-    public function registerRoutes(Closure|callable $closure): Router
-    {
-        return Route::group(['middleware' => ['web', 'core']], function () use ($closure): void {
-            Route::group(apply_filters(BASE_FILTER_GROUP_PUBLIC_ROUTE, []), fn () => $closure());
-        });
-    }
-
     public function loadView(string $view): string
     {
         return $this->view->make($this->getThemeNamespace('views') . '.' . $view)->render();
@@ -900,214 +804,18 @@ class Theme implements ThemeContract
         return $this;
     }
 
-    public function getThemeScreenshot(string $theme, ?string $name = null): string
+    public function getThemeScreenshot(string $theme): string
     {
         $publicThemeName = Theme::getPublicThemeName();
 
         $themeName = Theme::getThemeName() == $theme && $publicThemeName ? $publicThemeName : $theme;
 
-        $screenshotName = $name ?: 'screenshot.png';
-
-        $screenshot = public_path($this->getConfig('themeDir') . '/' . $themeName . '/' . $screenshotName);
+        $screenshot = public_path($this->getConfig('themeDir') . '/' . $themeName . '/screenshot.png');
 
         if (! File::exists($screenshot)) {
-            $screenshot = $this->path($theme) . '/' . $screenshotName;
+            $screenshot = theme_path($theme . '/screenshot.png');
         }
 
-        if (! File::exists($screenshot)) {
-            $screenshot = theme_path($theme . '/' . $screenshotName);
-        }
-
-        if (! File::exists($screenshot)) {
-            return RvMedia::getDefaultImage();
-        }
-
-        $guessedMimeType = File::mimeType($screenshot);
-
-        return 'data:' . $guessedMimeType . ';base64,' . base64_encode(File::get($screenshot));
-    }
-
-    public function registerThemeIconFields(array $icons, array $css = [], array $js = []): void
-    {
-        ThemeSupport::registerThemeIconFields($icons, $css, $js);
-    }
-
-    public function registerFacebookIntegration(): void
-    {
-        ThemeSupport::registerFacebookIntegration();
-    }
-
-    public function registerSocialLinks(): void
-    {
-        ThemeSupport::registerSocialLinks();
-    }
-
-    public function getSocialLinksRepeaterFields(): array
-    {
-        return ThemeSupport::getSocialLinksRepeaterFields();
-    }
-
-    /**
-     * @return array<SocialLink>
-     */
-    public function getSocialLinks(): array
-    {
-        return ThemeSupport::getSocialLinks();
-    }
-
-    public function convertSocialLinksToArray(array|string|null $data): array
-    {
-        if (! $data) {
-            return [];
-        }
-
-        return ThemeSupport::convertSocialLinksToArray($data);
-    }
-
-    public function getThemeIcons(): array
-    {
-        return ThemeSupport::getThemeIcons();
-    }
-
-    public function addBodyAttributes(array $bodyAttributes): static
-    {
-        $this->bodyAttributes = [...$this->bodyAttributes, ...$bodyAttributes];
-
-        return $this;
-    }
-
-    public function getBodyAttribute(string $attribute): ?string
-    {
-        return $this->bodyAttributes[$attribute] ?? null;
-    }
-
-    public function getBodyAttributes(): array
-    {
-        return $this->bodyAttributes;
-    }
-
-    public function bodyAttributes(): string
-    {
-        if (BaseHelper::isRtlEnabled()) {
-            $this->bodyAttributes['dir'] = 'rtl';
-        }
-
-        if ($this->get('bodyClass')) {
-            $this->bodyAttributes['class'] = $this->get('bodyClass');
-        }
-
-        return apply_filters('theme_body_attributes', Html::attributes($this->bodyAttributes));
-    }
-
-    public function addHtmlAttributes(array $htmlAttributes): static
-    {
-        $this->htmlAttributes = [...$this->htmlAttributes, ...$htmlAttributes];
-
-        return $this;
-    }
-
-    public function getHtmlAttribute(string $attribute): ?string
-    {
-        return $this->htmlAttributes[$attribute] ?? null;
-    }
-
-    public function getHtmlAttributes(): array
-    {
-        return $this->htmlAttributes;
-    }
-
-    public function htmlAttributes(): string
-    {
-        $lang = str_replace('_', '-', app()->getLocale());
-
-        if ($lang) {
-            $this->addHtmlAttributes(['lang' => $lang]);
-        }
-
-        return apply_filters('theme_html_attributes', Html::attributes($this->htmlAttributes));
-    }
-
-    public function registerPreloader(): void
-    {
-        ThemeSupport::registerPreloader();
-    }
-
-    public function getPreloaderVersions(): array
-    {
-        return ThemeSupport::getPreloaderVersions();
-    }
-
-    public function registerToastNotification(): void
-    {
-        ThemeSupport::registerToastNotification();
-    }
-
-    public function getSiteCopyright(): ?string
-    {
-        return ThemeSupport::getSiteCopyright();
-    }
-
-    public function getLogo(string $logoKey = 'logo'): ?string
-    {
-        return apply_filters('theme_logo', theme_option($logoKey));
-    }
-
-    public function getFavicon(): ?string
-    {
-        return apply_filters('theme_favicon', theme_option('favicon'));
-    }
-
-    public function getSiteTitle(): ?string
-    {
-        return apply_filters('theme_site_title', theme_option('site_title'));
-    }
-
-    public function getLogoImage(
-        array $attributes = [],
-        string $logoKey = 'logo',
-        int $maxHeight = 0,
-        ?string $logoUrl = null
-    ): ?HtmlString {
-        if ($logoUrl) {
-            $logo = $logoUrl;
-        } else {
-            $logo = $this->getLogo($logoKey);
-        }
-
-        if (! $logo) {
-            return null;
-        }
-
-        $height = theme_option('logo_height') ?: $maxHeight;
-
-        if ($height) {
-            $attributes['style'] = sprintf('max-height: %s', is_numeric($height) ? "{$height}px" : $height);
-        }
-
-        $attributes['loading'] = false;
-
-        return apply_filters('theme_logo_image', RvMedia::image($logo, $this->getSiteTitle(), attributes: $attributes, lazy: false));
-    }
-
-    public function formatDate(CarbonInterface|string|int|null $date, ?string $format = null): ?string
-    {
-        return ThemeSupport::formatDate($date, $format);
-    }
-
-    public function typography(): Typography
-    {
-        $this->typography ??= new Typography();
-
-        return $this->typography;
-    }
-
-    public function renderSocialSharing(?string $url = null, ?string $title = null, ?string $thumbnail = null): string
-    {
-        return ThemeSupport::renderSocialSharingButtons($url, $title, $thumbnail);
-    }
-
-    public function termAndPrivacyPolicyUrl(): ?string
-    {
-        return theme_option('term_and_privacy_policy_url');
+        return 'data:image/png;base64,' . base64_encode(File::get($screenshot));
     }
 }

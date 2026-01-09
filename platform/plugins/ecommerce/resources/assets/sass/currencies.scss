@@ -1,11 +1,14 @@
+.max-width-1200 {
+    max-width: 1300px;
+}
+
 .swatches-container {
     .header {
         display: flex;
         flex-direction: row;
         font-weight: 700;
-        background-color: var(--bb-body-bg);
-        color: var(--bb-body-color);
-        border-bottom: var(--bb-border-width) var(--bb-border-style) var(--bb-border-color);
+        background-color: #36c6d3;
+        color: #ffffff;
 
         > * {
             float: left;
@@ -33,7 +36,7 @@
             }
 
             &:nth-child(odd) {
-                background-color: var(--bb-body-bg);
+                background-color: #f0f0f0;
             }
 
             > * {
@@ -86,25 +89,24 @@
     }
 
     .swatch-is-default {
-        width: 120px;
+        width: 90px;
     }
 
     .remove-item {
-        width: 80px;
+        width: 50px;
     }
 
-    .swatch-exchange-rate,
-    .swatch-is-prefix-symbol,
-    .swatch-decimals {
-        max-width: 180px;
+    .swatch-exchange-rate, .swatch-is-prefix-symbol, .swatch-decimals {
+        max-width: 145px;
     }
 }
 
+
 @keyframes spin {
-    0% {
-        transform: rotate(0deg);
-    }
-    100% {
-        transform: rotate(360deg);
-    }
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#btn-update-currencies, #btn-clear-cache-rates {
+    margin-top: 18px;
 }

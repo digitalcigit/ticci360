@@ -141,7 +141,7 @@ class MySqlDump
             'include-tables' => [],
             'exclude-tables' => [],
             'include-views' => [],
-            'compress' => MySqlDump::NONE,
+            'compress' => Mysqldump::NONE,
             'init_commands' => [],
             'no-data' => [],
             'if-not-exists' => false,
@@ -152,7 +152,7 @@ class MySqlDump
             'add-locks' => true,
             'complete-insert' => false,
             'databases' => false,
-            'default-character-set' => MySqlDump::UTF8,
+            'default-character-set' => Mysqldump::UTF8,
             'disable-keys' => true,
             'extended-insert' => true,
             'events' => false,
@@ -262,7 +262,7 @@ class MySqlDump
      *
      * @param $tableName
      *
-     * @return bool|int
+     * @return bool
      */
     public function getTableLimit($tableName)
     {
@@ -363,8 +363,8 @@ class MySqlDump
                 default:
                     throw new Exception('Unsupported database type (' . $this->dbType . ')');
             }
-        } catch (PDOException $exception) {
-            throw new Exception('Connection to ' . $this->dbType . ' failed with message: ' . $exception->getMessage());
+        } catch (PDOException $e) {
+            throw new Exception('Connection to ' . $this->dbType . ' failed with message: ' . $e->getMessage());
         }
 
         if (is_null($this->dbHandler)) {
@@ -379,6 +379,8 @@ class MySqlDump
      * Primary function, triggers dumping.
      *
      * @param string $filename Name of file to write sql dump to
+     *
+     * @return null
      *
      * @throws \Exception
      */
@@ -454,6 +456,8 @@ class MySqlDump
         $this->compressManager->write($this->getDumpFileFooter());
         // Close output file.
         $this->compressManager->close();
+
+        return;
     }
 
     /**
@@ -505,6 +509,8 @@ class MySqlDump
     /**
      * Reads table names from database.
      * Fills $this->tables array so they will be dumped later.
+     *
+     * @return null
      */
     protected function getDatabaseStructureTables()
     {
@@ -527,11 +533,15 @@ class MySqlDump
                 }
             }
         }
+
+        return;
     }
 
     /**
      * Reads view names from database.
      * Fills $this->tables array so they will be dumped later.
+     *
+     * @return null
      */
     protected function getDatabaseStructureViews()
     {
@@ -554,11 +564,15 @@ class MySqlDump
                 }
             }
         }
+
+        return;
     }
 
     /**
      * Reads trigger names from database.
      * Fills $this->tables array so they will be dumped later.
+     *
+     * @return null
      */
     protected function getDatabaseStructureTriggers()
     {
@@ -568,11 +582,15 @@ class MySqlDump
                 $this->triggers[] = $row['Trigger'];
             }
         }
+
+        return;
     }
 
     /**
      * Reads procedure names from database.
      * Fills $this->tables array so they will be dumped later.
+     *
+     * @return null
      */
     protected function getDatabaseStructureProcedures()
     {
@@ -582,11 +600,15 @@ class MySqlDump
                 $this->procedures[] = $row['procedure_name'];
             }
         }
+
+        return;
     }
 
     /**
      * Reads functions names from database.
      * Fills $this->tables array so they will be dumped later.
+     *
+     * @return null
      */
     protected function getDatabaseStructureFunctions()
     {
@@ -596,11 +618,15 @@ class MySqlDump
                 $this->functions[] = $row['function_name'];
             }
         }
+
+        return;
     }
 
     /**
      * Reads event names from database.
      * Fills $this->tables array so they will be dumped later.
+     *
+     * @return null
      */
     protected function getDatabaseStructureEvents()
     {
@@ -639,6 +665,7 @@ class MySqlDump
     /**
      * Exports all the tables selected from database.
      *
+     * @return null
      * @throws Exception
      */
     protected function exportTables()
@@ -662,6 +689,8 @@ class MySqlDump
 
     /**
      * Exports all the views found in database.
+     *
+     * @return null
      */
     protected function exportViews()
     {
@@ -685,6 +714,8 @@ class MySqlDump
 
     /**
      * Exports all the triggers found in database.
+     *
+     * @return null
      */
     protected function exportTriggers()
     {
@@ -696,6 +727,8 @@ class MySqlDump
 
     /**
      * Exports all the procedures found in database.
+     *
+     * @return null
      */
     protected function exportProcedures()
     {
@@ -707,6 +740,8 @@ class MySqlDump
 
     /**
      * Exports all the functions found in database.
+     *
+     * @return null
      */
     protected function exportFunctions()
     {
@@ -718,6 +753,8 @@ class MySqlDump
 
     /**
      * Exports all the events found in database.
+     *
+     * @return null
      */
     protected function exportEvents()
     {
@@ -731,6 +768,8 @@ class MySqlDump
      * Table structure extractor.
      *
      * @param string $tableName Name of table to export
+     *
+     * @return null
      *
      * @throws Exception
      * @todo move specific mysql code to typeAdapter
@@ -760,6 +799,8 @@ class MySqlDump
             }
         }
         $this->tableColumnTypes[$tableName] = $this->getTableColumnTypes($tableName);
+
+        return;
     }
 
     /**
@@ -795,6 +836,8 @@ class MySqlDump
      * View structure extractor, create table (avoids cyclic references).
      *
      * @param string $viewName Name of view to export
+     *
+     * @return null
      *
      * @todo move mysql specific code to typeAdapter
      */
@@ -851,6 +894,8 @@ class MySqlDump
      *
      * @param string $viewName Name of view to export
      *
+     * @return null
+     *
      * @todo move mysql specific code to typeAdapter
      */
     protected function getViewStructureView($viewName)
@@ -882,6 +927,8 @@ class MySqlDump
      * Trigger structure extractor.
      *
      * @param string $triggerName Name of trigger to export
+     *
+     * @return null
      */
     protected function getTriggerStructure($triggerName)
     {
@@ -904,6 +951,8 @@ class MySqlDump
      * Procedure structure extractor.
      *
      * @param string $procedureName Name of procedure to export
+     *
+     * @return null
      */
     protected function getProcedureStructure($procedureName)
     {
@@ -927,6 +976,8 @@ class MySqlDump
      * Function structure extractor.
      *
      * @param string $functionName Name of function to export
+     *
+     * @return null
      */
     protected function getFunctionStructure($functionName)
     {
@@ -950,6 +1001,8 @@ class MySqlDump
      * Event structure extractor.
      *
      * @param string $eventName Name of event to export
+     *
+     * @return null
      */
     protected function getEventStructure($eventName)
     {
@@ -998,6 +1051,14 @@ class MySqlDump
         return $ret;
     }
 
+    /**
+     * Escape values with quotes when needed.
+     *
+     * @param string $tableName Name of table which contains rows
+     * @param array $row Associative array of column names and values to be quoted
+     *
+     * @return string
+     */
     protected function escape($colValue, $colType)
     {
         if (is_null($colValue)) {
@@ -1126,6 +1187,8 @@ class MySqlDump
      *
      * @param string $tableName Name of table to export
      *
+     * @return null
+     *
      * @throws Exception
      */
     public function prepareListValues($tableName)
@@ -1165,6 +1228,8 @@ class MySqlDump
                 $this->typeAdapter->startDisableAutocommit()
             );
         }
+
+        return;
     }
 
     /**
@@ -1213,6 +1278,8 @@ class MySqlDump
                 '--' . PHP_EOL . PHP_EOL
             );
         }
+
+        return;
     }
 
     /**

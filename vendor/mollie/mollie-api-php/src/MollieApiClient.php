@@ -5,16 +5,13 @@ namespace Mollie\Api;
 use Mollie\Api\Endpoints\BalanceEndpoint;
 use Mollie\Api\Endpoints\BalanceReportEndpoint;
 use Mollie\Api\Endpoints\BalanceTransactionEndpoint;
-use Mollie\Api\Endpoints\CapabilityEndpoint;
 use Mollie\Api\Endpoints\ChargebackEndpoint;
 use Mollie\Api\Endpoints\ClientEndpoint;
-use Mollie\Api\Endpoints\ClientLinkEndpoint;
 use Mollie\Api\Endpoints\CustomerEndpoint;
 use Mollie\Api\Endpoints\CustomerPaymentsEndpoint;
 use Mollie\Api\Endpoints\InvoiceEndpoint;
 use Mollie\Api\Endpoints\MandateEndpoint;
 use Mollie\Api\Endpoints\MethodEndpoint;
-use Mollie\Api\Endpoints\MethodIssuerEndpoint;
 use Mollie\Api\Endpoints\OnboardingEndpoint;
 use Mollie\Api\Endpoints\OrderEndpoint;
 use Mollie\Api\Endpoints\OrderLineEndpoint;
@@ -26,23 +23,16 @@ use Mollie\Api\Endpoints\PaymentCaptureEndpoint;
 use Mollie\Api\Endpoints\PaymentChargebackEndpoint;
 use Mollie\Api\Endpoints\PaymentEndpoint;
 use Mollie\Api\Endpoints\PaymentLinkEndpoint;
-use Mollie\Api\Endpoints\PaymentLinkPaymentEndpoint;
 use Mollie\Api\Endpoints\PaymentRefundEndpoint;
 use Mollie\Api\Endpoints\PaymentRouteEndpoint;
 use Mollie\Api\Endpoints\PermissionEndpoint;
 use Mollie\Api\Endpoints\ProfileEndpoint;
 use Mollie\Api\Endpoints\ProfileMethodEndpoint;
 use Mollie\Api\Endpoints\RefundEndpoint;
-use Mollie\Api\Endpoints\SalesInvoiceEndpoint;
-use Mollie\Api\Endpoints\SessionEndpoint;
-use Mollie\Api\Endpoints\SettlementCaptureEndpoint;
-use Mollie\Api\Endpoints\SettlementChargebackEndpoint;
 use Mollie\Api\Endpoints\SettlementPaymentEndpoint;
-use Mollie\Api\Endpoints\SettlementRefundEndpoint;
 use Mollie\Api\Endpoints\SettlementsEndpoint;
 use Mollie\Api\Endpoints\ShipmentEndpoint;
 use Mollie\Api\Endpoints\SubscriptionEndpoint;
-use Mollie\Api\Endpoints\SubscriptionPaymentEndpoint;
 use Mollie\Api\Endpoints\TerminalEndpoint;
 use Mollie\Api\Endpoints\WalletEndpoint;
 use Mollie\Api\Exceptions\ApiException;
@@ -56,7 +46,7 @@ class MollieApiClient
     /**
      * Version of our client.
      */
-    public const CLIENT_VERSION = "2.79.0";
+    public const CLIENT_VERSION = "2.55.0";
 
     /**
      * Endpoint of the remote API.
@@ -106,16 +96,6 @@ class MollieApiClient
     public $profileMethods;
 
     /**
-     * @var \Mollie\Api\Endpoints\MethodIssuerEndpoint
-     */
-    public $methodIssuers;
-
-    /**
-     * @var \Mollie\Api\Endpoints\CapabilityEndpoint
-     */
-    public $capabilities;
-
-    /**
      * RESTful Customers resource.
      *
      * @var CustomerEndpoint
@@ -130,32 +110,11 @@ class MollieApiClient
     public $customerPayments;
 
     /**
-     * RESTful Sales Invoice resource.
-     *
-     * @var SalesInvoiceEndpoint
-     */
-    public $salesInvoices;
-
-    /**
      * RESTful Settlement resource.
      *
      * @var SettlementsEndpoint
      */
     public $settlements;
-
-    /**
-     * RESTful Settlement capture resource.
-     *
-     * @var \Mollie\Api\Endpoints\SettlementCaptureEndpoint
-     */
-    public $settlementCaptures;
-
-    /**
-     * RESTful Settlement chargeback resource.
-     *
-     * @var \Mollie\Api\Endpoints\SettlementChargebackEndpoint
-     */
-    public $settlementChargebacks;
 
     /**
      * RESTful Settlement payment resource.
@@ -165,25 +124,11 @@ class MollieApiClient
     public $settlementPayments;
 
     /**
-     * RESTful Settlement refund resource.
-     *
-     * @var \Mollie\Api\Endpoints\SettlementRefundEndpoint
-     */
-    public $settlementRefunds;
-
-    /**
      * RESTful Subscription resource.
      *
      * @var SubscriptionEndpoint
      */
     public $subscriptions;
-
-    /**
-     * RESTful Subscription Payments resource.
-     *
-     * @var SubscriptionPaymentEndpoint
-     */
-    public $subscriptionPayments;
 
     /**
      * RESTful Mandate resource.
@@ -322,13 +267,6 @@ class MollieApiClient
     public $orderRefunds;
 
     /**
-     * RESTful Payment Link Payment resource.
-     *
-     * @var PaymentLinkPaymentEndpoint
-     */
-    public $paymentLinkPayments;
-
-    /**
      * Manages Payment Links requests
      *
      * @var PaymentLinkEndpoint
@@ -355,27 +293,6 @@ class MollieApiClient
      * @var WalletEndpoint
      */
     public $wallets;
-
-    /**
-     * RESTful Client resource.
-     *
-     * @var ClientEndpoint
-     */
-    public $clients;
-
-    /**
-     * RESTful Client resource.
-     *
-     * @var ClientLinkEndpoint
-     */
-    public $clientLinks;
-
-    /**
-     * RESTful Session resource.
-     *
-     * @var SessionEndpoint
-     */
-    public $sessions;
 
     /**
      * @var string
@@ -408,6 +325,13 @@ class MollieApiClient
     protected $versionStrings = [];
 
     /**
+     * RESTful Client resource.
+     *
+     * @var ClientEndpoint
+     */
+    public $clients;
+
+    /**
      * @param \GuzzleHttp\ClientInterface|\Mollie\Api\HttpAdapter\MollieHttpAdapterInterface|null $httpClient
      * @param \Mollie\Api\HttpAdapter\MollieHttpAdapterPickerInterface|null $httpAdapterPicker,
      * @param \Mollie\Api\Idempotency\IdempotencyKeyGeneratorContract $idempotencyKeyGenerator,
@@ -428,49 +352,39 @@ class MollieApiClient
 
     public function initializeEndpoints()
     {
-        $this->balanceReports = new BalanceReportEndpoint($this);
-        $this->balanceTransactions = new BalanceTransactionEndpoint($this);
-        $this->balances = new BalanceEndpoint($this);
-        $this->capabilities = new CapabilityEndpoint($this);
-        $this->chargebacks = new ChargebackEndpoint($this);
-        $this->clientLinks = new ClientLinkEndpoint($this);
-        $this->clients = new ClientEndpoint($this);
-        $this->customerPayments = new CustomerPaymentsEndpoint($this);
-        $this->customers = new CustomerEndpoint($this);
-        $this->invoices = new InvoiceEndpoint($this);
-        $this->mandates = new MandateEndpoint($this);
+        $this->payments = new PaymentEndpoint($this);
         $this->methods = new MethodEndpoint($this);
-        $this->methodIssuers = new MethodIssuerEndpoint($this);
+        $this->profileMethods = new ProfileMethodEndpoint($this);
+        $this->customers = new CustomerEndpoint($this);
+        $this->settlements = new SettlementsEndpoint($this);
+        $this->settlementPayments = new SettlementPaymentEndpoint($this);
+        $this->subscriptions = new SubscriptionEndpoint($this);
+        $this->customerPayments = new CustomerPaymentsEndpoint($this);
+        $this->mandates = new MandateEndpoint($this);
+        $this->balances = new BalanceEndpoint($this);
+        $this->balanceTransactions = new BalanceTransactionEndpoint($this);
+        $this->balanceReports = new BalanceReportEndpoint($this);
+        $this->invoices = new InvoiceEndpoint($this);
+        $this->permissions = new PermissionEndpoint($this);
+        $this->profiles = new ProfileEndpoint($this);
         $this->onboarding = new OnboardingEndpoint($this);
+        $this->organizations = new OrganizationEndpoint($this);
+        $this->orders = new OrderEndpoint($this);
         $this->orderLines = new OrderLineEndpoint($this);
         $this->orderPayments = new OrderPaymentEndpoint($this);
         $this->orderRefunds = new OrderRefundEndpoint($this);
-        $this->orders = new OrderEndpoint($this);
-        $this->organizationPartners = new OrganizationPartnerEndpoint($this);
-        $this->organizations = new OrganizationEndpoint($this);
-        $this->paymentCaptures = new PaymentCaptureEndpoint($this);
-        $this->paymentChargebacks = new PaymentChargebackEndpoint($this);
-        $this->paymentLinkPayments = new PaymentLinkPaymentEndpoint($this);
-        $this->paymentLinks = new PaymentLinkEndpoint($this);
-        $this->paymentRefunds = new PaymentRefundEndpoint($this);
-        $this->paymentRoutes = new PaymentRouteEndpoint($this);
-        $this->payments = new PaymentEndpoint($this);
-        $this->permissions = new PermissionEndpoint($this);
-        $this->profileMethods = new ProfileMethodEndpoint($this);
-        $this->profiles = new ProfileEndpoint($this);
-        $this->refunds = new RefundEndpoint($this);
-        $this->salesInvoices = new SalesInvoiceEndpoint($this);
-        $this->settlementCaptures = new SettlementCaptureEndpoint($this);
-        $this->settlementChargebacks = new SettlementChargebackEndpoint($this);
-        $this->settlementPayments = new SettlementPaymentEndpoint($this);
-        $this->settlementRefunds = new SettlementRefundEndpoint($this);
-        $this->settlements = new SettlementsEndpoint($this);
-        $this->sessions = new SessionEndpoint($this);
         $this->shipments = new ShipmentEndpoint($this);
-        $this->subscriptionPayments = new SubscriptionPaymentEndpoint($this);
-        $this->subscriptions = new SubscriptionEndpoint($this);
-        $this->terminals = new TerminalEndpoint($this);
+        $this->refunds = new RefundEndpoint($this);
+        $this->paymentRefunds = new PaymentRefundEndpoint($this);
+        $this->paymentCaptures = new PaymentCaptureEndpoint($this);
+        $this->paymentRoutes = new PaymentRouteEndpoint($this);
+        $this->chargebacks = new ChargebackEndpoint($this);
+        $this->paymentChargebacks = new PaymentChargebackEndpoint($this);
         $this->wallets = new WalletEndpoint($this);
+        $this->paymentLinks = new PaymentLinkEndpoint($this);
+        $this->terminals = new TerminalEndpoint($this);
+        $this->organizationPartners = new OrganizationPartnerEndpoint($this);
+        $this->clients = new ClientEndpoint($this);
     }
 
     protected function initializeVersionStrings()
@@ -673,9 +587,10 @@ class MollieApiClient
     }
 
     /**
+     * @param \Mollie\Api\Idempotency\IdempotencyKeyGeneratorContract $generator
      * @return \Mollie\Api\MollieApiClient
      */
-    public function clearIdempotencyKeyGenerator()
+    public function clearIdempotencyKeyGenerator($generator)
     {
         $this->idempotencyKeyGenerator = null;
 
@@ -743,45 +658,23 @@ class MollieApiClient
             $headers['X-Mollie-Client-Info'] = php_uname();
         }
 
-        $headers = $this->applyIdempotencyKey($headers, $httpMethod);
+        if (in_array($httpMethod, [self::HTTP_POST, self::HTTP_PATCH, self::HTTP_DELETE])) {
+            if (! $this->idempotencyKey && $this->idempotencyKeyGenerator) {
+                $headers['Idempotency-Key'] = $this->idempotencyKeyGenerator->generate();
+            }
+
+            if ($this->idempotencyKey) {
+                $headers['Idempotency-Key'] = $this->idempotencyKey;
+            } elseif ($this->idempotencyKeyGenerator) {
+                $headers['Idempotency-Key'] = $this->idempotencyKeyGenerator->generate();
+            }
+        }
 
         $response = $this->httpClient->send($httpMethod, $url, $headers, $httpBody);
 
         $this->resetIdempotencyKey();
 
         return $response;
-    }
-
-    /**
-     * Conditionally apply the idempotency key to the request headers
-     *
-     * @param array $headers
-     * @param string $httpMethod
-     * @return array
-     */
-    private function applyIdempotencyKey(array $headers, string $httpMethod)
-    {
-        if (! in_array($httpMethod, [self::HTTP_POST, self::HTTP_PATCH, self::HTTP_DELETE])) {
-            unset($headers['Idempotency-Key']);
-
-            return $headers;
-        }
-
-        if ($this->idempotencyKey) {
-            $headers['Idempotency-Key'] = $this->idempotencyKey;
-
-            return $headers;
-        }
-
-        if ($this->idempotencyKeyGenerator) {
-            $headers['Idempotency-Key'] = $this->idempotencyKeyGenerator->generate();
-
-            return $headers;
-        }
-
-        unset($headers['Idempotency-Key']);
-
-        return $headers;
     }
 
     /**

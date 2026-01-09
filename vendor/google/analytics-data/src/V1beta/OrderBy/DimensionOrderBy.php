@@ -20,13 +20,13 @@ class DimensionOrderBy extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>string dimension_name = 1;</code>
      */
-    protected $dimension_name = '';
+    private $dimension_name = '';
     /**
      * Controls the rule for dimension value ordering.
      *
      * Generated from protobuf field <code>.google.analytics.data.v1beta.OrderBy.DimensionOrderBy.OrderType order_type = 2;</code>
      */
-    protected $order_type = 0;
+    private $order_type = 0;
 
     /**
      * Constructor.

@@ -3,25 +3,18 @@
 namespace Botble\Blog\Models;
 
 use Botble\Base\Casts\SafeContent;
-use Botble\Base\Contracts\HasTreeCategory as HasTreeCategoryContract;
 use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Base\Facades\Html;
 use Botble\Base\Models\BaseModel;
-use Botble\Base\Traits\HasTreeCategory;
 use Illuminate\Database\Eloquent\Casts\Attribute;
-use Illuminate\Database\Eloquent\Collection as EloquentCollection;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Botble\Base\Facades\Html;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
 
-class Category extends BaseModel implements HasTreeCategoryContract
+class Category extends BaseModel
 {
-    use HasTreeCategory;
-
     protected $table = 'categories';
 
     protected $fillable = [
@@ -41,18 +34,7 @@ class Category extends BaseModel implements HasTreeCategoryContract
         'status' => BaseStatusEnum::class,
         'name' => SafeContent::class,
         'description' => SafeContent::class,
-        'is_default' => 'bool',
-        'order' => 'int',
     ];
-
-    protected static function booted(): void
-    {
-        static::deleted(function (Category $category): void {
-            $category->children()->each(fn (Model $child) => $child->delete());
-
-            $category->posts()->detach();
-        });
-    }
 
     public function posts(): BelongsToMany
     {
@@ -61,78 +43,69 @@ class Category extends BaseModel implements HasTreeCategoryContract
 
     public function parent(): BelongsTo
     {
-        return $this
-            ->belongsTo(Category::class, 'parent_id')
-            ->whereNot('parent_id', $this->getKey())
-            ->withDefault();
+        return $this->belongsTo(Category::class, 'parent_id')->withDefault();
+    }
+
+    protected function parents(): Attribute
+    {
+        return Attribute::make(
+            get: function (): Collection {
+                $parents = collect();
+
+                $parent = $this->parent;
+
+                while ($parent->id) {
+                    $parents->push($parent);
+                    $parent = $parent->parent;
+                }
+
+                return $parents;
+            },
+        );
+    }
+
+    protected function badgeWithCount(): Attribute
+    {
+        return Attribute::make(
+            get: function (): HtmlString {
+                $badge = match ($this->status->getValue()) {
+                    BaseStatusEnum::DRAFT => 'bg-secondary',
+                    BaseStatusEnum::PENDING => 'bg-warning',
+                    default => 'bg-success',
+                };
+
+                return Html::tag('span', (string)$this->posts_count, [
+                    'class' => 'badge font-weight-bold ' . $badge,
+                    'data-bs-toggle' => 'tooltip',
+                    'data-bs-original-title' => trans('plugins/blog::categories.total_posts', ['total' => $this->posts_count]),
+                ]);
+            },
+        );
     }
 
     public function children(): HasMany
     {
-        return $this
-            ->hasMany(Category::class, 'parent_id')
-            ->whereNot('id', $this->getKey());
+        return $this->hasMany(Category::class, 'parent_id');
     }
 
     public function activeChildren(): HasMany
     {
         return $this
             ->children()
-            ->wherePublished()
+            ->where('status', BaseStatusEnum::PUBLISHED)
             ->with(['slugable', 'activeChildren']);
     }
 
-    protected function parents(): Attribute
+    protected static function boot(): void
     {
-        return Attribute::get(function (): Collection {
-            $parents = collect();
+        parent::boot();
 
-            $parent = $this->parent;
-
-            while ($parent->id) {
-                $parents->push($parent);
-                $parent = $parent->parent;
+        self::deleting(function (Category $category) {
+            foreach ($category->children()->get() as $child) {
+                $child->delete();
             }
 
-            return $parents;
+            $category->posts()->detach();
         });
-    }
-
-    public static function getChildrenIds(EloquentCollection $children, $categoryIds = []): array
-    {
-        if ($children->isEmpty()) {
-            return $categoryIds;
-        }
-
-        foreach ($children as $item) {
-            $categoryIds[] = $item->id;
-            if ($item->children->isNotEmpty()) {
-                $categoryIds = static::getChildrenIds($item->activeChildren, $categoryIds);
-            }
-        }
-
-        return $categoryIds;
-    }
-
-    protected function badgeWithCount(): Attribute
-    {
-        return Attribute::get(function (): HtmlString {
-            $categoryIds = static::getChildrenIds($this->activeChildren);
-
-            if (empty($categoryIds)) {
-                $categoryIds = [$this->getKey()];
-            }
-
-            $postsCount = DB::table('post_categories')
-                ->whereIn('category_id', $categoryIds)
-                ->distinct('post_id')
-                ->count();
-
-            return Html::link($this->url, sprintf('(%s)', $postsCount), [
-                'data-bs-toggle' => 'tooltip',
-                'data-bs-original-title' => trans('plugins/blog::categories.total_posts', ['total' => $postsCount]),
-                'target' => '_blank',
-            ]);
-        })->shouldCache();
     }
 }

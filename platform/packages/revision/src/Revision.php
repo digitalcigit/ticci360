@@ -3,9 +3,8 @@
 namespace Botble\Revision;
 
 use Botble\ACL\Models\User;
-use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Models\BaseModel;
 use Exception;
+use Botble\Base\Models\BaseModel;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Str;
 
@@ -61,7 +60,7 @@ class Revision extends BaseModel
      * Grab the old value of the field, if it was a foreign key
      * attempt to get an identifying name for the model.
      */
-    public function oldValue(): ?string
+    public function oldValue(): string|null
     {
         return $this->getValue('old');
     }
@@ -72,7 +71,7 @@ class Revision extends BaseModel
      *
      * @param string $which old or new
      */
-    protected function getValue(string $which = 'new'): ?string
+    protected function getValue(string $which = 'new'): string|null
     {
         $whichValue = $which . '_value';
 
@@ -124,7 +123,7 @@ class Revision extends BaseModel
             } catch (Exception $exception) {
                 // Just a fail-safe, in the case the data setup isn't as expected
                 // Nothing to do here.
-                BaseHelper::logError($exception);
+                info('Revisionable: ' . $exception);
             }
 
             // if there was an issue
@@ -168,7 +167,7 @@ class Revision extends BaseModel
     /**
      * Format the value according to the $revisionFormattedFields array.
      */
-    public function format(string $key, ?string $value): ?string
+    public function format(string $key, string|null $value): string|null
     {
         $relatedModel = $this->revisionable_type;
         $relatedModel = new $relatedModel();
@@ -187,7 +186,7 @@ class Revision extends BaseModel
      * Grab the new value of the field, if it was a foreign key
      * attempt to get an identifying name for the model.
      */
-    public function newValue(): ?string
+    public function newValue(): string|null
     {
         return $this->getValue();
     }

@@ -1,17 +1,7 @@
-<x-core::button
-    tag="a"
-    :href="route('ecommerce.invoice.generate-invoice', ['invoice' => $invoice, 'type' => 'print'])"
-    icon="ti ti-printer"
-    target="_blank"
->
-    {{ trans('plugins/ecommerce::invoice.print') }}
-</x-core::button>
+<a href="{{ route('ecommerce.invoice.generate-invoice', ['id' => $invoice->id, 'type' => 'print']) }}" target="_blank" class="btn btn-success my-2">
+    {{ trans('plugins/ecommerce::invoice.print')}}
+</a>
 
-<x-core::button
-    tag="a"
-    :href="route('ecommerce.invoice.generate-invoice', ['invoice' => $invoice, 'type' => 'download'])"
-    icon="ti ti-download"
-    target="_blank"
->
-    {{ trans('plugins/ecommerce::invoice.download') }}
-</x-core::button>
+<a href="{{ route('ecommerce.invoice.generate-invoice', ['id' => $invoice->id, 'type' => 'download']) }}" target="_blank" class="btn btn-danger my-2">
+    {{ trans('plugins/ecommerce::invoice.download')}}
+</a>

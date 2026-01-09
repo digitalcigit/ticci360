@@ -1,36 +1,31 @@
-@if (($attributes = $attributes->where('attribute_set_id', $set->id)) && $attributes->isNotEmpty())
-    <div
-        class="bb-product-attribute-swatch visual-swatches-wrapper attribute-swatches-wrapper"
-        data-type="visual"
-        data-slug="{{ $set->slug }}"
-    >
-        <h4 class="bb-product-attribute-swatch-title">{{ $set->title }}:</h4>
-        <ul class="bb-product-attribute-swatch-list visual-swatch color-swatch attribute-swatch">
-            @foreach ($attributes as $attribute)
-                <li
-                    data-slug="{{ $attribute->slug }}"
+<div class="visual-swatches-wrapper attribute-swatches-wrapper"
+    data-type="visual" data-slug="{{ $set->slug }}">
+    <label class="attribute-name">{{ $set->title }}</label>
+    <div class="attribute-values">
+        <ul class="visual-swatch attribute-swatch">
+            @foreach($attributes->where('attribute_set_id', $set->id) as $attribute)
+                <li data-slug="{{ $attribute->slug }}"
                     data-id="{{ $attribute->id }}"
-                    data-bs-toggle="tooltip" data-bs-title="Disabled tooltip"
+                    data-bs-toggle="tooltip"
+                    data-placement="top"
+                    title="{{ $attribute->title }}"
                     @class([
-                        'bb-product-attribute-swatch-item attribute-swatch-item',
-                        'disabled' => $variationInfo->where('id', $attribute->id)->isEmpty(),
-                    ])
-                >
-                    <label>
-                        <input
-                            type="radio"
-                            name="attribute_{{ $set->slug }}_{{ $key }}"
-                            data-slug="{{ $attribute->slug }}"
-                            @if (! empty($referenceProduct)) data-reference-product="{{ $referenceProduct->slug }}" @endif
-                            value="{{ $attribute->id }}"
-                            @checked($selected->where('id', $attribute->id)->isNotEmpty())
-                            class="product-filter-item"
-                        >
-                        <span class="bb-product-attribute-swatch-display" style="{{ $attribute->getAttributeStyle($set, $productVariations) }}"></span>
-                        <span class="bb-product-attribute-swatch-item-tooltip">{{ $attribute->title }}</span>
-                    </label>
+                        'attribute-swatch-item',
+                        'pe-none' => !$variationInfo->where('id', $attribute->id)->count(),
+                    ])>
+                    <div class="custom-radio">
+                        <label>
+                            <input class="form-control product-filter-item"
+                                type="radio"
+                                name="attribute_{{ $set->slug }}_{{ $key }}"
+                                value="{{ $attribute->id }}"
+                                data-slug="{{ $attribute->slug }}"
+                                @checked($selected->where('id', $attribute->id)->count())>
+                            <span style="{{ $attribute->getAttributeStyle() }}"></span>
+                        </label>
+                    </div>
                 </li>
             @endforeach
         </ul>
     </div>
-@endif
+</div>

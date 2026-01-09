@@ -7,11 +7,11 @@ use Illuminate\Support\Facades\Schema;
 return new class () extends Migration {
     public function up(): void
     {
-        Schema::create('slugs', function (Blueprint $table): void {
+        Schema::create('slugs', function (Blueprint $table) {
             $table->id();
-            $table->string('key');
+            $table->string('key', 255);
             $table->foreignId('reference_id');
-            $table->string('reference_type');
+            $table->string('reference_type', 255);
             $table->string('prefix', 120)->nullable()->default('');
             $table->timestamps();
         });

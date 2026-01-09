@@ -2,19 +2,18 @@
 
 namespace Botble\GetStarted\Http\Controllers;
 
-use Botble\ACL\Models\User;
+use Botble\ACL\Repositories\Interfaces\UserInterface;
 use Botble\Base\Events\UpdatedContentEvent;
 use Botble\Base\Http\Controllers\BaseController;
 use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\GetStarted\Http\Requests\GetStartedRequest;
-use Botble\Setting\Facades\Setting;
-use Botble\Theme\Facades\ThemeOption;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Botble\Theme\Facades\ThemeOption;
 
 class GetStartedController extends BaseController
 {
-    public function save(GetStartedRequest $request): BaseHttpResponse
+    public function save(GetStartedRequest $request, BaseHttpResponse $response): BaseHttpResponse
     {
         $step = $request->input('step');
 
@@ -44,60 +43,52 @@ class GetStartedController extends BaseController
                     ThemeOption::setOption($key, $value);
 
                     if (in_array($key, ['admin_logo', 'admin_favicon'])) {
-                        Setting::set($key, $value);
+                        setting()->set($key, $value);
                     }
                 }
 
                 ThemeOption::saveOptions();
 
-                Setting::save();
+                setting()->save();
 
-                $user = Auth::guard()->user();
+                $user = Auth::user();
 
-                $defaultUsername = config('core.base.general.demo.account.username');
-                $defaultPassword = config('core.base.general.demo.account.password');
-
-                if (
-                    $defaultUsername &&
-                    $defaultPassword &&
-                    $user->username != $defaultUsername &&
-                    ! Hash::check($defaultPassword, $user->getAuthPassword())
+                if ($user->username != config('core.base.general.demo.account.username', 'botble') &&
+                    ! Hash::check($user->getAuthPassword(), config('core.base.general.demo.account.password', '159357'))
                 ) {
                     $nextStep = 4;
                 }
 
                 break;
             case 3:
-                $user = Auth::guard()->user();
+                $user = Auth::user();
 
-                $email = $request->input('email');
+                $userRepository = app(UserInterface::class);
 
-                if ($user->email !== $email) {
-                    $users = User::query()
-                        ->where('email', $email)
+                if ($user->email !== $request->input('email')) {
+                    $users = $userRepository
+                        ->getModel()
+                        ->where('email', $request->input('email'))
                         ->where('id', '<>', $user->id)
                         ->exists();
 
                     if ($users) {
-                        return $this
-                            ->httpResponse()
+                        return $response
                             ->setError()
                             ->setMessage(trans('core/acl::users.email_exist'))
                             ->withInput();
                     }
                 }
 
-                $username = $request->input('username');
-
-                if ($user->username !== $username) {
-                    $users = User::query()
-                        ->where('username', $username)
+                if ($user->username !== $request->input('username')) {
+                    $users = $userRepository
+                        ->getModel()
+                        ->where('username', $request->input('username'))
                         ->where('id', '<>', $user->id)
                         ->exists();
 
                     if ($users) {
-                        return $this
-                            ->httpResponse()
+                        return $response
                             ->setError()
                             ->setMessage(trans('core/acl::users.username_exist'))
                             ->withInput();
@@ -107,7 +98,7 @@ class GetStartedController extends BaseController
                 $user->fill($request->only(['username', 'email']));
                 $user->password = Hash::make($request->input('password'));
 
-                $user->save();
+                $userRepository->createOrUpdate($user);
 
                 do_action(USER_ACTION_AFTER_UPDATE_PROFILE, USER_MODULE_SCREEN_NAME, $request, $user);
                 do_action(USER_ACTION_AFTER_UPDATE_PASSWORD, USER_MODULE_SCREEN_NAME, $request, $user);
@@ -116,13 +107,11 @@ class GetStartedController extends BaseController
 
                 break;
             case 4:
-                Setting::set('is_completed_get_started', '1')->save();
+                setting()->set('is_completed_get_started', '1')->save();
 
                 break;
         }
 
-        return $this
-            ->httpResponse()
-            ->setData(['step' => $nextStep]);
+        return $response->setData(['step' => $nextStep]);
     }
 }

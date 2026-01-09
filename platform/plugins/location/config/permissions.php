@@ -67,4 +67,15 @@ return [
         'flag' => 'city.destroy',
         'parent_flag' => 'city.index',
     ],
+    [
+        'name' => 'Import',
+        'flag' => 'location.bulk-import.index',
+        'parent_flag' => 'plugin.location',
+    ],
+
+    [
+        'name' => 'Export',
+        'flag' => 'location.export.index',
+        'parent_flag' => 'plugin.location',
+    ],
 ];

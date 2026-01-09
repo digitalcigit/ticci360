@@ -4,7 +4,6 @@ return [
     [
         'name' => 'Appearance',
         'flag' => 'core.appearance',
-        'parent_flag' => 'core.system',
     ],
     [
         'name' => 'Theme',
@@ -40,15 +39,5 @@ return [
         'name' => 'Custom HTML',
         'flag' => 'theme.custom-html',
         'parent_flag' => 'core.appearance',
-    ],
-    [
-        'name' => 'Robots.txt Editor',
-        'flag' => 'theme.robots-txt',
-        'parent_flag' => 'core.appearance',
-    ],
-    [
-        'name' => 'Website Tracking',
-        'flag' => 'settings.website-tracking',
-        'parent_flag' => 'settings.common',
     ],
 ];

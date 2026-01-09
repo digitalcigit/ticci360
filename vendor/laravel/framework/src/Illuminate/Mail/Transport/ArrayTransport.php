@@ -3,13 +3,12 @@
 namespace Illuminate\Mail\Transport;
 
 use Illuminate\Support\Collection;
-use Stringable;
 use Symfony\Component\Mailer\Envelope;
 use Symfony\Component\Mailer\SentMessage;
 use Symfony\Component\Mailer\Transport\TransportInterface;
 use Symfony\Component\Mime\RawMessage;
 
-class ArrayTransport implements Stringable, TransportInterface
+class ArrayTransport implements TransportInterface
 {
     /**
      * The collection of Symfony Messages.
@@ -20,6 +19,8 @@ class ArrayTransport implements Stringable, TransportInterface
 
     /**
      * Create a new array transport instance.
+     *
+     * @return void
      */
     public function __construct()
     {
@@ -29,7 +30,7 @@ class ArrayTransport implements Stringable, TransportInterface
     /**
      * {@inheritdoc}
      */
-    public function send(RawMessage $message, ?Envelope $envelope = null): ?SentMessage
+    public function send(RawMessage $message, Envelope $envelope = null): ?SentMessage
     {
         return $this->messages[] = new SentMessage($message, $envelope ?? Envelope::create($message));
     }

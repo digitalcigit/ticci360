@@ -18,7 +18,6 @@ class Country extends BaseModel
         'order',
         'is_default',
         'status',
-        'image',
     ];
 
     protected $casts = [
@@ -26,25 +25,19 @@ class Country extends BaseModel
         'name' => SafeContent::class,
         'nationality' => SafeContent::class,
         'code' => SafeContent::class,
-        'is_default' => 'bool',
-        'order' => 'int',
     ];
-
-    protected static function booted(): void
-    {
-        static::deleted(function (Country $country): void {
-            $country->states()->delete();
-            $country->cities()->delete();
-        });
-    }
 
     public function states(): HasMany
     {
         return $this->hasMany(State::class);
     }
 
-    public function cities(): HasMany
+    protected static function boot(): void
     {
-        return $this->hasMany(City::class);
+        parent::boot();
+        static::deleting(function (Country $country) {
+            State::where('country_id', $country->id)->delete();
+            City::where('country_id', $country->id)->delete();
+        });
     }
 }

@@ -2,11 +2,9 @@
 
 namespace Botble\Marketplace\Repositories\Caches;
 
-use Botble\Marketplace\Repositories\Eloquent\WithdrawalRepository;
+use Botble\Support\Repositories\Caches\CacheAbstractDecorator;
+use Botble\Marketplace\Repositories\Interfaces\WithdrawalInterface;
 
-/**
- * @deprecated
- */
-class WithdrawalCacheDecorator extends WithdrawalRepository
+class WithdrawalCacheDecorator extends CacheAbstractDecorator implements WithdrawalInterface
 {
 }

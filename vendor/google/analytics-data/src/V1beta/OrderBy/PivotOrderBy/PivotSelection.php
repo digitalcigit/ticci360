@@ -33,13 +33,13 @@ class PivotSelection extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>string dimension_name = 1;</code>
      */
-    protected $dimension_name = '';
+    private $dimension_name = '';
     /**
      * Order by only when the named dimension is this value.
      *
      * Generated from protobuf field <code>string dimension_value = 2;</code>
      */
-    protected $dimension_value = '';
+    private $dimension_value = '';
 
     /**
      * Constructor.

@@ -1,12 +1,9 @@
-@if (is_array($item->dependencies))
-    <ul>
-        @foreach ($item->dependencies as $dependencyName => $dependencyVersion)
-            <li class="py-1">{{ $dependencyName }}: <x-core::badge
-                    color="primary"
-                    :label="$dependencyVersion"
-                /></li>
+<ul>
+    @if(is_array($item['dependencies']))
+        @foreach($item['dependencies'] as $dependencyName => $dependencyVersion)
+            <li>{{ $dependencyName }} : <span class="label ld-version-tag">{{ $dependencyVersion }}</span></li>
         @endforeach
-    </ul>
-@else
-    <p class="ms-3">&mdash;</p>
-@endif
+    @else
+        <li><span class="label label-primary">{{ $item['dependencies'] }}</span></li>
+    @endif
+</ul>

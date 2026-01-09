@@ -4,12 +4,10 @@ namespace Botble\AuditLog\Listeners;
 
 use Botble\AuditLog\Events\AuditHandlerEvent;
 use Botble\AuditLog\Models\AuditHistory;
-use Botble\Base\Facades\BaseHelper;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Str;
 
 class AuditHandlerListener
 {
@@ -20,17 +18,13 @@ class AuditHandlerListener
     public function handle(AuditHandlerEvent $event): void
     {
         try {
-            $module = strtolower(Str::afterLast($event->module, '\\'));
-
             $data = [
                 'user_agent' => $this->request->userAgent(),
                 'ip_address' => $this->request->ip(),
-                'module' => $module,
+                'module' => $event->module,
                 'action' => $event->action,
                 'user_id' => $this->request->user() ? $this->request->user()->getKey() : 0,
-                'user_type' => $this->request->user() ? get_class($this->request->user()) : null,
-                'actor_id' => $event->referenceUser,
-                'actor_type' => $this->request->user() ? get_class($this->request->user()) : null,
+                'reference_user' => $event->referenceUser,
                 'reference_id' => $event->referenceId,
                 'reference_name' => $event->referenceName,
                 'type' => $event->type,
@@ -61,7 +55,7 @@ class AuditHandlerListener
 
             AuditHistory::query()->insert($data);
         } catch (Exception $exception) {
-            BaseHelper::logError($exception);
+            info($exception->getMessage());
         }
     }
 }

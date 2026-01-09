@@ -3,38 +3,49 @@
 namespace Botble\Ecommerce\Notifications;
 
 use Botble\Base\Facades\EmailHandler;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\HtmlString;
 
-class ResetPasswordNotification extends Notification implements ShouldQueue
+class ResetPasswordNotification extends Notification
 {
-    use Queueable;
+    public string $token;
 
-    public function __construct(public string $token)
+    /**
+     * Create a new notification instance.
+     */
+    public function __construct(string $token)
     {
+        $this->token = $token;
     }
 
-    public function via($notifiable): array
+    /**
+     * Get the notification's delivery channels.
+     *
+     * @param mixed $notifiable
+     * @return array
+     */
+    public function via($notifiable)
     {
         return ['mail'];
     }
 
-    public function toMail($notifiable): MailMessage
+    /**
+     * Get the mail representation of the notification.
+     *
+     * @param mixed $notifiable
+     * @return MailMessage
+     */
+    public function toMail($notifiable)
     {
-        $emailHandler = EmailHandler::setModule(ECOMMERCE_MODULE_SCREEN_NAME)
-            ->setType('plugins')
-            ->setTemplate('password-reminder')
-            ->addTemplateSettings(ECOMMERCE_MODULE_SCREEN_NAME, config('plugins.ecommerce.email', []))
-            ->setVariableValues([
-                'reset_link' => route('customer.password.reset.update', ['token' => $this->token, 'email' => request()->input('email')]),
-                'customer_name' => $notifiable->name,
-            ]);
+        EmailHandler::setModule(ECOMMERCE_MODULE_SCREEN_NAME)
+            ->setVariableValue('reset_link', route('customer.password.reset.update', ['token' => $this->token]));
+
+        $template = 'password-reminder';
+        $content = EmailHandler::prepareData(EmailHandler::getTemplateContent($template));
 
         return (new MailMessage())
-            ->view(['html' => new HtmlString($emailHandler->getContent())])
-            ->subject($emailHandler->getSubject());
+            ->view(['html' => new HtmlString($content)])
+            ->subject(EmailHandler::getTemplateSubject($template));
     }
 }

@@ -1,15 +1,20 @@
 <?php
 
-use Botble\Base\Facades\AdminHelper;
+use Botble\Base\Facades\BaseHelper;
 use Illuminate\Support\Facades\Route;
 
-AdminHelper::registerRoutes(function (): void {
-    Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'prefix' => 'ecommerce'], function (): void {
+Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'middleware' => ['web', 'core']], function () {
+    Route::group(['prefix' => BaseHelper::getAdminPrefix(), 'middleware' => 'auth'], function () {
         Route::group([
             'prefix' => 'shipping-methods',
-            'permission' => 'ecommerce.settings.shipping',
+            'permission' => 'shipping_methods.index',
             'as' => 'shipping_methods.',
-        ], function (): void {
+        ], function () {
+            Route::get('', [
+                'as' => 'index',
+                'uses' => 'ShippingMethodController@index',
+            ]);
+
             Route::post('region/create', [
                 'as' => 'region.create',
                 'uses' => 'ShippingMethodController@postCreateRegion',
@@ -35,7 +40,7 @@ AdminHelper::registerRoutes(function (): void {
                 'uses' => 'ShippingMethodController@postCreateRule',
             ]);
 
-            Route::group(['prefix' => 'settings', 'as' => 'settings.'], function (): void {
+            Route::group(['prefix' => 'settings', 'as' => 'settings.'], function () {
                 Route::post('update', [
                     'as' => 'update',
                     'uses' => 'ShippingMethodSettingController@update',
@@ -44,23 +49,30 @@ AdminHelper::registerRoutes(function (): void {
             });
         });
 
-        Route::group(['as' => 'ecommerce.'], function (): void {
+        Route::group(['prefix' => 'ecommerce', 'as' => 'ecommerce.'], function () {
             Route::group([
                 'prefix' => 'shipping-rule-items',
                 'as' => 'shipping-rule-items.',
-                'permission' => 'ecommerce.settings.shipping',
-            ], function (): void {
+            ], function () {
                 Route::resource('', 'ShippingRuleItemController')->parameters(['' => 'item']);
+
+                Route::delete('items/destroy', [
+                    'as' => 'deletes',
+                    'uses' => 'ShippingRuleItemController@deletes',
+                    'permission' => 'ecommerce.shipping-rule-items.destroy',
+                ]);
 
                 Route::get('items/{rule_id}', [
                     'as' => 'items',
                     'uses' => 'ShippingRuleItemController@items',
+                    'permission' => 'ecommerce.shipping-rule-items.index',
                 ])->wherePrimaryKey('rule_id');
 
                 Route::group([
                     'as' => 'bulk-import.',
                     'prefix' => 'bulk-import',
-                ], function (): void {
+                    'permission' => 'ecommerce.shipping-rule-items.bulk-import',
+                ], function () {
                     Route::get('/', [
                         'as' => 'index',
                         'uses' => 'ShippingRuleItemController@import',

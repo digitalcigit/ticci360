@@ -1,26 +1,18 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
-
+<html lang="{{ app()->getLocale() }}">
 <head>
     <meta charset="utf-8">
-    <meta
-        http-equiv="X-UA-Compatible"
-        content="IE=edge"
-    >
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=5, user-scalable=1"
-    />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=5, user-scalable=1" name="viewport"/>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    {!! BaseHelper::googleFonts(
-        'https://fonts.googleapis.com/css2?family=' .
-            urlencode(theme_option('primary_font', 'Mulish')) .
-            ':wght@400;600;700&display=swap',
-    ) !!}
+    <!-- Fonts-->
+    <link href="https://fonts.googleapis.com/css?family={{ urlencode(theme_option('primary_font', 'Muli')) }}:400,600,700&subset=latin,latin-ext" rel="stylesheet" type="text/css">
+    <!-- CSS Library-->
 
     <style>
         :root {
-            --primary-font: '{{ theme_option('primary_font', 'Mulish') }}', sans-serif;
+            --primary-font: '{{ theme_option('primary_font', 'Muli') }}', sans-serif;
             --primary-color: {{ theme_option('primary_color', '#fab528') }};
             --heading-color: {{ theme_option('heading_color', '#000') }};
             --text-color: {{ theme_option('text_color', '#000') }};
@@ -38,13 +30,9 @@
 
     {!! Theme::header() !!}
 </head>
-
-<body @if (BaseHelper::isRtlEnabled()) dir="rtl" @endif>
+<body @if (BaseHelper::siteLanguageDirection() == 'rtl') dir="rtl" @endif>
     @if (theme_option('preloader_enabled', 'yes') == 'yes')
-        <div
-            class="preloader"
-            id="preloader"
-        >
+        <div class="preloader" id="preloader">
             <div class="preloader-loading"></div>
         </div>
     @endif
@@ -57,9 +45,9 @@
         'use strict';
 
         window.siteConfig = {
-            "countdown_text": {
-                "days": "{{ __('days') }}",
-                "hours": "{{ __('hours') }}",
+            "countdown_text" : {
+                "days"   : "{{ __('days') }}",
+                "hours"  : "{{ __('hours') }}",
                 "minutes": "{{ __('mins') }}",
                 "seconds": "{{ __('secs') }}"
             }
@@ -68,5 +56,5 @@
 
     {!! Theme::footer() !!}
 </body>
-
 </html>
+

@@ -3,17 +3,18 @@
 namespace Botble\Marketplace\Http\Controllers\Fronts;
 
 use Botble\Base\Facades\Assets;
-use Botble\Base\Http\Controllers\BaseController;
+use Botble\Base\Facades\PageTitle;
 use Botble\Marketplace\Tables\ReviewTable;
+use Botble\Marketplace\Facades\MarketplaceHelper;
 
-class ReviewController extends BaseController
+class ReviewController
 {
     public function index(ReviewTable $table)
     {
-        $this->pageTitle(__('Reviews'));
+        PageTitle::setTitle(__('Reviews'));
 
         Assets::addStylesDirectly('vendor/core/plugins/ecommerce/css/review.css');
 
-        return $table->renderTable();
+        return $table->render(MarketplaceHelper::viewPath('dashboard.table.base'));
     }
 }

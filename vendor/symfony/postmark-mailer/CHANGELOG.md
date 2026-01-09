@@ -1,11 +1,6 @@
 CHANGELOG
 =========
 
-6.3
----
-
- * Add support for webhooks
-
 4.4.0
 -----
 

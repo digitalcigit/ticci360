@@ -2,46 +2,62 @@
 
 namespace Botble\Ecommerce\Tables;
 
-use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Facades\Html;
-use Botble\Ecommerce\Models\FlashSale;
+use Botble\Base\Enums\BaseStatusEnum;
+use Botble\Ecommerce\Repositories\Interfaces\FlashSaleInterface;
 use Botble\Table\Abstracts\TableAbstract;
-use Botble\Table\Actions\DeleteAction;
-use Botble\Table\Actions\EditAction;
-use Botble\Table\BulkActions\DeleteBulkAction;
-use Botble\Table\Columns\Column;
-use Botble\Table\Columns\CreatedAtColumn;
-use Botble\Table\Columns\IdColumn;
-use Botble\Table\Columns\NameColumn;
-use Botble\Table\Columns\StatusColumn;
+use Botble\Base\Facades\Html;
+use Illuminate\Contracts\Routing\UrlGenerator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
+use Botble\Table\DataTables;
 
 class FlashSaleTable extends TableAbstract
 {
-    public function setup(): void
+    protected $hasActions = true;
+
+    protected $hasFilter = true;
+
+    public function __construct(DataTables $table, UrlGenerator $urlGenerator, FlashSaleInterface $flashSaleRepository)
     {
-        $this
-            ->model(FlashSale::class)
-            ->addActions([
-                EditAction::make()->route('flash-sale.edit'),
-                DeleteAction::make()->route('flash-sale.destroy'),
-            ]);
+        parent::__construct($table, $urlGenerator);
+
+        $this->repository = $flashSaleRepository;
+
+        if (! Auth::user()->hasAnyPermission(['flash-sale.edit', 'flash-sale.destroy'])) {
+            $this->hasOperations = false;
+            $this->hasActions = false;
+        }
     }
 
     public function ajax(): JsonResponse
     {
         $data = $this->table
             ->eloquent($this->query())
-            ->editColumn('end_date', function (FlashSale $item) {
-                return Html::tag(
-                    'span',
-                    BaseHelper::formatDate($item->end_date),
-                    ['class' => $item->expired ? 'text-danger' : 'text-success']
-                );
+            ->editColumn('name', function ($item) {
+                if (! Auth::user()->hasPermission('flash-sale.edit')) {
+                    return BaseHelper::clean($item->name);
+                }
+
+                return Html::link(route('flash-sale.edit', $item->id), BaseHelper::clean($item->name));
+            })
+            ->editColumn('checkbox', function ($item) {
+                return $this->getCheckbox($item->id);
+            })
+            ->editColumn('end_date', function ($item) {
+                return Html::tag('span', BaseHelper::formatDate($item->end_date), ['class' => $item->expired ? 'text-danger' : 'text-success']);
+            })
+            ->editColumn('created_at', function ($item) {
+                return BaseHelper::formatDate($item->created_at);
+            })
+            ->editColumn('status', function ($item) {
+                return BaseHelper::clean($item->status->toHtml());
+            })
+            ->addColumn('operations', function ($item) {
+                return $this->getOperations('flash-sale.edit', 'flash-sale.destroy', $item);
             });
 
         return $this->toJson($data);
@@ -49,16 +65,13 @@ class FlashSaleTable extends TableAbstract
 
     public function query(): Relation|Builder|QueryBuilder
     {
-        $query = $this
-            ->getModel()
-            ->query()
-            ->select([
-                'id',
-                'name',
-                'end_date',
-                'created_at',
-                'status',
-            ]);
+        $query = $this->repository->getModel()->select([
+            'id',
+            'name',
+            'end_date',
+            'created_at',
+            'status',
+        ]);
 
         return $this->applyScopes($query);
     }
@@ -66,13 +79,26 @@ class FlashSaleTable extends TableAbstract
     public function columns(): array
     {
         return [
-            IdColumn::make(),
-            NameColumn::make()->route('flash-sale.edit'),
-            Column::make('end_date')
-                ->title(__('End date'))
-                ->width(100),
-            CreatedAtColumn::make(),
-            StatusColumn::make(),
+            'id' => [
+                'title' => trans('core/base::tables.id'),
+                'width' => '20px',
+            ],
+            'name' => [
+                'title' => trans('core/base::tables.name'),
+                'class' => 'text-start',
+            ],
+            'end_date' => [
+                'title' => __('End date'),
+                'width' => '100px',
+            ],
+            'created_at' => [
+                'title' => trans('core/base::tables.created_at'),
+                'width' => '100px',
+            ],
+            'status' => [
+                'title' => trans('core/base::tables.status'),
+                'width' => '100px',
+            ],
         ];
     }
 
@@ -83,9 +109,7 @@ class FlashSaleTable extends TableAbstract
 
     public function bulkActions(): array
     {
-        return [
-            DeleteBulkAction::make()->permission('flash-sale.destroy'),
-        ];
+        return $this->addDeleteAction(route('flash-sale.deletes'), 'flash-sale.destroy', parent::bulkActions());
     }
 
     public function getBulkChanges(): array
@@ -107,5 +131,10 @@ class FlashSaleTable extends TableAbstract
                 'type' => 'datePicker',
             ],
         ];
+    }
+
+    public function getFilters(): array
+    {
+        return $this->getBulkChanges();
     }
 }

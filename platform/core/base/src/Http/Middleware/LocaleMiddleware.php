@@ -2,7 +2,6 @@
 
 namespace Botble\Base\Http\Middleware;
 
-use Botble\Base\Facades\AdminHelper;
 use Botble\Base\Supports\Language;
 use Closure;
 use Illuminate\Contracts\Foundation\Application;
@@ -19,10 +18,6 @@ class LocaleMiddleware
 
     public function handle(Request $request, Closure $next)
     {
-        if (AdminHelper::isInAdmin(true)) {
-            return $next($request);
-        }
-
         $this->app->setLocale(config('app.locale'));
 
         if (! $request->session()->has('site-locale')) {
@@ -31,7 +26,7 @@ class LocaleMiddleware
 
         $sessionLocale = $request->session()->get('site-locale');
 
-        if (array_key_exists($sessionLocale, Language::getAvailableLocales())) {
+        if (array_key_exists($sessionLocale, Language::getAvailableLocales()) && is_in_admin()) {
             $this->app->setLocale($sessionLocale);
             $request->setLocale($sessionLocale);
         }

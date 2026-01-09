@@ -26,6 +26,7 @@ class AblyBroadcaster extends Broadcaster
      * Create a new broadcaster instance.
      *
      * @param  \Ably\AblyRest  $ably
+     * @return void
      */
     public function __construct(AblyRest $ably)
     {
@@ -77,8 +78,8 @@ class AblyBroadcaster extends Broadcaster
         $user = $this->retrieveUser($request, $channelName);
 
         $broadcastIdentifier = method_exists($user, 'getAuthIdentifierForBroadcasting')
-            ? $user->getAuthIdentifierForBroadcasting()
-            : $user->getAuthIdentifier();
+                    ? $user->getAuthIdentifierForBroadcasting()
+                    : $user->getAuthIdentifier();
 
         $signature = $this->generateAblySignature(
             $request->channel_name,
@@ -174,8 +175,8 @@ class AblyBroadcaster extends Broadcaster
     {
         if ($this->isGuardedChannel($channel)) {
             return str_starts_with($channel, 'private-')
-                ? Str::replaceFirst('private-', '', $channel)
-                : Str::replaceFirst('presence-', '', $channel);
+                        ? Str::replaceFirst('private-', '', $channel)
+                        : Str::replaceFirst('presence-', '', $channel);
         }
 
         return $channel;
@@ -205,7 +206,7 @@ class AblyBroadcaster extends Broadcaster
     /**
      * Get the public token value from the Ably key.
      *
-     * @return string
+     * @return mixed
      */
     protected function getPublicToken()
     {
@@ -215,7 +216,7 @@ class AblyBroadcaster extends Broadcaster
     /**
      * Get the private token value from the Ably key.
      *
-     * @return string
+     * @return mixed
      */
     protected function getPrivateToken()
     {
@@ -230,16 +231,5 @@ class AblyBroadcaster extends Broadcaster
     public function getAbly()
     {
         return $this->ably;
-    }
-
-    /**
-     * Set the underlying Ably SDK instance.
-     *
-     * @param  \Ably\AblyRest  $ably
-     * @return void
-     */
-    public function setAbly($ably)
-    {
-        $this->ably = $ably;
     }
 }

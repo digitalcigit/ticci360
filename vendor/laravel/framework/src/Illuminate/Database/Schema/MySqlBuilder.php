@@ -5,13 +5,77 @@ namespace Illuminate\Database\Schema;
 class MySqlBuilder extends Builder
 {
     /**
+     * Create a database in the schema.
+     *
+     * @param  string  $name
+     * @return bool
+     */
+    public function createDatabase($name)
+    {
+        return $this->connection->statement(
+            $this->grammar->compileCreateDatabase($name, $this->connection)
+        );
+    }
+
+    /**
+     * Drop a database from the schema if the database exists.
+     *
+     * @param  string  $name
+     * @return bool
+     */
+    public function dropDatabaseIfExists($name)
+    {
+        return $this->connection->statement(
+            $this->grammar->compileDropDatabaseIfExists($name)
+        );
+    }
+
+    /**
+     * Determine if the given table exists.
+     *
+     * @param  string  $table
+     * @return bool
+     */
+    public function hasTable($table)
+    {
+        $table = $this->connection->getTablePrefix().$table;
+
+        return count($this->connection->selectFromWriteConnection(
+            $this->grammar->compileTableExists(), [$this->connection->getDatabaseName(), $table]
+        )) > 0;
+    }
+
+    /**
+     * Get the column listing for a given table.
+     *
+     * @param  string  $table
+     * @return array
+     */
+    public function getColumnListing($table)
+    {
+        $table = $this->connection->getTablePrefix().$table;
+
+        $results = $this->connection->selectFromWriteConnection(
+            $this->grammar->compileColumnListing(), [$this->connection->getDatabaseName(), $table]
+        );
+
+        return $this->connection->getPostProcessor()->processColumnListing($results);
+    }
+
+    /**
      * Drop all tables from the database.
      *
      * @return void
      */
     public function dropAllTables()
     {
-        $tables = $this->getTableListing($this->getCurrentSchemaListing());
+        $tables = [];
+
+        foreach ($this->getAllTables() as $row) {
+            $row = (array) $row;
+
+            $tables[] = reset($row);
+        }
 
         if (empty($tables)) {
             return;
@@ -19,13 +83,11 @@ class MySqlBuilder extends Builder
 
         $this->disableForeignKeyConstraints();
 
-        try {
-            $this->connection->statement(
-                $this->grammar->compileDropAllTables($tables)
-            );
-        } finally {
-            $this->enableForeignKeyConstraints();
-        }
+        $this->connection->statement(
+            $this->grammar->compileDropAllTables($tables)
+        );
+
+        $this->enableForeignKeyConstraints();
     }
 
     /**
@@ -35,7 +97,13 @@ class MySqlBuilder extends Builder
      */
     public function dropAllViews()
     {
-        $views = array_column($this->getViews($this->getCurrentSchemaListing()), 'schema_qualified_name');
+        $views = [];
+
+        foreach ($this->getAllViews() as $row) {
+            $row = (array) $row;
+
+            $views[] = reset($row);
+        }
 
         if (empty($views)) {
             return;
@@ -47,12 +115,26 @@ class MySqlBuilder extends Builder
     }
 
     /**
-     * Get the names of current schemas for the connection.
+     * Get all of the table names for the database.
      *
-     * @return string[]|null
+     * @return array
      */
-    public function getCurrentSchemaListing()
+    public function getAllTables()
     {
-        return [$this->connection->getDatabaseName()];
+        return $this->connection->select(
+            $this->grammar->compileGetAllTables()
+        );
+    }
+
+    /**
+     * Get all of the view names for the database.
+     *
+     * @return array
+     */
+    public function getAllViews()
+    {
+        return $this->connection->select(
+            $this->grammar->compileGetAllViews()
+        );
     }
 }

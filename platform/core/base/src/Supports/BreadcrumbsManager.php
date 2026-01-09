@@ -10,9 +10,6 @@ use Illuminate\Support\HtmlString;
 use Illuminate\Support\Traits\Macroable;
 use stdClass;
 
-/**
- * @deprecated use Breadcrumb::class instead
- */
 class BreadcrumbsManager
 {
     use Macroable;
@@ -23,7 +20,7 @@ class BreadcrumbsManager
 
     protected array $after = [];
 
-    protected ?array $route;
+    protected array|null $route;
 
     public function __construct(
         protected BreadcrumbsGenerator $generator,
@@ -32,14 +29,14 @@ class BreadcrumbsManager
     ) {
     }
 
-    public function register(string $name, callable $callback, bool $modify = false): void
+    public function register(string $name, callable $callback): void
     {
-        $this->for($name, $callback, $modify);
+        $this->for($name, $callback);
     }
 
-    public function for(string $name, callable $callback, bool $modify = false): void
+    public function for(string $name, callable $callback): void
     {
-        if (! isset($this->callbacks[$name]) || $modify) {
+        if (! isset($this->callbacks[$name])) {
             $this->callbacks[$name] = $callback;
         }
     }
@@ -67,7 +64,7 @@ class BreadcrumbsManager
         return isset($this->callbacks[$name]);
     }
 
-    protected function getCurrentRoute(): ?array
+    protected function getCurrentRoute(): array|null
     {
         // Manually set route
         if ($this->route) {
@@ -115,14 +112,14 @@ class BreadcrumbsManager
             try {
                 [$name, $params] = $this->getCurrentRoute();
             } catch (Exception) {
-                return collect();
+                return new Collection();
             }
         }
 
         try {
             return $this->generator->generate($this->callbacks, $this->before, $this->after, $name, $params);
         } catch (Exception) {
-            return collect();
+            return new Collection();
         }
     }
 

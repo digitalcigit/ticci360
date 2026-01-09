@@ -22,6 +22,7 @@ class QueuedCommand implements ShouldQueue
      * Create a new job instance.
      *
      * @param  array  $data
+     * @return void
      */
     public function __construct($data)
     {
@@ -37,15 +38,5 @@ class QueuedCommand implements ShouldQueue
     public function handle(KernelContract $kernel)
     {
         $kernel->call(...array_values($this->data));
-    }
-
-    /**
-     * Get the display name for the queued job.
-     *
-     * @return string
-     */
-    public function displayName()
-    {
-        return array_values($this->data)[0];
     }
 }

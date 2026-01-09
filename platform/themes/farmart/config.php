@@ -1,11 +1,10 @@
 <?php
 
 use Botble\Base\Facades\BaseHelper;
-use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Ecommerce\Facades\ProductCategoryHelper;
 use Botble\Shortcode\View\View;
 use Botble\Theme\Theme;
 use Illuminate\Support\Arr;
-use Illuminate\View\View as IlluminateView;
 
 return [
 
@@ -40,17 +39,31 @@ return [
         // Before event inherit from package config and the theme that call before,
         // you can use this event to set meta, breadcrumb template or anything
         // you want inheriting.
-        'before' => function (Theme $theme): void {
+        'before' => function ($theme) {
             // You can remove this line anytime.
         },
 
         // Listen on event before render a theme,
         // this event should call to assign some assets,
         // breadcrumb template.
-        'beforeRenderTheme' => function (Theme $theme): void {
-            $theme->partialComposer(['header', 'footer'], function (IlluminateView $view): void {
-                $view->with('currencies', is_plugin_active('ecommerce') ? get_all_currencies() : collect());
-            });
+        'beforeRenderTheme' => function (Theme $theme) {
+            // Partial composer.
+            if (is_plugin_active('ecommerce')) {
+                $categories = ProductCategoryHelper::getActiveTreeCategories();
+
+                $theme->partialComposer('header', function ($view) use ($categories) {
+                    $view->with('currencies', get_all_currencies());
+                    $view->with('categories', $categories);
+                });
+
+                $theme->partialComposer('footer', function ($view) use ($categories) {
+                    $view->with('categories', $categories);
+                });
+
+                $theme->composer('ecommerce.includes.filters', function ($view) use ($categories) {
+                    $view->with(['categories' => $categories]);
+                });
+            }
 
             // You may use this event to set up your assets.
             $version = get_cms_version();
@@ -60,9 +73,9 @@ return [
             $assets = [
                 'bootstrap-css' => [
                     'cdn' => [
-                        'source' => '//cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css',
+                        'source' => '//cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css',
                         'attributes' => [
-                            'integrity' => 'sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN',
+                            'integrity' => 'sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3',
                             'crossorigin' => 'anonymous',
                         ],
                     ],
@@ -117,16 +130,16 @@ return [
                 ],
                 'jquery' => [
                     'cdn' => [
-                        'source' => '//ajax.googleapis.com/ajax/libs/jquery/3.6.4/jquery.min.js',
+                        'source' => '//ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js',
                     ],
                     'local' => [
-                        'source' => 'plugins/jquery-3.6.4.min.js',
+                        'source' => 'plugins/jquery-3.6.0.min.js',
                     ],
                     'container' => 'footer',
                 ],
                 'popper-js' => [
                     'cdn' => [
-                        'source' => '//cdnjs.cloudflare.com/ajax/libs/popper.js/2.10.2/umd/popper.min.js',
+                        'source' => '//cdn.jsdelivr.net/npm/@popperjs/core@2.10.2/dist/umd/popper.min.js',
                         'attributes' => [
                             'integrity' => 'sha384-7+zCNj/IqJ95wo16oMtfsKbZ9ccEh31eOz1HGyDuCQ6wgnyJNSYdrPa03rtR1zdB',
                             'crossorigin' => 'anonymous',
@@ -139,9 +152,9 @@ return [
                 ],
                 'bootstrap-js' => [
                     'cdn' => [
-                        'source' => '//cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.min.js',
+                        'source' => '//cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.min.js',
                         'attributes' => [
-                            'integrity' => 'sha384-BBtl+eGJRgqQAUMxJ7pMwbEyER4l1g+O15P+16Ep7Q9Q+zqX6gSbd85u4mG4QzX+',
+                            'integrity' => 'sha384-QJHtvGhmr9XOIpI6YVutG+2QOK9T+ZnN4kzFN1RtK3zEFEIsxhlmWl5/YESvpZ13',
                             'crossorigin' => 'anonymous',
                         ],
                     ],
@@ -191,7 +204,7 @@ return [
                 ],
                 'lazyload-js' => [
                     'cdn' => [
-                        'source' => '//cdnjs.cloudflare.com/ajax/libs/vanilla-lazyload/17.8.3/lazyload.min.js',
+                        'source' => '//cdn.jsdelivr.net/npm/vanilla-lazyload@17.8.3/dist/lazyload.min.js',
                         'dependencies' => ['jquery'],
                     ],
                     'local' => [
@@ -207,13 +220,6 @@ return [
                     ],
                     'container' => 'footer',
                 ],
-                'masonry-js' => [
-                    'local' => [
-                        'source' => 'plugins/masonry.pkgd.min.js',
-                        'dependencies' => ['jquery'],
-                    ],
-                    'container' => 'footer',
-                ],
                 'scrollbar-js' => [
                     'local' => [
                         'source' => 'plugins/scrollbar.js',
@@ -224,19 +230,36 @@ return [
                 'main-js' => [
                     'local' => [
                         'source' => 'js/main.js',
-                        'dependencies' => ['jquery', 'front-ecommerce-js'],
+                        'dependencies' => ['jquery'],
+                        'version' => $version . '.1',
+                    ],
+                    'container' => 'footer',
+                ],
+                'vue-infinite-scroll' => [
+                    'cdn' => [
+                        'source' => '//cdn.jsdelivr.net/npm/vue-infinite-scroll@2.0.2/vue-infinite-scroll.min.js',
+                    ],
+                    'local' => [
+                        'source' => 'plugins/vue-infinite-scroll.js',
+                    ],
+                    'container' => 'footer',
+                ],
+                'app-js' => [
+                    'local' => [
+                        'source' => 'js/app.js',
+                        'dependencies' => ['jquery'],
                         'version' => $version,
                     ],
                     'container' => 'footer',
                 ],
             ];
 
-            if (BaseHelper::isRtlEnabled()) {
+            if (BaseHelper::siteLanguageDirection() == 'rtl') {
                 $assets['bootstrap-css'] = [
                     'cdn' => [
-                        'source' => '//cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.rtl.min.css',
+                        'source' => '//cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.rtl.min.css',
                         'attributes' => [
-                            'integrity' => 'sha384-nU14brUcp6StFntEOOEBvcJm4huWjB0OcIeQ3fltAfSmuZFrkAif0T+UtNGlKKQv',
+                            'integrity' => 'sha384-+qdLaIRZfNu4cVPK/PxJJEy0B0f3Ugv8i482AKY7gwXwhaCroABd086ybrVKTa0q',
                             'crossorigin' => 'anonymous',
                         ],
                     ],
@@ -277,13 +300,9 @@ return [
                     'ecommerce.brand',
                     'ecommerce.search',
                     'ecommerce.cart',
-                ], function (View $view): void {
+                ], function (View $view) {
                     $view->withShortcodes();
                 });
-            }
-
-            if (is_plugin_active('ecommerce')) {
-                EcommerceHelper::registerThemeAssets();
             }
         },
 
@@ -291,7 +310,7 @@ return [
         // this should call to assign style, script for a layout.
         'beforeRenderLayout' => [
 
-            'default' => function (Theme $theme): void {
+            'default' => function ($theme) {
                 // $theme->asset()->usePath()->add('ipad', 'css/layouts/ipad.css');
             },
         ],

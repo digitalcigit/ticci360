@@ -2,21 +2,19 @@
 
 namespace Botble\Base\Events;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Foundation\Events\Dispatchable;
+use Botble\Base\Models\BaseModel;
 use Illuminate\Http\Request;
 use Illuminate\Queue\SerializesModels;
 
 class UpdatedContentEvent extends Event
 {
-    use Dispatchable;
     use SerializesModels;
 
     public string $screen;
 
-    public function __construct(string|Model $screen, public Request $request, public bool|Model|null $data)
+    public function __construct(string|BaseModel $screen, public Request $request, public bool|BaseModel|null $data)
     {
-        if ($screen instanceof Model) {
+        if ($screen instanceof BaseModel) {
             $screen = $screen->getTable();
         }
 

@@ -26,7 +26,8 @@ class ShippoSettingController extends BaseController
 
         $settingStore->save();
 
-        Cache::make(HandleShippingFeeService::class)->flush();
+        $cache = new Cache(app('cache'), HandleShippingFeeService::class);
+        $cache->flush();
 
         $message = trans('plugins/shippo::shippo.saved_shipping_settings_success');
         $isError = false;

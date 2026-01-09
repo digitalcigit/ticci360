@@ -3,21 +3,26 @@
 namespace Botble\Marketplace\Listeners;
 
 use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Marketplace\Models\Store;
+use Botble\Marketplace\Repositories\Interfaces\StoreInterface;
 use Botble\Theme\Events\RenderingSiteMapEvent;
-use Botble\Theme\Facades\SiteMapManager;
+use SiteMapManager;
 
 class RenderingSiteMapListener
 {
+    public function __construct(protected StoreInterface $storeRepository)
+    {
+    }
+
     public function handle(RenderingSiteMapEvent $event): void
     {
         if ($key = $event->key) {
             switch ($key) {
                 case 'stores':
-                    $stores = Store::query()
+                    $stores = $this->storeRepository
+                        ->getModel()
                         ->with('slugable')
                         ->where('status', BaseStatusEnum::PUBLISHED)
-                        ->orderByDesc('created_at')
+                        ->orderBy('created_at', 'desc')
                         ->select(['id', 'name', 'updated_at'])
                         ->get();
 
@@ -36,7 +41,7 @@ class RenderingSiteMapListener
                     break;
             }
         } else {
-            SiteMapManager::addSitemap(SiteMapManager::route('stores'));
+            SiteMapManager::addSitemap(SiteMapManager::route('stores'), null);
         }
     }
 }

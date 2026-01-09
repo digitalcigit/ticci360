@@ -1,14 +1,12 @@
 <?php
 
-use Botble\Base\Facades\Html;
-use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Ecommerce\Models\Product;
-use Botble\Ecommerce\Models\ProductAttributeSet;
-use Botble\Ecommerce\Models\ProductVariation;
-use Botble\Ecommerce\Models\ProductVariationItem;
+use Botble\Ecommerce\Repositories\Interfaces\ProductAttributeSetInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ProductVariationInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ProductVariationItemInterface;
 use Botble\Ecommerce\Supports\RenderProductAttributeSetsOnSearchPageSupport;
 use Botble\Ecommerce\Supports\RenderProductSwatchesSupport;
-use Botble\Theme\Facades\Theme;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
@@ -23,7 +21,7 @@ if (! function_exists('render_product_swatches')) {
 
         $params = array_merge([
             'selected' => $selected,
-            'view' => EcommerceHelper::viewPath('attributes.swatches-renderer'),
+            'view' => 'plugins/ecommerce::themes.attributes.swatches-renderer',
         ], $params);
 
         $support = app(RenderProductSwatchesSupport::class);
@@ -48,19 +46,26 @@ if (! function_exists('render_product_swatches_filter')) {
 if (! function_exists('get_ecommerce_attribute_set')) {
     function get_ecommerce_attribute_set(): LengthAwarePaginator|Collection
     {
-        return ProductAttributeSet::query()
-            ->wherePublished()
-            ->where('is_searchable', true)
-            ->orderBy('order')
-            ->with('attributes')
-            ->get();
+        return app(ProductAttributeSetInterface::class)
+            ->advancedGet([
+                'condition' => [
+                    'status' => BaseStatusEnum::PUBLISHED,
+                    'is_searchable' => 1,
+                ],
+                'order_by' => [
+                    'order' => 'ASC',
+                ],
+                'with' => [
+                    'attributes',
+                ],
+            ]);
     }
 }
 
 if (! function_exists('get_parent_product')) {
     function get_parent_product(int|string $variationId, array $with = ['slugable']): Product
     {
-        return ProductVariation::getParentOfVariation($variationId, $with);
+        return app(ProductVariationInterface::class)->getParentOfVariation($variationId, $with);
     }
 }
 
@@ -69,20 +74,20 @@ if (! function_exists('get_parent_product_id')) {
     {
         $parent = get_parent_product($variationId);
 
-        return $parent->getKey();
+        return $parent->id;
     }
 }
 
 if (! function_exists('get_product_info')) {
     function get_product_info(int|string $variationId): Collection
     {
-        return ProductVariationItem::getVariationsInfo([$variationId]);
+        return app(ProductVariationItemInterface::class)->getVariationsInfo([$variationId]);
     }
 }
 
 if (! function_exists('get_product_attributes')) {
     function get_product_attributes(int|string $productId): Collection
     {
-        return ProductVariationItem::getProductAttributes($productId);
+        return app(ProductVariationItemInterface::class)->getProductAttributes($productId);
     }
 }

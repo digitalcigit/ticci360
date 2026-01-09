@@ -14,17 +14,14 @@ return new class () extends Migration {
 
             DB::table('ec_product_categories')
                 ->whereColumn('id', 'parent_id')
-                ->orWhere(function (Builder $query) use ($categoryIds): void {
+                ->orWhere(function (Builder $query) use ($categoryIds) {
                     $query
                         ->whereNotNull('parent_id')
                         ->whereNot('parent_id', '=', 0)
                         ->whereNotIn('parent_id', $categoryIds)
                         ->whereNotIn(
                             'id',
-                            MenuNode::query()
-                                ->where('reference_type', ProductCategory::class)
-                                ->pluck('reference_id')
-                                ->all()
+                            MenuNode::where('reference_type', ProductCategory::class)->pluck('reference_id')->all()
                         );
                 })
                 ->delete();

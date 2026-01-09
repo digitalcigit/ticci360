@@ -22,7 +22,7 @@ class BankTransferPaymentService
             'customer_id' => $data['customer_id'],
             'customer_type' => $data['customer_type'],
             'payment_channel' => PaymentMethodEnum::BANK_TRANSFER,
-            'status' => PaymentStatusEnum::PENDING,
+            'status' => PaymentStatusEnum::COMPLETED,
         ]);
 
         return $chargeId;

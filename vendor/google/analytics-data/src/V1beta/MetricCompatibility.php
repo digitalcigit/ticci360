@@ -22,14 +22,14 @@ class MetricCompatibility extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>optional .google.analytics.data.v1beta.MetricMetadata metric_metadata = 1;</code>
      */
-    protected $metric_metadata = null;
+    private $metric_metadata = null;
     /**
      * The compatibility of this metric. If the compatibility is COMPATIBLE,
      * this metric can be successfully added to the report.
      *
      * Generated from protobuf field <code>optional .google.analytics.data.v1beta.Compatibility compatibility = 2;</code>
      */
-    protected $compatibility = null;
+    private $compatibility = null;
 
     /**
      * Constructor.

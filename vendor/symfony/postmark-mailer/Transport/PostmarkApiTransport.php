@@ -13,7 +13,6 @@ namespace Symfony\Component\Mailer\Bridge\Postmark\Transport;
 
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\Mailer\Bridge\Postmark\Event\PostmarkDeliveryEvent;
 use Symfony\Component\Mailer\Envelope;
 use Symfony\Component\Mailer\Exception\HttpTransportException;
 use Symfony\Component\Mailer\Exception\TransportException;
@@ -33,32 +32,21 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 class PostmarkApiTransport extends AbstractApiTransport
 {
     private const HOST = 'api.postmarkapp.com';
-    private const CODE_INACTIVE_RECIPIENT = 406;
 
-    private ?string $messageStream = null;
+    private string $key;
 
-    public function __construct(
-        #[\SensitiveParameter] private string $key,
-        ?HttpClientInterface $client = null,
-        private ?EventDispatcherInterface $dispatcher = null,
-        ?LoggerInterface $logger = null,
-    ) {
-        parent::__construct($client, $dispatcher, $logger);
-    }
+    private $messageStream;
 
-    /**
-     * @return $this
-     */
-    public function setMessageStream(string $messageStream): static
+    public function __construct(string $key, HttpClientInterface $client = null, EventDispatcherInterface $dispatcher = null, LoggerInterface $logger = null)
     {
-        $this->messageStream = $messageStream;
+        $this->key = $key;
 
-        return $this;
+        parent::__construct($client, $dispatcher, $logger);
     }
 
     public function __toString(): string
     {
-        return \sprintf('postmark+api://%s', $this->getEndpoint()).($this->messageStream ? '?message_stream='.$this->messageStream : '');
+        return sprintf('postmark+api://%s', $this->getEndpoint()).($this->messageStream ? '?message_stream='.$this->messageStream : '');
     }
 
     protected function doSendApi(SentMessage $sentMessage, Email $email, Envelope $envelope): ResponseInterface
@@ -74,21 +62,14 @@ class PostmarkApiTransport extends AbstractApiTransport
         try {
             $statusCode = $response->getStatusCode();
             $result = $response->toArray(false);
-        } catch (DecodingExceptionInterface) {
-            throw new HttpTransportException('Unable to send an email: '.$response->getContent(false).\sprintf(' (code %d).', $statusCode), $response);
+        } catch (DecodingExceptionInterface $e) {
+            throw new HttpTransportException('Unable to send an email: '.$response->getContent(false).sprintf(' (code %d).', $statusCode), $response);
         } catch (TransportExceptionInterface $e) {
             throw new HttpTransportException('Could not reach the remote Postmark server.', $response, 0, $e);
         }
 
         if (200 !== $statusCode) {
-            // Some delivery issues can be handled silently - route those through EventDispatcher
-            if (null !== $this->dispatcher && self::CODE_INACTIVE_RECIPIENT === $result['ErrorCode']) {
-                $this->dispatcher->dispatch(new PostmarkDeliveryEvent($result['Message'], $result['ErrorCode'], $email->getHeaders()));
-
-                return $response;
-            }
-
-            throw new HttpTransportException('Unable to send an email: '.$result['Message'].\sprintf(' (code %d).', $result['ErrorCode']), $response);
+            throw new HttpTransportException('Unable to send an email: '.$result['Message'].sprintf(' (code %d).', $result['ErrorCode']), $response);
         }
 
         $sentMessage->setMessageId($result['MessageID']);
@@ -166,7 +147,7 @@ class PostmarkApiTransport extends AbstractApiTransport
             ];
 
             if ('inline' === $disposition) {
-                $att['ContentID'] = 'cid:'.($attachment->hasContentId() ? $attachment->getContentId() : $filename);
+                $att['ContentID'] = 'cid:'.$filename;
             }
 
             $attachments[] = $att;
@@ -178,5 +159,15 @@ class PostmarkApiTransport extends AbstractApiTransport
     private function getEndpoint(): ?string
     {
         return ($this->host ?: self::HOST).($this->port ? ':'.$this->port : '');
+    }
+
+    /**
+     * @return $this
+     */
+    public function setMessageStream(string $messageStream): static
+    {
+        $this->messageStream = $messageStream;
+
+        return $this;
     }
 }

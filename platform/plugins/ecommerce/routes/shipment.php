@@ -1,30 +1,32 @@
 <?php
 
-use Botble\Base\Facades\AdminHelper;
-use Botble\Ecommerce\Http\Controllers\PrintShippingLabelController;
+use Botble\Base\Facades\BaseHelper;
 use Illuminate\Support\Facades\Route;
 
-AdminHelper::registerRoutes(function (): void {
-    Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'prefix' => 'ecommerce', 'as' => 'ecommerce.'], function (): void {
-        Route::group(['prefix' => 'shipments', 'as' => 'shipments.'], function (): void {
+Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'middleware' => ['web', 'core']], function () {
+    Route::group(['prefix' => BaseHelper::getAdminPrefix(), 'middleware' => 'auth'], function () {
+        Route::group(['prefix' => 'shipments', 'as' => 'ecommerce.shipments.'], function () {
             Route::resource('', 'ShipmentController')
                 ->parameters(['' => 'shipment'])
                 ->except(['create', 'store']);
 
-            Route::group(['permission' => 'ecommerce.shipments.edit'], function (): void {
-                Route::get('shipments/{shipment}/print', [PrintShippingLabelController::class, '__invoke'])
-                    ->name('print');
+            Route::delete('items/destroy', [
+                'as' => 'deletes',
+                'uses' => 'ShipmentController@deletes',
+                'permission' => 'ecommerce.shipments.destroy',
+            ]);
 
-                Route::post('update-status/{shipment}', [
-                    'as' => 'update-status',
-                    'uses' => 'ShipmentController@postUpdateStatus',
-                ])->wherePrimaryKey();
+            Route::post('update-status/{id}', [
+                'as' => 'update-status',
+                'uses' => 'ShipmentController@postUpdateStatus',
+                'permission' => 'ecommerce.shipments.edit',
+            ])->wherePrimaryKey();
 
-                Route::post('update-cod-status/{shipment}', [
-                    'as' => 'update-cod-status',
-                    'uses' => 'ShipmentController@postUpdateCodStatus',
-                ])->wherePrimaryKey();
-            });
+            Route::post('update-cod-status/{id}', [
+                'as' => 'update-cod-status',
+                'uses' => 'ShipmentController@postUpdateCodStatus',
+                'permission' => 'ecommerce.shipments.edit',
+            ])->wherePrimaryKey();
         });
     });
 });

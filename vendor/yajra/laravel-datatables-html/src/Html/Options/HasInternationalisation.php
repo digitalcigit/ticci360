@@ -2,6 +2,8 @@
 
 namespace Yajra\DataTables\Html\Options;
 
+use Yajra\DataTables\Html\Options\Languages;
+
 /**
  * DataTables - Internationalisation option builder.
  *
@@ -17,8 +19,8 @@ trait HasInternationalisation
     /**
      * Set language decimal option value.
      *
+     * @param  string  $value
      * @return $this
-     *
      * @see https://datatables.net/reference/option/language.decimal
      */
     public function languageDecimal(string $value): static
@@ -29,8 +31,8 @@ trait HasInternationalisation
     /**
      * Set language option value.
      *
+     * @param  array|string  $value
      * @return $this
-     *
      * @see https://datatables.net/reference/option/language
      */
     public function language(array|string $value): static
@@ -47,8 +49,8 @@ trait HasInternationalisation
     /**
      * Set language emptyTable option value.
      *
+     * @param  string  $value
      * @return $this
-     *
      * @see https://datatables.net/reference/option/language.emptyTable
      */
     public function languageEmptyTable(string $value): static
@@ -59,8 +61,8 @@ trait HasInternationalisation
     /**
      * Set language info option value.
      *
+     * @param  string  $value
      * @return $this
-     *
      * @see https://datatables.net/reference/option/language.info
      */
     public function languageInfo(string $value): static
@@ -71,8 +73,8 @@ trait HasInternationalisation
     /**
      * Set language infoEmpty option value.
      *
+     * @param  string  $value
      * @return $this
-     *
      * @see https://datatables.net/reference/option/language.infoEmpty
      */
     public function languageInfoEmpty(string $value): static
@@ -83,8 +85,8 @@ trait HasInternationalisation
     /**
      * Set language infoFiltered option value.
      *
+     * @param  string  $value
      * @return $this
-     *
      * @see https://datatables.net/reference/option/language.infoFiltered
      */
     public function languageInfoFiltered(string $value): static
@@ -95,8 +97,8 @@ trait HasInternationalisation
     /**
      * Set language infoPostFix option value.
      *
+     * @param  string  $value
      * @return $this
-     *
      * @see https://datatables.net/reference/option/language.infoPostFix
      */
     public function languageInfoPostFix(string $value): static
@@ -107,8 +109,8 @@ trait HasInternationalisation
     /**
      * Set language lengthMenu option value.
      *
+     * @param  string  $value
      * @return $this
-     *
      * @see https://datatables.net/reference/option/language.lengthMenu
      */
     public function languageLengthMenu(string $value): static
@@ -119,8 +121,8 @@ trait HasInternationalisation
     /**
      * Set language loadingRecords option value.
      *
+     * @param  string  $value
      * @return $this
-     *
      * @see https://datatables.net/reference/option/language.loadingRecords
      */
     public function languageLoadingRecords(string $value): static
@@ -131,8 +133,8 @@ trait HasInternationalisation
     /**
      * Set language processing option value.
      *
+     * @param  string  $value
      * @return $this
-     *
      * @see https://datatables.net/reference/option/language.processing
      */
     public function languageProcessing(string $value): static
@@ -143,8 +145,8 @@ trait HasInternationalisation
     /**
      * Set language search option value.
      *
+     * @param  string  $value
      * @return $this
-     *
      * @see https://datatables.net/reference/option/language.search
      */
     public function languageSearch(string $value): static
@@ -155,8 +157,8 @@ trait HasInternationalisation
     /**
      * Set language searchPlaceholder option value.
      *
+     * @param  string  $value
      * @return $this
-     *
      * @see https://datatables.net/reference/option/language.searchPlaceholder
      */
     public function languageSearchPlaceholder(string $value): static
@@ -167,8 +169,8 @@ trait HasInternationalisation
     /**
      * Set language thousands option value.
      *
+     * @param  string  $value
      * @return $this
-     *
      * @see https://datatables.net/reference/option/language.thousands
      */
     public function languageThousands(string $value): static
@@ -179,8 +181,8 @@ trait HasInternationalisation
     /**
      * Set language url option value.
      *
+     * @param  string  $value
      * @return $this
-     *
      * @see https://datatables.net/reference/option/language.url
      */
     public function languageUrl(string $value): static
@@ -191,8 +193,8 @@ trait HasInternationalisation
     /**
      * Set language zeroRecords option value.
      *
+     * @param  string  $value
      * @return $this
-     *
      * @see https://datatables.net/reference/option/language.zeroRecords
      */
     public function languageZeroRecords(string $value): static
@@ -200,7 +202,11 @@ trait HasInternationalisation
         return $this->language(['zeroRecords' => $value]);
     }
 
-    public function getLanguage(?string $key = null): mixed
+    /**
+     * @param  string|null  $key
+     * @return mixed
+     */
+    public function getLanguage(string $key = null): mixed
     {
         if (is_null($key)) {
             return $this->attributes['language'] ?? [];

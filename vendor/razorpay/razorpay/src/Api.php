@@ -4,13 +4,11 @@ namespace Razorpay\Api;
 
 class Api
 {
-    protected static $baseUrl = 'https://api.razorpay.com';
+    protected static $baseUrl = 'https://api.razorpay.com/v1/';
 
     protected static $key = null;
 
     protected static $secret = null;
-
-    protected static $oauthToken = null;
 
     /*
      * App info is to store the Plugin/integration
@@ -18,17 +16,16 @@ class Api
      */
     public static $appsDetails = array();
 
-    const VERSION = '2.9.1';
+    const VERSION = '2.8.5';
 
     /**
      * @param string $key
      * @param string $secret
      */
-    public function __construct($key, $secret, $oauthToken=null)
+    public function __construct($key, $secret)
     {
         self::$key = $key;
         self::$secret = $secret;
-        self::$oauthToken = $oauthToken;
     }
 
     /*
@@ -87,13 +84,8 @@ class Api
         return self::$secret;
     }
 
-    public static function getToken()
+    public static function getFullUrl($relativeUrl)
     {
-        return self::$oauthToken;
-    }
-
-    public static function getFullUrl($relativeUrl, $apiVersion = "v1")
-    {
-        return self::getBaseUrl() . "/". $apiVersion . "/". $relativeUrl;
+        return self::getBaseUrl() . $relativeUrl;
     }
 }

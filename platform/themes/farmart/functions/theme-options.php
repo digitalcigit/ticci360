@@ -1,14 +1,12 @@
 <?php
 
-use Botble\Theme\Events\RenderingThemeOptionSettings;
-
-app('events')->listen(RenderingThemeOptionSettings::class, function (): void {
+app()->booted(function () {
     theme_option()
         ->setField([
             'id' => 'sticky_header_enabled',
             'section_id' => 'opt-text-subsection-general',
             'type' => 'customSelect',
-            'label' => __('Enable sticky header?'),
+            'label' => 'Enable sticky header?',
             'attributes' => [
                 'name' => 'sticky_header_enabled',
                 'list' => [
@@ -25,7 +23,7 @@ app('events')->listen(RenderingThemeOptionSettings::class, function (): void {
             'id' => 'sticky_header_mobile_enabled',
             'section_id' => 'opt-text-subsection-general',
             'type' => 'customSelect',
-            'label' => __('Enable sticky header on mobile?'),
+            'label' => 'Enable sticky header on mobile?',
             'attributes' => [
                 'name' => 'sticky_header_mobile_enabled',
                 'list' => [
@@ -33,24 +31,6 @@ app('events')->listen(RenderingThemeOptionSettings::class, function (): void {
                     'no' => trans('core/base::base.no'),
                 ],
                 'value' => 'yes',
-                'options' => [
-                    'class' => 'form-control',
-                ],
-            ],
-        ])
-        ->setField([
-            'id' => 'sticky_header_content_position',
-            'section_id' => 'opt-text-subsection-general',
-            'type' => 'customSelect',
-            'label' => __('Sticky header content position?'),
-            'attributes' => [
-                'name' => 'sticky_header_content_position',
-                'list' => [
-                    'bottom' => __('Header bottom'),
-                    'middle' => __('Header middle'),
-                    'top' => __('Header top'),
-                ],
-                'value' => 'middle',
                 'options' => [
                     'class' => 'form-control',
                 ],
@@ -118,6 +98,22 @@ app('events')->listen(RenderingThemeOptionSettings::class, function (): void {
             ],
         ])
         ->setField([
+            'id' => 'copyright',
+            'section_id' => 'opt-text-subsection-general',
+            'type' => 'text',
+            'label' => __('Copyright'),
+            'attributes' => [
+                'name' => 'copyright',
+                'value' => __('© :year Your Company. All right reserved.', ['year' => now()->format('Y')]),
+                'options' => [
+                    'class' => 'form-control',
+                    'placeholder' => __('Change copyright'),
+                    'data-counter' => 250,
+                ],
+            ],
+            'helper' => __('Copyright on footer of site'),
+        ])
+        ->setField([
             'id' => 'hotline',
             'section_id' => 'opt-text-subsection-general',
             'type' => 'text',
@@ -149,9 +145,20 @@ app('events')->listen(RenderingThemeOptionSettings::class, function (): void {
         ])
         ->setSection([
             'title' => __('Style'),
+            'desc' => __('Style of theme'),
             'id' => 'opt-text-subsection-style',
             'subsection' => true,
-            'icon' => 'ti ti-brush',
+            'icon' => 'fa fa-bars',
+        ])
+        ->setField([
+            'id' => 'primary_font',
+            'section_id' => 'opt-text-subsection-style',
+            'type' => 'googleFonts',
+            'label' => __('Primary font'),
+            'attributes' => [
+                'name' => 'primary_font',
+                'value' => 'Muli',
+            ],
         ])
         ->setField([
             'id' => 'primary_color',
@@ -194,16 +201,6 @@ app('events')->listen(RenderingThemeOptionSettings::class, function (): void {
             ],
         ])
         ->setField([
-            'id' => 'primary_button_background_color',
-            'section_id' => 'opt-text-subsection-style',
-            'type' => 'customColor',
-            'label' => __('Primary button background color'),
-            'attributes' => [
-                'name' => 'primary_button_background_color',
-                'value' => '#fab528',
-            ],
-        ])
-        ->setField([
             'id' => 'top_header_background_color',
             'section_id' => 'opt-text-subsection-style',
             'type' => 'customColor',
@@ -211,16 +208,6 @@ app('events')->listen(RenderingThemeOptionSettings::class, function (): void {
             'attributes' => [
                 'name' => 'top_header_background_color',
                 'value' => '#f7f7f7',
-            ],
-        ])
-        ->setField([
-            'id' => 'top_header_text_color',
-            'section_id' => 'opt-text-subsection-style',
-            'type' => 'customColor',
-            'label' => __('Top header text color'),
-            'attributes' => [
-                'name' => 'top_header_text_color',
-                'value' => '#000',
             ],
         ])
         ->setField([
@@ -234,16 +221,6 @@ app('events')->listen(RenderingThemeOptionSettings::class, function (): void {
             ],
         ])
         ->setField([
-            'id' => 'middle_header_text_color',
-            'section_id' => 'opt-text-subsection-style',
-            'type' => 'customColor',
-            'label' => __('Middle header text color'),
-            'attributes' => [
-                'name' => 'middle_header_text_color',
-                'value' => '#000',
-            ],
-        ])
-        ->setField([
             'id' => 'bottom_header_background_color',
             'section_id' => 'opt-text-subsection-style',
             'type' => 'customColor',
@@ -254,12 +231,12 @@ app('events')->listen(RenderingThemeOptionSettings::class, function (): void {
             ],
         ])
         ->setField([
-            'id' => 'bottom_header_text_color',
+            'id' => 'header_text_color',
             'section_id' => 'opt-text-subsection-style',
             'type' => 'customColor',
-            'label' => __('Bottom header text color'),
+            'label' => __('Header text color'),
             'attributes' => [
-                'name' => 'bottom_header_text_color',
+                'name' => 'header_text_color',
                 'value' => '#000',
             ],
         ])
@@ -271,26 +248,6 @@ app('events')->listen(RenderingThemeOptionSettings::class, function (): void {
             'attributes' => [
                 'name' => 'header_deliver_color',
                 'value' => '#000',
-            ],
-        ])
-        ->setField([
-            'id' => 'header_mobile_background_color',
-            'section_id' => 'opt-text-subsection-style',
-            'type' => 'customColor',
-            'label' => __('Header mobile background color'),
-            'attributes' => [
-                'name' => 'header_mobile_background_color',
-                'value' => '#fff',
-            ],
-        ])
-        ->setField([
-            'id' => 'header_mobile_icon_color',
-            'section_id' => 'opt-text-subsection-style',
-            'type' => 'customColor',
-            'label' => __('Header mobile icon color'),
-            'attributes' => [
-                'name' => 'header_mobile_icon_color',
-                'value' => '#222',
             ],
         ])
         ->setField([
@@ -335,9 +292,55 @@ app('events')->listen(RenderingThemeOptionSettings::class, function (): void {
         ])
         ->setSection([
             'title' => __('Social links'),
+            'desc' => __('Social links'),
             'id' => 'opt-text-subsection-social-links',
             'subsection' => true,
-            'icon' => 'ti ti-share',
+            'icon' => 'fa fa-share-alt',
+        ])
+        ->setField([
+            'id' => 'social_links',
+            'section_id' => 'opt-text-subsection-social-links',
+            'type' => 'repeater',
+            'label' => __('Social links'),
+            'attributes' => [
+                'name' => 'social_links',
+                'value' => null,
+                'fields' => [
+                    [
+                        'type' => 'text',
+                        'label' => __('Name'),
+                        'attributes' => [
+                            'name' => 'social-name',
+                            'value' => null,
+                            'options' => [
+                                'class' => 'form-control',
+                            ],
+                        ],
+                    ],
+                    [
+                        'type' => 'mediaImage',
+                        'label' => __('Icon Image'),
+                        'attributes' => [
+                            'name' => 'social-icon',
+                            'value' => null,
+                            'options' => [
+                                'class' => 'form-control',
+                            ],
+                        ],
+                    ],
+                    [
+                        'type' => 'text',
+                        'label' => __('URL'),
+                        'attributes' => [
+                            'name' => 'social-url',
+                            'value' => null,
+                            'options' => [
+                                'class' => 'form-control',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
         ])
         ->setField([
             'id' => '404_page_image',
@@ -407,36 +410,22 @@ app('events')->listen(RenderingThemeOptionSettings::class, function (): void {
                     'data-counter' => 255,
                 ],
             ],
-        ])
+        ]);
+
+    // Facebook integration
+    theme_option()
         ->setField([
-            'id' => 'enabled_product_categories_on_header',
-            'section_id' => 'opt-text-subsection-ecommerce',
+            'id' => 'facebook_comment_enabled_in_product',
+            'section_id' => 'opt-text-subsection-facebook-integration',
             'type' => 'customSelect',
-            'label' => __('Enable shop by categories on header?'),
+            'label' => __('Enable Facebook comment in product detail page?'),
             'attributes' => [
-                'name' => 'enabled_product_categories_on_header',
+                'name' => 'facebook_comment_enabled_in_product',
                 'list' => [
-                    'yes' => trans('core/base::base.yes'),
                     'no' => trans('core/base::base.no'),
-                ],
-                'value' => 'yes',
-                'options' => [
-                    'class' => 'form-control',
-                ],
-            ],
-        ])
-        ->setField([
-            'id' => 'blog_show_author_name',
-            'section_id' => 'opt-text-subsection-blog',
-            'type' => 'customSelect',
-            'label' => __('Show author name?'),
-            'attributes' => [
-                'name' => 'blog_show_author_name',
-                'list' => [
                     'yes' => trans('core/base::base.yes'),
-                    'no' => trans('core/base::base.no'),
                 ],
-                'value' => 'yes',
+                'value' => 'no',
                 'options' => [
                     'class' => 'form-control',
                 ],

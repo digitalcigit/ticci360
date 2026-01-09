@@ -158,7 +158,6 @@ $dataEffect: 'data-effect-name';
         }
     }
 }
-
 // Mixin Options data
 @mixin dataDefault {
     #{$front},
@@ -171,7 +170,6 @@ $dataEffect: 'data-effect-name';
         }
     }
 }
-
 // Mixin Effect custom
 @mixin effectCustom {
     #{$front} {

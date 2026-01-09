@@ -3,95 +3,126 @@
 namespace Botble\Location\Http\Controllers;
 
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Http\Actions\DeleteResourceAction;
-use Botble\Base\Http\Controllers\BaseController;
-use Botble\Base\Supports\Breadcrumb;
-use Botble\Location\Forms\CountryForm;
+use Botble\Base\Facades\PageTitle;
 use Botble\Location\Http\Requests\CountryRequest;
 use Botble\Location\Http\Resources\CountryResource;
 use Botble\Location\Models\Country;
-use Botble\Location\Tables\CountryTable;
+use Botble\Location\Repositories\Interfaces\CountryInterface;
+use Botble\Base\Http\Controllers\BaseController;
 use Illuminate\Http\Request;
+use Exception;
+use Botble\Location\Tables\CountryTable;
+use Botble\Base\Events\CreatedContentEvent;
+use Botble\Base\Events\DeletedContentEvent;
+use Botble\Base\Events\UpdatedContentEvent;
+use Botble\Base\Http\Responses\BaseHttpResponse;
+use Botble\Location\Forms\CountryForm;
+use Botble\Base\Forms\FormBuilder;
 
 class CountryController extends BaseController
 {
-    protected function breadcrumb(): Breadcrumb
+    public function __construct(protected CountryInterface $countryRepository)
     {
-        return parent::breadcrumb()
-            ->add(trans('plugins/location::location.name'))
-            ->add(trans('plugins/location::country.name'), route('country.index'));
     }
 
     public function index(CountryTable $table)
     {
-        $this->pageTitle(trans('plugins/location::country.name'));
+        PageTitle::setTitle(trans('plugins/location::country.name'));
 
         return $table->renderTable();
     }
 
-    public function create()
+    public function create(FormBuilder $formBuilder)
     {
-        $this->pageTitle(trans('plugins/location::country.create'));
+        PageTitle::setTitle(trans('plugins/location::country.create'));
 
-        return CountryForm::create()->renderForm();
+        return $formBuilder->create(CountryForm::class)->renderForm();
     }
 
-    public function store(CountryRequest $request)
+    public function store(CountryRequest $request, BaseHttpResponse $response)
     {
-        $form = CountryForm::create()->setRequest($request);
-        $form->save();
+        $country = $this->countryRepository->createOrUpdate($request->input());
 
-        return $this
-            ->httpResponse()
-            ->setPreviousRoute('country.index')
-            ->setNextRoute('country.edit', $form->getModel()->getKey())
-            ->withCreatedSuccessMessage();
+        event(new CreatedContentEvent(COUNTRY_MODULE_SCREEN_NAME, $request, $country));
+
+        return $response
+            ->setPreviousUrl(route('country.index'))
+            ->setNextUrl(route('country.edit', $country->id))
+            ->setMessage(trans('core/base::notices.create_success_message'));
     }
 
-    public function edit(Country $country)
+    public function edit(Country $country, FormBuilder $formBuilder)
     {
-        $this->pageTitle(trans('core/base::forms.edit_item', ['name' => $country->name]));
+        PageTitle::setTitle(trans('core/base::forms.edit_item', ['name' => $country->name]));
 
-        return CountryForm::createFromModel($country)->renderForm();
+        return $formBuilder->create(CountryForm::class, ['model' => $country])->renderForm();
     }
 
-    public function update(Country $country, CountryRequest $request)
+    public function update(Country $country, CountryRequest $request, BaseHttpResponse $response)
     {
-        CountryForm::createFromModel($country)->setRequest($request)->save();
+        $country->fill($request->input());
 
-        return $this
-            ->httpResponse()
-            ->setPreviousRoute('country.index')
-            ->withUpdatedSuccessMessage();
+        $this->countryRepository->createOrUpdate($country);
+
+        event(new UpdatedContentEvent(COUNTRY_MODULE_SCREEN_NAME, $request, $country));
+
+        return $response
+            ->setPreviousUrl(route('country.index'))
+            ->setMessage(trans('core/base::notices.update_success_message'));
     }
 
-    public function destroy(Country $country)
+    public function destroy(Country $country, Request $request, BaseHttpResponse $response)
     {
-        return DeleteResourceAction::make($country);
+        try {
+            $this->countryRepository->delete($country);
+
+            event(new DeletedContentEvent(COUNTRY_MODULE_SCREEN_NAME, $request, $country));
+
+            return $response->setMessage(trans('core/base::notices.delete_success_message'));
+        } catch (Exception $exception) {
+            return $response
+                ->setError()
+                ->setMessage($exception->getMessage());
+        }
     }
 
-    public function getList(Request $request)
+    public function deletes(Request $request, BaseHttpResponse $response)
+    {
+        $ids = $request->input('ids');
+        if (empty($ids)) {
+            return $response
+                ->setError()
+                ->setMessage(trans('core/base::notices.no_select'));
+        }
+
+        foreach ($ids as $id) {
+            $country = $this->countryRepository->findOrFail($id);
+            $this->countryRepository->delete($country);
+            event(new DeletedContentEvent(COUNTRY_MODULE_SCREEN_NAME, $request, $country));
+        }
+
+        return $response->setMessage(trans('core/base::notices.delete_success_message'));
+    }
+
+    public function getList(Request $request, BaseHttpResponse $response)
     {
         $keyword = BaseHelper::stringify($request->input('q'));
 
         if (! $keyword) {
-            return $this
-                ->httpResponse()
-                ->setData([]);
+            return $response->setData([]);
         }
 
-        $data = Country::query()
-            ->where('name', 'LIKE', '%' . $keyword . '%')
-            ->select(['id', 'name', 'code'])
-            ->take(10)
-            ->oldest('order')
-            ->oldest('name')
-            ->get();
+        $data = $this->countryRepository->advancedGet([
+            'condition' => [
+                ['countries.name', 'LIKE', '%' . $keyword . '%'],
+            ],
+            'select' => ['countries.id', 'countries.name'],
+            'take' => 10,
+            'order_by' => ['order' => 'ASC', 'name' => 'ASC'],
+        ]);
 
         $data->prepend(new Country(['id' => 0, 'name' => trans('plugins/location::city.select_country')]));
 
-        return $this
-            ->httpResponse()
-            ->setData(CountryResource::collection($data));
+        return $response->setData(CountryResource::collection($data));
     }
 }

@@ -9,9 +9,7 @@ return new class () extends Migration {
     public function up(): void
     {
         try {
-            Slug::query()
-                ->where('reference_type', Store::class)
-                ->update(['prefix' => SlugHelper::getPrefix(Store::class)]);
+            Slug::where('reference_type', Store::class)->update(['prefix' => SlugHelper::getPrefix(Store::class)]);
         } catch (Throwable) {
         }
     }

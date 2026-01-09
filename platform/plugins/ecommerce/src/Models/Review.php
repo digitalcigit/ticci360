@@ -4,57 +4,16 @@ namespace Botble\Ecommerce\Models;
 
 use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Base\Models\BaseModel;
-use Botble\Base\Supports\Avatar;
-use Botble\Media\Facades\RvMedia;
-use Exception;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Support\Str;
 
 class Review extends BaseModel
 {
     protected $table = 'ec_reviews';
 
-    /**
-     * Check if a customer has already reviewed a product
-     *
-     * @param int|string $customerId
-     * @param int|string $productId
-     * @return bool
-     */
-    public static function hasUserReviewed(int|string $customerId, int|string $productId): bool
-    {
-        return static::query()
-            ->where([
-                'customer_id' => $customerId,
-                'product_id' => $productId,
-            ])
-            ->exists();
-    }
-
-    /**
-     * Get a customer's review for a product
-     *
-     * @param int|string $customerId
-     * @param int|string $productId
-     * @return Review|null
-     */
-    public static function getUserReview(int|string $customerId, int|string $productId): ?Review
-    {
-        return static::query()
-            ->where([
-                'customer_id' => $customerId,
-                'product_id' => $productId,
-            ])
-            ->first();
-    }
-
     protected $fillable = [
         'product_id',
         'customer_id',
-        'customer_name',
-        'customer_email',
         'star',
         'comment',
         'status',
@@ -64,25 +23,7 @@ class Review extends BaseModel
     protected $casts = [
         'status' => BaseStatusEnum::class,
         'images' => 'array',
-        'order_created_at' => 'datetime',
     ];
-
-    protected static function booted(): void
-    {
-        static::creating(function (Review $review): void {
-            if (! $review->images || ! is_array($review->images) || ! count($review->images)) {
-                $review->images = null;
-            }
-        });
-
-        static::updating(function (Review $review): void {
-            if (! $review->images || ! is_array($review->images) || ! count($review->images)) {
-                $review->images = null;
-            }
-        });
-
-        static::deleting(fn (Review $review) => $review->reply()->delete());
-    }
 
     public function user(): BelongsTo
     {
@@ -94,42 +35,40 @@ class Review extends BaseModel
         return $this->belongsTo(Product::class)->withDefault();
     }
 
-    public function reply(): HasOne
+    public function getProductNameAttribute(): ?string
     {
-        return $this->hasOne(ReviewReply::class);
+        return $this->product->name;
     }
 
-    protected function productName(): Attribute
+    public function getUserNameAttribute(): ?string
     {
-        return Attribute::get(fn () => $this->product->name);
-    }
-
-    protected function userName(): Attribute
-    {
-        return Attribute::get(fn () => $this->user->name ?: $this->customer_name);
+        return $this->user->name;
     }
 
     protected function orderCreatedAt(): Attribute
     {
-        return Attribute::get(fn () => $this->user->orders()->first()?->created_at);
-    }
+        return Attribute::make(
+            get: function () {
+                $order = $this->user->orders->first();
 
-    protected function isApproved(): Attribute
-    {
-        return Attribute::get(fn () => $this->status == BaseStatusEnum::PUBLISHED);
-    }
-
-    protected function customerAvatarUrl(): Attribute
-    {
-        return Attribute::get(function () {
-            if ($this->user->avatar) {
-                return RvMedia::getImageUrl($this->user->avatar, 'thumb');
+                return $order?->created_at;
             }
+        );
+    }
 
-            try {
-                return (new Avatar())->create(Str::ucfirst($this->user->name ?: $this->customer_name))->toBase64();
-            } catch (Exception) {
-                return RvMedia::getDefaultImage();
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        self::creating(function (Review $review) {
+            if (! $review->images || ! is_array($review->images) || ! count($review->images)) {
+                $review->images = null;
+            }
+        });
+
+        self::updating(function (Review $review) {
+            if (! $review->images || ! is_array($review->images) || ! count($review->images)) {
+                $review->images = null;
             }
         });
     }

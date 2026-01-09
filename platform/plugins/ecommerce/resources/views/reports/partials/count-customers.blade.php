@@ -2,10 +2,7 @@
     <div class="display">
         <div class="number">
             <h3 class="font-purple-soft">
-                <span
-                    data-counter="counterup"
-                    data-value="{{ $count['customers'] }}"
-                >0</span>
+                <span data-counter="counterup" data-value="{{ $count['customers'] }}">0</span>
             </h3>
             <small>{{ trans('plugins/ecommerce::reports.count.customers') }}</small>
         </div>

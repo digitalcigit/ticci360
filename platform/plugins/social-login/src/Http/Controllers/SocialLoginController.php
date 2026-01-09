@@ -2,48 +2,34 @@
 
 namespace Botble\SocialLogin\Http\Controllers;
 
-use Botble\Base\Facades\BaseHelper;
+use Botble\Base\Facades\Assets;
+use Botble\Base\Facades\PageTitle;
 use Botble\Base\Http\Controllers\BaseController;
 use Botble\Base\Http\Responses\BaseHttpResponse;
-use Botble\Media\Facades\RvMedia;
-use Botble\SocialLogin\Facades\SocialService;
-use Botble\SocialLogin\Services\SocialLoginService;
+use Botble\Setting\Supports\SettingStore;
+use Botble\SocialLogin\Http\Requests\SocialLoginRequest;
 use Carbon\Carbon;
 use Exception;
-use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Laravel\Socialite\AbstractUser;
+use Botble\Media\Facades\RvMedia;
 use Laravel\Socialite\Facades\Socialite;
-use Laravel\Socialite\Two\InvalidStateException;
+use Botble\SocialLogin\Facades\SocialService;
 
 class SocialLoginController extends BaseController
 {
-    public function __construct(protected SocialLoginService $socialLoginService)
+    public function redirectToProvider(string $provider, Request $request, BaseHttpResponse $response)
     {
-    }
-
-    public function redirectToProvider(string $provider, Request $request)
-    {
-        $this->ensureProviderIsExisted($provider);
-
         $guard = $this->guard($request);
 
         if (! $guard) {
-            return $this
-                ->httpResponse()
+            return $response
                 ->setError()
-                ->setNextUrl(BaseHelper::getHomepageUrl());
-        }
-
-        if (BaseHelper::hasDemoModeEnabled() && $provider !== 'google') {
-            return $this
-                ->httpResponse()
-                ->setError()
-                ->setMessage(__('This feature is temporary disabled in demo mode. Please use another login option. Such as Google.'));
+                ->setNextUrl(route('public.index'));
         }
 
         $this->setProvider($provider);
@@ -85,17 +71,14 @@ class SocialLoginController extends BaseController
         return true;
     }
 
-    public function handleProviderCallback(string $provider)
+    public function handleProviderCallback(string $provider, BaseHttpResponse $response)
     {
-        $this->ensureProviderIsExisted($provider);
-
         $guard = $this->guard();
 
         if (! $guard) {
-            return $this
-                ->httpResponse()
+            return $response
                 ->setError()
-                ->setNextUrl(BaseHelper::getHomepageUrl())
+                ->setNextUrl(route('public.index'))
                 ->setMessage(__('An error occurred while trying to login'));
         }
 
@@ -119,49 +102,25 @@ class SocialLoginController extends BaseController
                 $message = __('An error occurred while trying to login');
             }
 
-            if ($exception instanceof InvalidStateException) {
-                $message = __('InvalidStateException occurred while trying to login');
-            }
-
-            return $this
-                ->httpResponse()
+            return $response
                 ->setError()
                 ->setNextUrl($providerData['login_url'])
                 ->setMessage($message);
         }
 
         if (! $oAuth->getEmail()) {
-            return $this
-                ->httpResponse()
+            return $response
                 ->setError()
                 ->setNextUrl($providerData['login_url'])
                 ->setMessage(__('Cannot login, no email provided!'));
         }
 
-        $avatarId = null;
-        $avatarUrl = null;
-
         $model = new $providerData['model']();
 
-        // Find account by email
-        $account = $this->socialLoginService->findUserByEmail($oAuth->getEmail(), $model::class);
+        $account = $model->where('email', $oAuth->getEmail())->first();
 
-        // Find social login by provider and provider ID
-        $socialLoginUser = $this->socialLoginService->findUserByProvider($provider, $oAuth->getId());
-
-        if ($socialLoginUser && $account && $socialLoginUser->getKey() !== $account->getKey()) {
-            // If social login exists but belongs to a different account, update it
-            $this->socialLoginService->updateSocialLogin($socialLoginUser, $provider, [
-                'user_id' => $account->getKey(),
-                'user_type' => $account::class,
-            ]);
-        } elseif (! $account) {
-            // Create new account if not exists
-            $beforeProcessData = apply_filters('social_login_before_creating_account', null, $oAuth, $providerData);
-
-            if ($beforeProcessData instanceof BaseHttpResponse) {
-                return $beforeProcessData;
-            }
+        if (! $account) {
+            $avatarId = null;
 
             try {
                 $url = $oAuth->getAvatar();
@@ -169,97 +128,67 @@ class SocialLoginController extends BaseController
                     $result = RvMedia::uploadFromUrl($url, 0, $model->upload_folder ?: 'accounts', 'image/png');
                     if (! $result['error']) {
                         $avatarId = $result['data']->id;
-                        $avatarUrl = $result['data']->url;
                     }
                 }
             } catch (Exception $exception) {
-                BaseHelper::logError($exception);
+                info($exception->getMessage());
             }
 
             $data = [
                 'name' => $oAuth->getName() ?: $oAuth->getEmail(),
                 'email' => $oAuth->getEmail(),
                 'password' => Hash::make(Str::random(36)),
+                'avatar_id' => $avatarId,
             ];
 
             $data = apply_filters('social_login_before_saving_account', $data, $oAuth, $providerData);
 
             $account = $model;
-
             $account->fill($data);
-
-            if ($account->isFillable('avatar_id')) {
-                $account->avatar_id = $avatarId;
-            } elseif ($account->isFillable('avatar')) {
-                $account->avatar = $avatarUrl;
-            }
-
             $account->confirmed_at = Carbon::now();
-
             $account->save();
-
-            event(new Registered($account));
-        }
-
-        // Create or update social login
-        $socialLoginData = $this->socialLoginService->createSocialLoginData([
-            'provider' => $provider,
-            'id' => $oAuth->getId(),
-            'token' => $oAuth->token,
-            'refresh_token' => $oAuth->refreshToken,
-            'expires_in' => $oAuth->expiresIn,
-            'name' => $oAuth->getName(),
-            'email' => $oAuth->getEmail(),
-            'avatar' => $oAuth->getAvatar(),
-        ]);
-
-        if ($this->socialLoginService->hasSocialLogin($account, $provider)) {
-            $this->socialLoginService->updateSocialLogin($account, $provider, $socialLoginData);
-        } else {
-            $this->socialLoginService->addSocialLogin($account, $socialLoginData);
-        }
-
-        // Update user information if changed
-        if ($account->name !== $oAuth->getName() || $account->email !== $oAuth->getEmail()) {
-            $account->name = $oAuth->getName() ?: $account->name;
-            $account->email = $oAuth->getEmail();
-            $account->save();
-        }
-
-        // Update avatar if changed
-        try {
-            $url = $oAuth->getAvatar();
-            if ($url && (! $account->avatar_id || $account->avatar_id !== $avatarId)) {
-                $result = RvMedia::uploadFromUrl($url, 0, $model->upload_folder ?: 'accounts', 'image/png');
-
-                if (! $result['error']) {
-                    if ($account->isFillable('avatar_id')) {
-                        $account->avatar_id = $result['data']->id;
-                    } elseif ($account->isFillable('avatar')) {
-                        $account->avatar = $result['data']->url;
-                    }
-
-                    $account->save();
-                }
-            }
-        } catch (Exception $exception) {
-            BaseHelper::logError($exception);
         }
 
         Auth::guard($guard)->login($account, true);
 
-        $redirectUrl = $providerData['redirect_url'] ?: BaseHelper::getHomepageUrl();
-
-        $redirectUrl = session()->has('url.intended') ? session('url.intended') : $redirectUrl;
-
-        return $this
-            ->httpResponse()
-            ->setNextUrl($redirectUrl)
+        return $response
+            ->setNextUrl($providerData['redirect_url'] ?: route('public.index'))
             ->setMessage(trans('core/acl::auth.login.success'));
     }
 
-    protected function ensureProviderIsExisted(string $provider): void
+    public function getSettings()
     {
-        abort_if(! in_array($provider, SocialService::getProviderKeys(), true), 404);
+        PageTitle::setTitle(trans('plugins/social-login::social-login.settings.title'));
+
+        Assets::addScriptsDirectly('vendor/core/plugins/social-login/js/social-login.js');
+
+        return view('plugins/social-login::settings');
+    }
+
+    public function postSettings(SocialLoginRequest $request, BaseHttpResponse $response, SettingStore $setting)
+    {
+        $prefix = 'social_login_';
+
+        $setting->set($prefix . 'enable', $request->input($prefix . 'enable'));
+
+        foreach (SocialService::getProviders() as $provider => $item) {
+            $prefix = 'social_login_' . $provider . '_';
+
+            $setting->set($prefix . 'enable', $request->input($prefix . 'enable'));
+
+            foreach ($item['data'] as $input) {
+                if (! in_array(app()->environment(), SocialService::getEnvDisableData()) ||
+                    ! in_array($input, Arr::get($item, 'disable', []))
+                ) {
+                    $setting->set($prefix . $input, $request->input($prefix . $input));
+                }
+            }
+        }
+
+        $setting->save();
+
+        return $response
+            ->setPreviousUrl(route('social-login.settings'))
+            ->setMessage(trans('core/base::notices.update_success_message'));
     }
 }

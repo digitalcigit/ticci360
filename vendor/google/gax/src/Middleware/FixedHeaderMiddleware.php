@@ -37,12 +37,13 @@ use Google\ApiCore\Call;
 /**
  * Middleware to add fixed headers to an API call.
  */
-class FixedHeaderMiddleware implements MiddlewareInterface
+class FixedHeaderMiddleware
 {
     /** @var callable */
     private $nextHandler;
-    private array $headers;
-    private bool $overrideUserHeaders;
+
+    private $headers;
+    private $overrideUserHeaders;
 
     public function __construct(
         callable $nextHandler,

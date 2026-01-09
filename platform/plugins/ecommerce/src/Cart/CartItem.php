@@ -3,96 +3,160 @@
 namespace Botble\Ecommerce\Cart;
 
 use Botble\Ecommerce\Cart\Contracts\Buyable;
-use Botble\Ecommerce\Facades\EcommerceHelper;
 use Carbon\Carbon;
+use Botble\Ecommerce\Facades\EcommerceHelper;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Contracts\Support\Jsonable;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 
-/**
- * @property string $created_at
- * @property string $updated_at
- * @property float $priceTax
- * @property-read float $subtotal
- * @property-read float $total
- * @property-read float $tax
- * @property-read float $taxTotal
- */
-#[\AllowDynamicProperties]
 class CartItem implements Arrayable, Jsonable
 {
     public string $rowId;
 
-    public int|string|null $id;
+    /**
+     * The ID of the cart item.
+     *
+     * @var int|string
+     */
+    public $id;
 
-    public int|float $qty;
+    /**
+     * The quantity for this cart item.
+     *
+     * @var int|float
+     */
+    public $qty;
 
-    public string $name;
+    /**
+     * The name of the cart item.
+     *
+     * @var string
+     */
+    public $name;
 
-    public float $price;
+    /**
+     * The price without TAX of the cart item.
+     *
+     * @var float
+     */
+    public $price;
 
-    public array|Collection $options;
+    /**
+     * The options for this cart item.
+     *
+     * @var array|Collection
+     */
+    public $options;
 
-    protected ?string $associatedModel = null;
+    /**
+     * The FQN of the associated model.
+     *
+     * @var string|null
+     */
+    protected $associatedModel = null;
 
-    protected float $taxRate = 0;
+    /**
+     * The tax rate for the cart item.
+     *
+     * @var int|float
+     */
+    protected $taxRate = 0;
 
-    public string|Carbon $updated_at;
-
-    public string|Carbon $created_at;
-
-    public function __construct(int|string|null $id, ?string $name, float $price, array $options = [])
+    /**
+     * CartItem constructor.
+     *
+     * @param int|string $id
+     * @param string $name
+     * @param float $price
+     * @param array $options
+     */
+    public function __construct($id, $name, $price, array $options = [])
     {
         if (empty($id)) {
             throw new InvalidArgumentException('Please supply a valid identifier.');
         }
-
         if (empty($name)) {
             throw new InvalidArgumentException('Please supply a valid name.');
+        }
+        if (! is_numeric($price)) {
+            throw new InvalidArgumentException('Please supply a valid price.');
         }
 
         $this->id = $id;
         $this->name = $name;
-        $this->price = $price;
+        $this->price = floatval($price);
         $this->options = new CartItemOptions($options);
         $this->rowId = $this->generateRowId($id, $options);
         $this->created_at = Carbon::now();
         $this->updated_at = Carbon::now();
     }
 
+    /**
+     * Returns the formatted price without TAX.
+     */
     public function price(): string
     {
         return format_price($this->price);
     }
 
+    /**
+     * Returns the formatted price with TAX.
+     */
     public function priceTax(): string
     {
         return format_price($this->priceTax);
     }
 
-    public function subtotal(): string
+    /**
+     * Returns the formatted subtotal.
+     * Subtotal is price for whole CartItem without TAX
+     *
+     * @return string
+     */
+    public function subtotal()
     {
         return format_price($this->subtotal);
     }
 
-    public function total(): string
+    /**
+     * Returns the formatted total.
+     * Total is price for whole CartItem with TAX
+     *
+     * @return string
+     */
+    public function total()
     {
         return format_price($this->total);
     }
 
-    public function tax(): string
+    /**
+     * Returns the formatted tax.
+     *
+     * @return string
+     */
+    public function tax()
     {
         return format_price($this->tax);
     }
 
-    public function taxTotal(): string
+    /**
+     * Returns the formatted tax.
+     *
+     * @return string
+     */
+    public function taxTotal()
     {
         return format_price($this->taxTotal);
     }
 
-    public function setQuantity(int|float $qty): void
+    /**
+     * Set the quantity for this cart item.
+     *
+     * @param int|float $qty
+     */
+    public function setQuantity($qty)
     {
         if (empty($qty) || ! is_numeric($qty)) {
             throw new InvalidArgumentException('Please supply a valid quantity.');
@@ -101,7 +165,13 @@ class CartItem implements Arrayable, Jsonable
         $this->qty = $qty;
     }
 
-    public function updateFromBuyable(Buyable $item): void
+    /**
+     * Update the cart item from a Buyable.
+     *
+     * @param Buyable $item
+     * @return void
+     */
+    public function updateFromBuyable(Buyable $item)
     {
         $this->id = $item->getBuyableIdentifier($this->options);
         $this->name = $item->getBuyableDescription($this->options);
@@ -109,10 +179,16 @@ class CartItem implements Arrayable, Jsonable
         $this->priceTax = $this->price + $this->tax;
     }
 
-    public function updateFromArray(array $attributes): void
+    /**
+     * Update the cart item from an array.
+     *
+     * @param array $attributes
+     * @return void
+     */
+    public function updateFromArray(array $attributes)
     {
         $this->id = Arr::get($attributes, 'id', $this->id);
-        $this->qty = Arr::get($attributes, 'qty', $this->qty) ?: 1;
+        $this->qty = Arr::get($attributes, 'qty', $this->qty);
         $this->name = Arr::get($attributes, 'name', $this->name);
         $this->price = Arr::get($attributes, 'price', $this->price);
         $this->priceTax = $this->price + $this->tax;
@@ -121,14 +197,26 @@ class CartItem implements Arrayable, Jsonable
         $this->rowId = $this->generateRowId($this->id, $this->options->all());
     }
 
-    public function associate($model): static
+    /**
+     * Associate the cart item with the given model.
+     *
+     * @param mixed $model
+     * @return \Botble\Ecommerce\Cart\CartItem
+     */
+    public function associate($model)
     {
         $this->associatedModel = is_string($model) ? $model : get_class($model);
 
         return $this;
     }
 
-    public function setTaxRate(float $taxRate): static
+    /**
+     * Set the tax rate.
+     *
+     * @param int|float $taxRate
+     * @return \Botble\Ecommerce\Cart\CartItem
+     */
+    public function setTaxRate($taxRate)
     {
         $this->taxRate = $taxRate;
 
@@ -140,11 +228,12 @@ class CartItem implements Arrayable, Jsonable
         return $this->taxRate;
     }
 
-    public function __set($name, $value)
-    {
-        $this->{$name} = $value;
-    }
-
+    /**
+     * Get an attribute from the cart item or get the associated model.
+     *
+     * @param string $attribute
+     * @return mixed
+     */
     public function __get($attribute)
     {
         if (property_exists($this, $attribute)) {
@@ -164,7 +253,7 @@ class CartItem implements Arrayable, Jsonable
         }
 
         if ($attribute === 'total') {
-            return $this->qty * $this->price + $this->tax;
+            return $this->qty * ($this->priceTax);
         }
 
         if ($attribute === 'tax') {
@@ -190,7 +279,14 @@ class CartItem implements Arrayable, Jsonable
         return null;
     }
 
-    public static function fromBuyable(Buyable $item, array $options = []): self
+    /**
+     * Create a new instance from a Buyable.
+     *
+     * @param Buyable $item
+     * @param array $options
+     * @return \Botble\Ecommerce\Cart\CartItem
+     */
+    public static function fromBuyable(Buyable $item, array $options = [])
     {
         return new self(
             $item->getBuyableIdentifier($options),
@@ -200,25 +296,50 @@ class CartItem implements Arrayable, Jsonable
         );
     }
 
-    public static function fromArray(array $attributes): self
+    /**
+     * Create a new instance from the given array.
+     *
+     * @param array $attributes
+     * @return \Botble\Ecommerce\Cart\CartItem
+     */
+    public static function fromArray(array $attributes)
     {
         $options = Arr::get($attributes, 'options', []);
 
         return new self($attributes['id'], $attributes['name'], $attributes['price'], $options);
     }
 
-    public static function fromAttributes(int|string|null $id, string $name, float $price, array $options = []): self
+    /**
+     * Create a new instance from the given attributes.
+     *
+     * @param int|string $id
+     * @param string $name
+     * @param float $price
+     * @param array $options
+     * @return \Botble\Ecommerce\Cart\CartItem
+     */
+    public static function fromAttributes($id, $name, $price, array $options = [])
     {
         return new self($id, $name, $price, $options);
     }
 
-    protected function generateRowId(int|string|null $id, array $options): string
+    /**
+     * Generate a unique id for the cart item.
+     *
+     * @param string $id
+     * @param array $options
+     * @return string
+     */
+    protected function generateRowId($id, array $options): string
     {
         ksort($options);
 
         return md5($id . serialize($options));
     }
 
+    /**
+     * Get the instance as an array.
+     */
     public function toArray(): array
     {
         return [
@@ -234,6 +355,11 @@ class CartItem implements Arrayable, Jsonable
         ];
     }
 
+    /**
+     * Convert the object to its JSON representation.
+     *
+     * @param int $options
+     */
     public function toJson($options = 0): string
     {
         return json_encode($this->toArray(), $options);

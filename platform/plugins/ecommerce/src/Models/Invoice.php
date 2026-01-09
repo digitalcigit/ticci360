@@ -5,7 +5,6 @@ namespace Botble\Ecommerce\Models;
 use Botble\Base\Models\BaseModel;
 use Botble\Ecommerce\Enums\InvoiceStatusEnum;
 use Botble\Payment\Models\Payment;
-use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
@@ -28,7 +27,6 @@ class Invoice extends BaseModel
         'sub_total',
         'tax_amount',
         'shipping_amount',
-        'payment_fee',
         'discount_amount',
         'amount',
         'payment_id',
@@ -45,21 +43,18 @@ class Invoice extends BaseModel
         'sub_total' => 'float',
         'tax_amount' => 'float',
         'shipping_amount' => 'float',
-        'payment_fee' => 'float',
         'discount_amount' => 'float',
         'amount' => 'float',
         'status' => InvoiceStatusEnum::class,
         'paid_at' => 'datetime',
     ];
 
-    protected static function booted(): void
+    protected static function boot(): void
     {
-        static::creating(function (Invoice $invoice): void {
-            $invoice->code = static::generateUniqueCode();
-        });
+        parent::boot();
 
-        static::deleted(function (Invoice $invoice): void {
-            $invoice->items()->delete();
+        static::creating(function (Invoice $invoice) {
+            $invoice->code = static::generateUniqueCode();
         });
     }
 
@@ -89,24 +84,5 @@ class Invoice extends BaseModel
         } while (static::query()->where('code', $code)->exists());
 
         return $code;
-    }
-
-    protected function taxClassesName(): Attribute
-    {
-        return Attribute::get(function () {
-            $taxes = [];
-
-            foreach ($this->items as $invoiceItem) {
-                if (! $invoiceItem->tax_amount || empty($invoiceItem->options['taxClasses'])) {
-                    continue;
-                }
-
-                foreach ($invoiceItem->options['taxClasses'] as $taxName => $taxRate) {
-                    $taxes[] = $taxName . ' - ' . $taxRate . '%';
-                }
-            }
-
-            return implode(', ', array_unique($taxes));
-        });
     }
 }

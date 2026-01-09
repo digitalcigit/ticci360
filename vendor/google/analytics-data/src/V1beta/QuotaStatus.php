@@ -18,15 +18,15 @@ class QuotaStatus extends \Google\Protobuf\Internal\Message
     /**
      * Quota consumed by this request.
      *
-     * Generated from protobuf field <code>optional int32 consumed = 1;</code>
+     * Generated from protobuf field <code>int32 consumed = 1;</code>
      */
-    protected $consumed = null;
+    private $consumed = 0;
     /**
      * Quota remaining after this request.
      *
-     * Generated from protobuf field <code>optional int32 remaining = 2;</code>
+     * Generated from protobuf field <code>int32 remaining = 2;</code>
      */
-    protected $remaining = null;
+    private $remaining = 0;
 
     /**
      * Constructor.
@@ -48,28 +48,18 @@ class QuotaStatus extends \Google\Protobuf\Internal\Message
     /**
      * Quota consumed by this request.
      *
-     * Generated from protobuf field <code>optional int32 consumed = 1;</code>
+     * Generated from protobuf field <code>int32 consumed = 1;</code>
      * @return int
      */
     public function getConsumed()
     {
-        return isset($this->consumed) ? $this->consumed : 0;
-    }
-
-    public function hasConsumed()
-    {
-        return isset($this->consumed);
-    }
-
-    public function clearConsumed()
-    {
-        unset($this->consumed);
+        return $this->consumed;
     }
 
     /**
      * Quota consumed by this request.
      *
-     * Generated from protobuf field <code>optional int32 consumed = 1;</code>
+     * Generated from protobuf field <code>int32 consumed = 1;</code>
      * @param int $var
      * @return $this
      */
@@ -84,28 +74,18 @@ class QuotaStatus extends \Google\Protobuf\Internal\Message
     /**
      * Quota remaining after this request.
      *
-     * Generated from protobuf field <code>optional int32 remaining = 2;</code>
+     * Generated from protobuf field <code>int32 remaining = 2;</code>
      * @return int
      */
     public function getRemaining()
     {
-        return isset($this->remaining) ? $this->remaining : 0;
-    }
-
-    public function hasRemaining()
-    {
-        return isset($this->remaining);
-    }
-
-    public function clearRemaining()
-    {
-        unset($this->remaining);
+        return $this->remaining;
     }
 
     /**
      * Quota remaining after this request.
      *
-     * Generated from protobuf field <code>optional int32 remaining = 2;</code>
+     * Generated from protobuf field <code>int32 remaining = 2;</code>
      * @param int $var
      * @return $this
      */

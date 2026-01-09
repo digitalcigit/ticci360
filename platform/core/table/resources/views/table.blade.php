@@ -1,5 +1,4 @@
-@extends($layout ?? BaseHelper::getAdminMasterLayoutTemplate())
-
+@extends(BaseHelper::getAdminMasterLayoutTemplate())
 @section('content')
     @include('core/table::base-table')
-@endsection
+@stop

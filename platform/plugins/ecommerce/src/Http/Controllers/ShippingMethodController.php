@@ -4,36 +4,71 @@ namespace Botble\Ecommerce\Http\Controllers;
 
 use Botble\Base\Events\CreatedContentEvent;
 use Botble\Base\Events\UpdatedContentEvent;
-use Botble\Base\Http\Actions\DeleteResourceAction;
+use Botble\Base\Facades\Assets;
+use Botble\Base\Events\DeletedContentEvent;
+use Botble\Base\Facades\PageTitle;
 use Botble\Base\Http\Controllers\BaseController;
+use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Ecommerce\Enums\ShippingRuleTypeEnum;
 use Botble\Ecommerce\Http\Requests\AddShippingRegionRequest;
 use Botble\Ecommerce\Http\Requests\ShippingRuleRequest;
-use Botble\Ecommerce\Models\Shipping;
-use Botble\Ecommerce\Models\ShippingRule;
-use Botble\Ecommerce\Models\ShippingRuleItem;
+use Botble\Ecommerce\Repositories\Interfaces\OrderInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ShippingInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ShippingRuleInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ShippingRuleItemInterface;
+use Botble\Ecommerce\Facades\EcommerceHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 
 class ShippingMethodController extends BaseController
 {
-    public function postCreateRegion(AddShippingRegionRequest $request)
+    public function __construct(
+        protected ShippingInterface $shippingRepository,
+        protected ShippingRuleInterface $shippingRuleRepository,
+        protected OrderInterface $orderRepository,
+        protected ShippingRuleItemInterface $shippingRuleItemRepository
+    ) {
+    }
+
+    public function index()
+    {
+        PageTitle::setTitle(trans('plugins/ecommerce::shipping.shipping_methods'));
+
+        if (EcommerceHelper::loadCountriesStatesCitiesFromPluginLocation()) {
+            Assets::addScriptsDirectly('vendor/core/plugins/location/js/location.js');
+        }
+
+        Assets::addStylesDirectly(['vendor/core/plugins/ecommerce/css/ecommerce.css'])
+            ->addScriptsDirectly(['vendor/core/plugins/ecommerce/js/shipping.js'])
+            ->addScripts(['input-mask']);
+
+        $shipping = $this->shippingRepository
+            ->allBy([], [
+                'rules' => function ($query) {
+                    $query->withCount(['items']);
+                },
+            ]);
+
+        return view('plugins/ecommerce::shipping.methods', compact('shipping'));
+    }
+
+    public function postCreateRegion(AddShippingRegionRequest $request, BaseHttpResponse $response)
     {
         $country = $request->input('region');
 
-        $shipping = Shipping::query()->create([
+        $shipping = $this->shippingRepository->createOrUpdate([
             'title' => $country ?: trans('plugins/ecommerce::shipping.all'),
             'country' => $country,
         ]);
 
         if (! $shipping) {
-            return $this
-                ->httpResponse()
+            return $response
                 ->setError()
                 ->setMessage(trans('plugins/ecommerce::shipping.error_when_adding_new_region'));
         }
 
-        $default = Shipping::query()
+        $default = $this->shippingRepository
+            ->getModel()
             ->whereNull('country')
             ->join('ec_shipping_rules', 'ec_shipping_rules.shipping_id', 'ec_shipping.id')
             ->select(['ec_shipping_rules.from', 'ec_shipping_rules.to', 'ec_shipping_rules.price'])
@@ -48,7 +83,7 @@ class ShippingMethodController extends BaseController
             $price = $default->price;
         }
 
-        ShippingRule::query()->create([
+        $this->shippingRuleRepository->createOrUpdate([
             'name' => trans('plugins/ecommerce::shipping.delivery'),
             'type' => ShippingRuleTypeEnum::BASED_ON_PRICE,
             'price' => $price,
@@ -57,63 +92,56 @@ class ShippingMethodController extends BaseController
             'shipping_id' => $shipping->id,
         ]);
 
-        return $this
-            ->httpResponse()
-            ->withCreatedSuccessMessage();
+        return $response->setMessage(trans('core/base::notices.create_success_message'));
     }
 
-    public function deleteRegion(Request $request)
+    public function deleteRegion(Request $request, BaseHttpResponse $response)
     {
-        /**
-         * @var Shipping $shipping
-         */
-        $shipping = Shipping::query()->findOrFail($request->input('id'));
+        $shipping = $this->shippingRepository->findOrFail($request->input('id'));
 
-        return DeleteResourceAction::make($shipping);
+        $this->shippingRepository->delete($shipping);
+        $this->shippingRuleRepository->deleteBy(['shipping_id' => $shipping->id]);
+
+        event(new DeletedContentEvent(SHIPPING_MODULE_SCREEN_NAME, $request, $shipping));
+
+        return $response->setMessage(trans('core/base::notices.delete_success_message'));
     }
 
-    public function deleteRegionRule(Request $request)
+    public function deleteRegionRule(Request $request, BaseHttpResponse $response)
     {
-        $rule = ShippingRule::query()->findOrFail($request->input('id'));
-        $rule->delete();
+        $rule = $this->shippingRuleRepository->findOrFail($request->input('id'));
+        $this->shippingRuleRepository->delete($rule);
 
-        $ruleCount = ShippingRule::query()->where('shipping_id', $rule->shipping_id)->count();
+        $ruleCount = $this->shippingRuleRepository->count(['shipping_id' => $rule->shipping_id]);
 
         if ($ruleCount === 0) {
-            /**
-             * @var Shipping $shipping
-             */
-            $shipping = Shipping::query()->findOrFail($rule->shipping_id);
-
-            $shipping->delete();
+            $shipping = $this->shippingRepository->findOrFail($rule->shipping_id);
+            $this->shippingRepository->delete($shipping);
+            event(new DeletedContentEvent(SHIPPING_MODULE_SCREEN_NAME, $request, $shipping));
         }
 
-        return $this
-            ->httpResponse()
-            ->setMessage(trans('core/base::notices.delete_success_message'))->setData([
+        return $response->setMessage(trans('core/base::notices.delete_success_message'))->setData([
             'count' => $ruleCount,
             'shipping_id' => $rule->shipping_id,
         ]);
     }
 
-    public function putUpdateRule(int|string $id, ShippingRuleRequest $request)
+    public function putUpdateRule(int|string $id, ShippingRuleRequest $request, BaseHttpResponse $response)
     {
-        /**
-         * @var ShippingRule $rule
-         */
-        $rule = ShippingRule::query()->findOrFail($id);
+        $rule = $this->shippingRuleRepository->findOrFail($id);
 
         $rule->fill($request->input());
-        $rule->save();
+
+        $rule = $this->shippingRuleRepository->createOrUpdate($rule);
 
         event(new UpdatedContentEvent(SHIPPING_RULE_ITEM_MODULE_SCREEN_NAME, $request, $rule));
 
-        if (! in_array($rule->type, [ShippingRuleTypeEnum::BASED_ON_ZIPCODE, ShippingRuleTypeEnum::BASED_ON_LOCATION])) {
-            $rule->items()->delete();
+        if ($rule->type != ShippingRuleTypeEnum::BASED_ON_ZIPCODE) {
+            $this->shippingRuleItemRepository->deleteBy(['shipping_rule_id' => $id]);
 
             foreach ($request->input('shipping_rule_items', []) as $key => $item) {
                 if (Arr::get($item, 'is_enabled', 0) == 0 || Arr::get($item, 'adjustment_price', 0) != 0) {
-                    ShippingRuleItem::query()->create([
+                    $this->shippingRuleItemRepository->createOrUpdate([
                         'shipping_rule_id' => $id,
                         'city' => $key,
                         'adjustment_price' => Arr::get($item, 'adjustment_price', 0),
@@ -125,35 +153,31 @@ class ShippingMethodController extends BaseController
 
         $data = view('plugins/ecommerce::shipping.rules.item', compact('rule'))->render();
 
-        return $this
-            ->httpResponse()
-            ->setData([
+        return $response->setData([
                 'rule' => $rule->toArray(),
                 'html' => $data,
             ])
-            ->withUpdatedSuccessMessage();
+            ->setMessage(trans('core/base::notices.update_success_message'));
     }
 
-    public function postCreateRule(ShippingRuleRequest $request)
+    public function postCreateRule(ShippingRuleRequest $request, BaseHttpResponse $response)
     {
-        $shipping = Shipping::query()->findOrFail($request->input('shipping_id'));
+        $shipping = $this->shippingRepository->findOrFail($request->input('shipping_id'));
 
         if (! $shipping->country && in_array($request->input('type'), [ShippingRuleTypeEnum::BASED_ON_ZIPCODE, ShippingRuleTypeEnum::BASED_ON_LOCATION])) {
-            return $this
-                ->httpResponse()
+            return $response
                 ->setError()
                 ->setMessage(trans('plugins/ecommerce::shipping.rule.cannot_create_rule_type_for_this_location', ['type' => ShippingRuleTypeEnum::getLabel($request->input('type'))]));
         }
 
-        $rule = ShippingRule::query()->create($request->input());
+        $rule = $this->shippingRuleRepository->createOrUpdate($request->input());
 
         event(new CreatedContentEvent(SHIPPING_RULE_ITEM_MODULE_SCREEN_NAME, $request, $rule));
 
         $data = view('plugins/ecommerce::shipping.rules.item', compact('rule'))->render();
 
-        return $this
-            ->httpResponse()
-            ->withCreatedSuccessMessage()
+        return $response
+            ->setMessage(trans('core/base::notices.create_success_message'))
             ->setData([
                 'rule' => $rule->toArray(),
                 'html' => $data,

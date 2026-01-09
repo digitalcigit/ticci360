@@ -3,69 +3,94 @@
 namespace Botble\AuditLog\Tables;
 
 use Botble\AuditLog\Models\AuditHistory;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
+use Botble\AuditLog\Repositories\Interfaces\AuditLogInterface;
 use Botble\Table\Abstracts\TableAbstract;
-use Botble\Table\Actions\DeleteAction;
-use Botble\Table\BulkActions\DeleteBulkAction;
-use Botble\Table\Columns\FormattedColumn;
-use Botble\Table\Columns\IdColumn;
-use Botble\Table\HeaderActions\HeaderAction;
+use Botble\Base\Facades\Html;
+use Illuminate\Contracts\Routing\UrlGenerator;
+use Botble\Table\DataTables;
 
 class AuditLogTable extends TableAbstract
 {
-    public function setup(): void
+    protected $hasActions = true;
+
+    protected $hasFilter = false;
+
+    public function __construct(DataTables $table, UrlGenerator $urlGenerator, AuditLogInterface $auditLogRepository)
     {
-        $this
-            ->model(AuditHistory::class)
-            ->setView('plugins/audit-log::table')
-            ->addColumns([
-                IdColumn::make(),
-                FormattedColumn::make('action')
-                    ->title(trans('plugins/audit-log::history.action'))
-                    ->alignStart()
-                    ->renderUsing(function (FormattedColumn $column) {
-                        if (! class_exists($column->getItem()->user_type)) {
-                            return trans('plugins/audit-log::history.activity_has_been_deleted');
-                        }
+        parent::__construct($table, $urlGenerator);
 
-                        return view('plugins/audit-log::activity-line', ['history' => $column->getItem()])->render();
-                    }),
-            ])
-            ->addHeaderActions([
-                HeaderAction::make('empty')
-                    ->label(trans('plugins/audit-log::history.delete_all'))
-                    ->icon('ti ti-trash')
-                    ->url('javascript:void(0)')
-                    ->attributes(['class' => 'empty-activities-logs-button']),
-            ])
-            ->addAction(DeleteAction::make()->route('audit-log.destroy'))
-            ->addBulkAction(DeleteBulkAction::make()->permission('audit-log.destroy')->silent())
-            ->onAjax(function (AuditLogTable $table) {
-                return $table->toJson(
-                    $table
-                        ->table
-                        ->eloquent($table->query())
-                        ->filter(function ($query) {
-                            if ($keyword = $this->request->input('search.value')) {
-                                $keyword = '%' . $keyword . '%';
+        $this->repository = $auditLogRepository;
 
-                                return $query
-                                    ->where('action', 'LIKE', $keyword)
-                                    ->orWhere('module', 'LIKE', $keyword)
-                                    ->orWhere('type', 'LIKE', $keyword)
-                                    ->orWhere('ip_address', 'LIKE', $keyword)
-                                    ->orWhere('user_agent', 'LIKE', $keyword)
-                                    ->orWhere('reference_name', 'LIKE', $keyword)
-                                    ->orWhereHas('user', function ($subQuery) use ($keyword) {
-                                        return $subQuery
-                                            ->where('first_name', 'LIKE', $keyword)
-                                            ->orWhere('last_name', 'LIKE', $keyword)
-                                            ->orWhereRaw('concat(first_name, " ", last_name) LIKE ?', $keyword);
-                                    });
-                            }
+        if (! Auth::user()->hasPermission('audit-log.destroy')) {
+            $this->hasOperations = false;
+            $this->hasActions = false;
+        }
+    }
 
-                            return $query;
-                        })
-                );
+    public function ajax(): JsonResponse
+    {
+        $data = $this->table
+            ->eloquent($this->query())
+            ->editColumn('checkbox', function (AuditHistory $item) {
+                return $this->getCheckbox($item->id);
+            })
+            ->editColumn('action', function (AuditHistory $item) {
+                return view('plugins/audit-log::activity-line', ['history' => $item])->render();
+            })
+            ->addColumn('operations', function (AuditHistory $item) {
+                return $this->getOperations(null, 'audit-log.destroy', $item);
             });
+
+        return $this->toJson($data);
+    }
+
+    public function query(): Relation|Builder|QueryBuilder
+    {
+        $query = $this->repository->getModel()
+            ->with(['user'])
+            ->select(['*']);
+
+        return $this->applyScopes($query);
+    }
+
+    public function columns(): array
+    {
+        return [
+            'id' => [
+                'name' => 'id',
+                'title' => trans('core/base::tables.id'),
+                'width' => '20px',
+            ],
+            'action' => [
+                'name' => 'action',
+                'title' => trans('plugins/audit-log::history.action'),
+                'class' => 'text-start',
+            ],
+            'user_agent' => [
+                'name' => 'user_agent',
+                'title' => trans('plugins/audit-log::history.user_agent'),
+                'class' => 'text-start',
+            ],
+        ];
+    }
+
+    public function buttons(): array
+    {
+        return [
+            'empty' => [
+                'link' => route('audit-log.empty'),
+                'text' => Html::tag('i', '', ['class' => 'fa fa-trash'])->toHtml() . ' ' . trans('plugins/audit-log::history.delete_all'),
+            ],
+        ];
+    }
+
+    public function bulkActions(): array
+    {
+        return $this->addDeleteAction(route('audit-log.deletes'), 'audit-log.destroy', parent::bulkActions());
     }
 }

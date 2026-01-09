@@ -7,22 +7,21 @@ return [
         'subscriber_email' => [
             'title' => 'plugins/newsletter::newsletter.settings.email.templates.to_user.title',
             'description' => 'plugins/newsletter::newsletter.settings.email.templates.to_user.description',
-            'subject' => 'plugins/newsletter::newsletter.settings.email.templates.to_user.subject',
+            'subject' => '{{ site_title }}: Subscription Confirmed!',
             'can_off' => true,
             'variables' => [
-                'newsletter_name' => 'plugins/newsletter::newsletter.settings.email.templates.to_user.newsletter_name',
-                'newsletter_email' => 'plugins/newsletter::newsletter.settings.email.templates.to_user.newsletter_email',
-                'newsletter_unsubscribe_link' => 'plugins/newsletter::newsletter.settings.email.templates.to_user.newsletter_unsubscribe_link',
-                'newsletter_unsubscribe_url' => 'plugins/newsletter::newsletter.settings.email.templates.to_user.newsletter_unsubscribe_url',
+                'newsletter_name' => 'Full name of user who subscribe newsletter',
+                'newsletter_email' => 'Email of user who subscribe newsletter',
+                'newsletter_unsubscribe_link' => 'Link for unsubscribe newsletter',
             ],
         ],
         'admin_email' => [
             'title' => 'plugins/newsletter::newsletter.settings.email.templates.to_admin.title',
             'description' => 'plugins/newsletter::newsletter.settings.email.templates.to_admin.description',
-            'subject' => 'plugins/newsletter::newsletter.settings.email.templates.to_admin.subject',
+            'subject' => 'New user subscribed your newsletter',
             'can_off' => true,
             'variables' => [
-                'newsletter_email' => 'plugins/newsletter::newsletter.settings.email.templates.to_admin.newsletter_email',
+                'newsletter_email' => 'Email of user who subscribe newsletter',
             ],
         ],
     ],

@@ -1,7 +1,6 @@
 <?php
 
 return [
-    'search' => 'Search...',
     'enabled' => 'Enabled',
     'deactivated' => 'Deactivated',
     'activated' => 'Activated',
@@ -10,9 +9,7 @@ return [
     'author' => 'By',
     'update_plugin_status_success' => 'Update plugin successfully',
     'plugins' => 'Plugins',
-    'installed_plugins' => 'Installed Plugins',
-    'add_new_plugin' => 'Add New Plugin',
-    'missing_required_plugins' => 'Please activate plugin(s): :plugins before activating this plugin!',
+    'missing_required_plugins' => 'Please activate plugin(s): :plugins before activate this plugin!',
     'remove' => 'Remove',
     'remove_plugin_success' => 'Remove plugin successfully!',
     'remove_plugin' => 'Remove plugin',
@@ -40,13 +37,4 @@ return [
     'install' => 'Install now',
     'install_plugin' => 'Install Plugin',
     'minimum_core_version_not_met' => 'Plugin :plugin requires :minimum_core_version version of core, but your core version is :current_core_version. Please upgrade your core to use this plugin!',
-    'required_by_other_plugins' => 'Cannot deactivate plugin :plugin because it is required by other plugin(s): :required_by',
-    'enums' => [
-        'plugin_filter_status' => [
-            'all' => 'All',
-            'activated' => 'Activated',
-            'not-activated' => 'Not Activated',
-            'updates-available' => 'Updates Available',
-        ],
-    ],
 ];

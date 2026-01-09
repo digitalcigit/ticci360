@@ -3,38 +3,30 @@
 namespace Botble\Analytics\Providers;
 
 use Botble\Base\Facades\Assets;
-use Botble\Base\Supports\ServiceProvider;
-use Botble\Dashboard\Events\RenderingDashboardWidgets;
 use Botble\Dashboard\Supports\DashboardWidgetInstance;
-use Botble\PluginManagement\Events\RenderingPluginListingPage;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\ServiceProvider;
 
 class HookServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
-        $this->app['events']->listen(RenderingDashboardWidgets::class, function (): void {
-            if (
-                ! config('plugins.analytics.general.enabled_dashboard_widgets')
-                || setting('analytics_dashboard_widgets', '0') != '1'
-            ) {
-                return;
-            }
+        if (! config('plugins.analytics.general.enabled_dashboard_widgets')) {
+            return;
+        }
 
-            add_action(DASHBOARD_ACTION_REGISTER_SCRIPTS, [$this, 'registerScripts'], 18);
-            add_filter(DASHBOARD_FILTER_ADMIN_LIST, [$this, 'addAnalyticsWidgets'], 18, 2);
-        });
-
-        $this->app['events']->listen(RenderingPluginListingPage::class, function (): void {
-            add_filter('core_layout_before_content', [$this, 'showMissingLibraryWarning'], 99);
-        });
+        add_action(DASHBOARD_ACTION_REGISTER_SCRIPTS, [$this, 'registerScripts'], 18);
+        add_filter(DASHBOARD_FILTER_ADMIN_LIST, [$this, 'addAnalyticsWidgets'], 18, 2);
+        add_filter(BASE_FILTER_AFTER_SETTING_CONTENT, [$this, 'addAnalyticsSetting'], 99);
+        add_filter('cms_settings_validation_rules', [$this, 'addAnalyticsSettingRules'], 99);
+        add_filter('core_layout_before_content', [$this, 'showMissingLibraryWarning'], 99);
     }
 
     public function registerScripts(): void
     {
-        if (Auth::guard()->user()->hasAnyPermission([
+        if (Auth::user()->hasAnyPermission([
             'analytics.general',
             'analytics.page',
             'analytics.browser',
@@ -57,36 +49,39 @@ class HookServiceProvider extends ServiceProvider
     {
         $dashboardWidgetInstance = new DashboardWidgetInstance();
 
-        $dashboardWidgetInstance
+        $widgets = $dashboardWidgetInstance
             ->setPermission('analytics.general')
             ->setKey('widget_analytics_general')
             ->setTitle(trans('plugins/analytics::analytics.widget_analytics_general'))
             ->setIcon('fas fa-chart-line')
-            ->setColor('warning')
+            ->setColor('#f2784b')
             ->setRoute(route('analytics.general'))
+            ->setBodyClass('row')
             ->setHasLoadCallback(true)
             ->setIsEqualHeight(false)
             ->setSettings(['show_predefined_ranges' => true])
             ->init($widgets, $widgetSettings);
 
-        $dashboardWidgetInstance
+        $widgets = $dashboardWidgetInstance
             ->setPermission('analytics.page')
             ->setKey('widget_analytics_page')
             ->setTitle(trans('plugins/analytics::analytics.widget_analytics_page'))
-            ->setIcon('ti ti-news')
-            ->setColor('info')
+            ->setIcon('far fa-newspaper')
+            ->setColor('#3598dc')
             ->setRoute(route('analytics.page'))
+            ->setBodyClass('scroll-table')
             ->setColumn('col-md-6 col-sm-6')
             ->setSettings(['show_predefined_ranges' => true])
             ->init($widgets, $widgetSettings);
 
-        $dashboardWidgetInstance
+        $widgets = $dashboardWidgetInstance
             ->setPermission('analytics.browser')
             ->setKey('widget_analytics_browser')
             ->setTitle(trans('plugins/analytics::analytics.widget_analytics_browser'))
             ->setIcon('fab fa-safari')
-            ->setColor('purple')
+            ->setColor('#8e44ad')
             ->setRoute(route('analytics.browser'))
+            ->setBodyClass('scroll-table')
             ->setColumn('col-md-6 col-sm-6')
             ->setSettings(['show_predefined_ranges' => true])
             ->init($widgets, $widgetSettings);
@@ -96,16 +91,31 @@ class HookServiceProvider extends ServiceProvider
             ->setKey('widget_analytics_referrer')
             ->setTitle(trans('plugins/analytics::analytics.widget_analytics_referrer'))
             ->setIcon('fas fa-user-friends')
-            ->setColor('info')
+            ->setColor('#3598dc')
             ->setRoute(route('analytics.referrer'))
+            ->setBodyClass('scroll-table')
             ->setColumn('col-md-6 col-sm-6')
             ->setSettings(['show_predefined_ranges' => true])
             ->init($widgets, $widgetSettings);
     }
 
-    public function showMissingLibraryWarning(?string $html): ?string
+    public function addAnalyticsSetting(string|null $data = null): string
     {
-        if (! Route::is('plugins.index') || class_exists('Google\ApiCore\Call')) {
+        return $data . view('plugins/analytics::setting')->render();
+    }
+
+    public function addAnalyticsSettingRules(array $rules): array
+    {
+        $rules['google_analytics'] = 'nullable|string|starts_with:G-';
+        $rules['analytics_property_id'] = 'nullable|string|min:9|max:9';
+        $rules['analytics_service_account_credentials'] = 'nullable|json';
+
+        return $rules;
+    }
+
+    public function showMissingLibraryWarning(string|null $html): string|null
+    {
+        if (! Route::is('plugins.index') || class_exists('Google\Service\Analytics\GaData')) {
             return $html;
         }
 

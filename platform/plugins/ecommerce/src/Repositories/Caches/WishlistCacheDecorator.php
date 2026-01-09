@@ -2,11 +2,9 @@
 
 namespace Botble\Ecommerce\Repositories\Caches;
 
-use Botble\Ecommerce\Repositories\Eloquent\WishlistRepository;
+use Botble\Ecommerce\Repositories\Interfaces\WishlistInterface;
+use Botble\Support\Repositories\Caches\CacheAbstractDecorator;
 
-/**
- * @deprecated
- */
-class WishlistCacheDecorator extends WishlistRepository
+class WishlistCacheDecorator extends CacheAbstractDecorator implements WishlistInterface
 {
 }

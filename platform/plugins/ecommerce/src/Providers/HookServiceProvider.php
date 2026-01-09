@@ -2,106 +2,70 @@
 
 namespace Botble\Ecommerce\Providers;
 
-use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Base\Facades\AdminHelper;
 use Botble\Base\Facades\Assets;
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Facades\EmailHandler;
-use Botble\Base\Facades\Form;
-use Botble\Base\Facades\Html;
-use Botble\Base\Facades\MetaBox;
-use Botble\Base\Forms\FieldOptions\NumberFieldOption;
-use Botble\Base\Forms\FieldOptions\OnOffFieldOption;
-use Botble\Base\Forms\Fields\NumberField;
-use Botble\Base\Forms\Fields\OnOffCheckboxField;
-use Botble\Base\Http\Responses\BaseHttpResponse;
-use Botble\Base\Rules\OnOffRule;
+use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Base\Supports\TwigCompiler;
-use Botble\Dashboard\Events\RenderingDashboardWidgets;
 use Botble\Dashboard\Supports\DashboardWidgetInstance;
-use Botble\DataSynchronize\Importer\Importer;
-use Botble\Ecommerce\AdsTracking\FacebookPixel;
-use Botble\Ecommerce\AdsTracking\GoogleTagManager;
-use Botble\Ecommerce\Cart\CartItem;
 use Botble\Ecommerce\Enums\OrderReturnStatusEnum;
-use Botble\Ecommerce\Facades\Cart;
 use Botble\Ecommerce\Facades\Discount;
-use Botble\Ecommerce\Facades\EcommerceHelper;
 use Botble\Ecommerce\Facades\FlashSale as FlashSaleFacade;
-use Botble\Ecommerce\Facades\InvoiceHelper;
-use Botble\Ecommerce\Facades\OrderHelper;
-use Botble\Ecommerce\Importers\ProductImporter;
 use Botble\Ecommerce\Models\Brand;
 use Botble\Ecommerce\Models\Customer;
 use Botble\Ecommerce\Models\FlashSale;
 use Botble\Ecommerce\Models\Invoice;
-use Botble\Ecommerce\Models\Order;
-use Botble\Ecommerce\Models\OrderReturn;
 use Botble\Ecommerce\Models\Product;
 use Botble\Ecommerce\Models\ProductCategory;
-use Botble\Ecommerce\Models\Review;
+use Botble\Ecommerce\Repositories\Interfaces\CustomerInterface;
+use Botble\Ecommerce\Repositories\Interfaces\OrderInterface;
+use Botble\Ecommerce\Repositories\Interfaces\OrderReturnInterface;
 use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
-use Botble\Ecommerce\Services\HandleFrontPages;
+use Botble\Ecommerce\Repositories\Interfaces\ReviewInterface;
+use Botble\Ecommerce\Supports\InvoiceHelper;
 use Botble\Ecommerce\Supports\TwigExtension;
-use Botble\Faq\Contracts\Faq as FaqContract;
-use Botble\Faq\FaqCollection;
-use Botble\Faq\FaqItem;
-use Botble\Faq\FaqSupport;
-use Botble\Language\Facades\Language;
-use Botble\Media\Facades\RvMedia;
-use Botble\Menu\Events\RenderingMenuOptions;
-use Botble\Menu\Facades\Menu;
 use Botble\Payment\Enums\PaymentMethodEnum;
-use Botble\Payment\Enums\PaymentStatusEnum;
-use Botble\Payment\Forms\BankTransferPaymentMethodForm;
-use Botble\Payment\Forms\CODPaymentMethodForm;
-use Botble\Payment\Http\Requests\PaymentMethodRequest;
 use Botble\Payment\Services\Gateways\BankTransferPaymentService;
 use Botble\Payment\Services\Gateways\CodPaymentService;
 use Botble\Payment\Supports\PaymentHelper;
-use Botble\SeoHelper\Facades\SeoHelper;
-use Botble\Shortcode\Compilers\Shortcode;
-use Botble\Shortcode\Forms\ShortcodeForm;
-use Botble\Slug\Models\Slug;
-use Botble\Support\Http\Requests\Request as BaseRequest;
-use Botble\Theme\Events\RenderingThemeOptionSettings;
-use Botble\Theme\Facades\Theme;
-use Botble\Theme\Facades\ThemeOption;
-use Botble\Theme\Http\Requests\UpdateOptionsRequest;
 use Botble\Theme\Supports\ThemeSupport;
 use Carbon\Carbon;
+use Botble\Ecommerce\Facades\Cart;
+use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Base\Facades\EmailHandler;
 use Exception;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\File;
+use Botble\Base\Facades\Form;
+use Botble\Base\Facades\Html;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Routing\Events\RouteMatched;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Str;
+use Botble\Menu\Facades\Menu;
+use Botble\Base\Facades\MetaBox;
+use Botble\Ecommerce\Facades\OrderHelper;
+use Illuminate\Support\Facades\Route;
+use Botble\Media\Facades\RvMedia;
+use Botble\Theme\Facades\Theme;
 
 class HookServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
-        Menu::addMenuOptionModel(Brand::class);
-        Menu::addMenuOptionModel(ProductCategory::class);
-
-        $this->app['events']->listen(RenderingMenuOptions::class, function (): void {
+        if (defined('MENU_ACTION_SIDEBAR_OPTIONS')) {
+            Menu::addMenuOptionModel(Brand::class);
+            Menu::addMenuOptionModel(ProductCategory::class);
             add_action(MENU_ACTION_SIDEBAR_OPTIONS, [$this, 'registerMenuOptions'], 12);
-        });
+        }
 
-        $this->app['events']->listen(RenderingDashboardWidgets::class, function (): void {
-            add_filter(DASHBOARD_FILTER_ADMIN_LIST, [$this, 'registerDashboardWidgets'], 208, 2);
-        });
+        add_filter(DASHBOARD_FILTER_ADMIN_LIST, [$this, 'registerDashboardWidgets'], 208, 2);
 
-        $this->app['events']->listen(RenderingThemeOptionSettings::class, function (): void {
+        if (function_exists('theme_option')) {
             add_action(RENDERING_THEME_OPTIONS_PAGE, [$this, 'addThemeOptions'], 35);
-        });
+        }
 
         add_filter('cms_twig_compiler', function (TwigCompiler $twigCompiler) {
             if (! array_key_exists(TwigExtension::class, $twigCompiler->getExtensions())) {
@@ -111,91 +75,12 @@ class HookServiceProvider extends ServiceProvider
             return $twigCompiler;
         }, 123);
 
-        add_filter('cms_unauthenticated_response', function ($defaultException) {
-            if (is_in_admin(true)) {
-                return $defaultException;
-            }
+        add_filter(BASE_FILTER_TOP_HEADER_LAYOUT, [$this, 'registerTopHeaderNotification'], 121);
+        add_filter(BASE_FILTER_APPEND_MENU_NAME, [$this, 'getPendingOrders'], 130, 2);
+        add_filter(BASE_FILTER_MENU_ITEMS_COUNT, [$this, 'getMenuItemCount'], 120);
+        add_filter(RENDER_PRODUCTS_IN_CHECKOUT_PAGE, [$this, 'renderProductsInCheckoutPage'], 1000);
 
-            return redirect()->guest(route('customer.login'));
-        });
-
-        add_filter('data_synchronize_import_form_before', function (?string $html, Importer $importer): ?string {
-            if (! $importer instanceof ProductImporter) {
-                return $html;
-            }
-
-            return $html . view('plugins/ecommerce::products.partials.product-import-extra-fields')->render();
-        }, 999, 2);
-
-        add_filter('core_request_rules', function (array $rules, Request $request): array {
-            if (! $request instanceof UpdateOptionsRequest) {
-                return $rules;
-            }
-
-            $fields = $request->collect()->filter(function ($value, $key) {
-                return Str::startsWith($key, 'ecommerce_') && Str::endsWith($key, '_page_slug');
-            });
-
-            if (empty($fields)) {
-                return $rules;
-            }
-
-            $locale = null;
-
-            if (
-                is_plugin_active('language')
-                && Language::getRefLang()
-            ) {
-                $locale = Language::getRefLang();
-            }
-
-            $themeName = Theme::getThemeName();
-
-            $themeOptions = collect(ThemeOption::getOptions())
-                ->filter(
-                    function ($value, $key) use ($themeName, $locale) {
-                        $prefix = sprintf('theme-%s-ecommerce', $themeName);
-
-                        if ($locale) {
-                            $prefix = sprintf('theme-%s-%s-ecommerce', $themeName, $locale);
-                        }
-
-                        return Str::startsWith($key, $prefix) && Str::endsWith($key, '_page_slug');
-                    }
-                );
-
-            $rules = $fields->mapWithKeys(fn ($value, $key) => [$key => ['nullable', 'string']])->all();
-
-            foreach ($fields as $key => $value) {
-                $rules[$key][] = function ($attribute, $value, $fail) use ($locale, $fields, $key, $themeOptions): void {
-                    if (
-                        collect($fields)->reject(fn ($v, $k) => $k === $key)->contains($value)
-                        || $themeOptions
-                            ->reject(fn ($value, $k) => $k === ThemeOption::getOptionKey($key, $locale))
-                            ->contains($value)
-                    ) {
-                        $fail(trans('plugins/ecommerce::ecommerce.theme_options.page_slug_already_exists', [
-                            'slug' => $value,
-                        ]));
-                    }
-                };
-            }
-
-            return $rules;
-        }, 999, 2);
-
-        $this->app['events']->listen(RouteMatched::class, function (): void {
-            add_filter(BASE_FILTER_TOP_HEADER_LAYOUT, [$this, 'registerTopHeaderNotification'], 121);
-            add_filter(BASE_FILTER_APPEND_MENU_NAME, [$this, 'getPendingOrders'], 130, 2);
-            add_filter(BASE_FILTER_MENU_ITEMS_COUNT, [$this, 'getMenuItemCount'], 120);
-            add_filter(RENDER_PRODUCTS_IN_CHECKOUT_PAGE, [$this, 'renderProductsInCheckoutPage'], 1000);
-
-            add_filter('cms_unauthenticated_redirect_to', function ($redirectCallback, $request) {
-                return $request->expectsJson() ? null : route('customer.login');
-            }, 15, 2);
-        });
-
-        $this->app['events']->listen(RenderingDashboardWidgets::class, function (): void {
+        $this->app->booted(function () {
             add_filter(DASHBOARD_FILTER_ADMIN_LIST, function ($widgets) {
                 foreach ($widgets as $key => $widget) {
                     if (in_array($key, [
@@ -212,7 +97,7 @@ class HookServiceProvider extends ServiceProvider
             }, 150);
 
             add_filter(DASHBOARD_FILTER_ADMIN_LIST, function ($widgets, $widgetSettings) {
-                $items = Order::query()->where('is_finished', 1)->count();
+                $items = app(OrderInterface::class)->count(['is_finished' => 1]);
 
                 return (new DashboardWidgetInstance())
                     ->setType('stats')
@@ -223,87 +108,57 @@ class HookServiceProvider extends ServiceProvider
                     ->setColor('#32c5d2')
                     ->setStatsTotal($items)
                     ->setRoute(route('orders.index'))
-                    ->setColumn('col-12 col-md-6 col-lg-3')
                     ->init($widgets, $widgetSettings);
             }, 2, 2);
 
             add_filter(DASHBOARD_FILTER_ADMIN_LIST, function ($widgets, $widgetSettings) {
-                $items = Product::query()
-                    ->where('is_variation', false)
-                    ->wherePublished()
-                    ->count();
+                $items = app(ProductInterface::class)->count([
+                    'status' => BaseStatusEnum::PUBLISHED,
+                    'is_variation' => 0,
+                ]);
 
                 return (new DashboardWidgetInstance())
                     ->setType('stats')
                     ->setPermission('products.index')
                     ->setTitle(trans('plugins/ecommerce::products.name'))
                     ->setKey('widget_total_2')
-                    ->setIcon('ti ti-shopping-cart')
+                    ->setIcon('far fa-file-alt')
                     ->setColor('#1280f5')
                     ->setStatsTotal($items)
                     ->setRoute(route('products.index'))
-                    ->setColumn('col-12 col-md-6 col-lg-3')
                     ->init($widgets, $widgetSettings);
             }, 3, 2);
 
             add_filter(DASHBOARD_FILTER_ADMIN_LIST, function ($widgets, $widgetSettings) {
-                $items = Customer::query()->count();
+                $items = app(CustomerInterface::class)->count();
 
                 return (new DashboardWidgetInstance())
                     ->setType('stats')
                     ->setPermission('customers.index')
                     ->setTitle(trans('plugins/ecommerce::customer.name'))
                     ->setKey('widget_total_3')
-                    ->setIcon('ti ti-user')
+                    ->setIcon('fas fa-users')
                     ->setColor('#75b6f9')
                     ->setStatsTotal($items)
                     ->setRoute(route('customers.index'))
-                    ->setColumn('col-12 col-md-6 col-lg-3')
                     ->init($widgets, $widgetSettings);
             }, 4, 2);
 
             add_filter(DASHBOARD_FILTER_ADMIN_LIST, function ($widgets, $widgetSettings) {
-                $items = Review::query()->wherePublished()->count();
+                $items = app(ReviewInterface::class)->count(['status' => BaseStatusEnum::PUBLISHED]);
 
                 return (new DashboardWidgetInstance())
                     ->setType('stats')
                     ->setPermission('reviews.index')
                     ->setTitle(trans('plugins/ecommerce::review.name'))
                     ->setKey('widget_total_4')
-                    ->setIcon('ti ti-messages')
+                    ->setIcon('far fa-file-alt')
                     ->setColor('#074f9d')
                     ->setStatsTotal($items)
                     ->setRoute(route('reviews.index'))
-                    ->setColumn('col-12 col-md-6 col-lg-3')
                     ->init($widgets, $widgetSettings);
             }, 5, 2);
-        });
 
-        if (defined('PAYMENT_ACTION_PAYMENT_PROCESSED')) {
-            add_action(PAYMENT_ACTION_PAYMENT_PROCESSED, function (array $data): void {
-                $orderIds = (array) $data['order_id'];
-
-                if (! $orderIds) {
-                    return;
-                }
-
-                $orders = Order::query()->whereIn('id', $orderIds)->get();
-
-                $currency = strtoupper(cms_currency()->getDefaultCurrency()->title);
-
-                foreach ($orders as $order) {
-                    $data['amount'] = $order->amount;
-                    $data['order_id'] = $order->id;
-                    $data['currency'] = $currency;
-
-                    PaymentHelper::storeLocalPayment($data);
-                }
-
-                OrderHelper::processOrder($orders->pluck('id')->all(), $data['charge_id']);
-            }, 123);
-        }
-
-        $this->app['events']->listen(RouteMatched::class, function (): void {
             if (defined('PAYMENT_FILTER_PAYMENT_PARAMETERS')) {
                 add_filter(PAYMENT_FILTER_PAYMENT_PARAMETERS, function ($html) {
                     if (! auth('customer')->check()) {
@@ -323,96 +178,51 @@ class HookServiceProvider extends ServiceProvider
 
             if (defined('PAYMENT_FILTER_CANCEL_URL')) {
                 add_filter(PAYMENT_FILTER_CANCEL_URL, function ($checkoutToken) {
-                    return route(
-                        'public.checkout.information',
-                        [$checkoutToken ?: OrderHelper::getOrderSessionToken()] + [
-                            'error' => true,
-                            'error_type' => 'payment',
-                        ]
-                    );
+                    return route('public.checkout.information', [$checkoutToken ?: OrderHelper::getOrderSessionToken()] + ['error' => true, 'error_type' => 'payment']);
                 }, 123);
             }
 
-            if (is_plugin_active('payment')) {
-                CODPaymentMethodForm::extend(function (CODPaymentMethodForm $form): void {
-                    $form->add(
-                        get_payment_setting_key('minimum_amount', PaymentMethodEnum::COD),
-                        NumberField::class,
-                        NumberFieldOption::make()
-                            ->label(
-                                trans(
-                                    'plugins/ecommerce::setting.payment_method_cod_minimum_amount',
-                                    ['currency' => get_application_currency()->title]
-                                )
-                            )
-                            ->value(get_payment_setting('minimum_amount', PaymentMethodEnum::COD, 0))
-                            ->toArray()
-                    );
-                });
+            if (defined('PAYMENT_ACTION_PAYMENT_PROCESSED')) {
+                add_action(PAYMENT_ACTION_PAYMENT_PROCESSED, function ($data) {
+                    $orderIds = (array)$data['order_id'];
 
-                BankTransferPaymentMethodForm::extend(function (BankTransferPaymentMethodForm $form): void {
-                    $form
-                        ->add(
-                            get_payment_setting_key('minimum_amount', PaymentMethodEnum::BANK_TRANSFER),
-                            NumberField::class,
-                            NumberFieldOption::make()
-                                ->label(
-                                    trans(
-                                        'plugins/ecommerce::setting.payment_method_minimum_amount',
-                                        ['currency' => get_application_currency()->title]
-                                    )
-                                )
-                                ->value(get_payment_setting('minimum_amount', PaymentMethodEnum::BANK_TRANSFER, 0))
-                                ->toArray()
-                        )
-                        ->add(
-                            get_payment_setting_key(
-                                'display_bank_info_at_the_checkout_success_page',
-                                PaymentMethodEnum::BANK_TRANSFER
-                            ),
-                            OnOffCheckboxField::class,
-                            OnOffFieldOption::make()
-                                ->label(trans('plugins/ecommerce::setting.display_bank_info_at_the_checkout_success_page'))
-                                ->value(
-                                    setting('payment_bank_transfer_display_bank_info_at_the_checkout_success_page', false)
-                                )
-                                ->toArray()
-                        );
-                });
+                    if ($orderIds) {
+                        $orders = $this->app->make(OrderInterface::class)->allBy([['id', 'IN', $orderIds]]);
+                        foreach ($orders as $order) {
+                            $data['amount'] = $order->amount;
+                            $data['order_id'] = $order->id;
+                            $data['currency'] = strtoupper(cms_currency()->getDefaultCurrency()->title);
+
+                            PaymentHelper::storeLocalPayment($data);
+                        }
+                    }
+
+                    return OrderHelper::processOrder($orderIds, $data['charge_id']);
+                }, 123);
             }
 
-            add_filter('core_request_rules', function (array $rules, BaseRequest $request) {
-                if ($request instanceof PaymentMethodRequest) {
-                    $rules = match ($request->input('type')) {
-                        PaymentMethodEnum::COD => [
-                            ...$rules,
-                            get_payment_setting_key('minimum_amount', PaymentMethodEnum::COD) => [
-                                'nullable',
-                                'numeric',
-                                'min:0',
-                            ],
-                        ],
-                        PaymentMethodEnum::BANK_TRANSFER => [
-                            ...$rules,
-                            get_payment_setting_key('minimum_amount', PaymentMethodEnum::BANK_TRANSFER) => [
-                                'nullable',
-                                'numeric',
-                                'min:0',
-                            ],
-                            get_payment_setting_key(
-                                'display_bank_info_at_the_checkout_success_page',
-                                PaymentMethodEnum::BANK_TRANSFER
-                            ) => [new OnOffRule()],
-                        ],
-                        default => $rules,
+            if (defined('PAYMENT_METHOD_SETTINGS_CONTENT')) {
+                add_filter(PAYMENT_METHOD_SETTINGS_CONTENT, function ($html, $paymentMethod) {
+                    return match ($paymentMethod) {
+                        PaymentMethodEnum::COD => $html . view(
+                            'plugins/ecommerce::settings.additional-cod-settings'
+                        )->render(),
+                        PaymentMethodEnum::BANK_TRANSFER => $html . view(
+                            'plugins/ecommerce::settings.additional-bank-transfer-settings'
+                        )->render(),
+                        default => $html,
                     };
-                }
-
-                return $rules;
-            }, 999, 2);
+                }, 123, 2);
+            }
 
             if (config('packages.theme.general.enable_custom_js')) {
                 add_filter('ecommerce_checkout_header', function ($html) {
+                    $customCSSFile = public_path(Theme::path() . '/css/style.integration.css');
+                    if (File::exists($customCSSFile)) {
+                        $html .= Html::style(Theme::asset()
+                            ->url('css/style.integration.css?v=' . filectime($customCSSFile)));
+                    }
+
                     return $html . ThemeSupport::getCustomJS('header');
                 }, 15);
 
@@ -429,19 +239,6 @@ class HookServiceProvider extends ServiceProvider
                 }
             }
 
-            add_filter('ecommerce_checkout_header', function ($html) {
-                $customCSSFile = Theme::getStyleIntegrationPath();
-
-                if (File::exists($customCSSFile)) {
-                    $html .= Html::style(
-                        Theme::asset()
-                            ->url('css/style.integration.css?v=' . filectime($customCSSFile))
-                    );
-                }
-
-                return $html;
-            }, 15);
-
             add_filter([THEME_FRONT_HEADER, 'ecommerce_checkout_header'], function ($html) {
                 $pixelID = get_ecommerce_setting('facebook_pixel_id');
 
@@ -450,106 +247,128 @@ class HookServiceProvider extends ServiceProvider
                 }
 
                 return $html . view('plugins/ecommerce::orders.partials.facebook-pixel', compact('pixelID'))->render();
+            }, 15);
+
+            add_filter([THEME_FRONT_HEADER, 'ecommerce_checkout_header'], function ($html) {
+                $tagManagerCode = get_ecommerce_setting('google_tag_manager_code');
+
+                if (BaseHelper::hasDemoModeEnabled() || ! $tagManagerCode) {
+                    return $html;
+                }
+
+                return $html . $tagManagerCode;
             }, 16);
 
-            add_filter('ecommerce_checkout_header', function ($html) {
-                return $html . ThemeSupport::renderGoogleTagManagerScript();
-            }, 17);
-
-            if (
-                defined('FAQ_MODULE_SCREEN_NAME')
-                && config('plugins.ecommerce.general.enable_faq_in_product_details', false)
-            ) {
+            if (defined('FAQ_MODULE_SCREEN_NAME') && config(
+                'plugins.ecommerce.general.enable_faq_in_product_details',
+                false
+            )) {
                 add_action(BASE_ACTION_META_BOXES, function ($context, $object) {
-                    if (
-                        ! $object
-                        || $context != 'advanced'
-                        || ! is_in_admin()
-                        || ! $object instanceof Product
-                        || ! in_array(Route::currentRouteName(), [
-                            'products.create',
-                            'products.edit',
-                            'marketplace.vendor.products.create',
-                            'marketplace.vendor.products.edit',
-                        ])
-                    ) {
+                    if (! $object || $context != 'advanced') {
                         return false;
                     }
 
+                    if (! is_in_admin() || get_class($object) != Product::class) {
+                        return false;
+                    }
+
+                    if (! in_array(Route::currentRouteName(), ['products.create', 'products.edit', 'marketplace.vendor.products.create', 'marketplace.vendor.products.edit'])) {
+                        return false;
+                    }
+
+                    Assets::addStylesDirectly(['vendor/core/plugins/faq/css/faq.css'])
+                        ->addScriptsDirectly(['vendor/core/plugins/faq/js/faq.js']);
+
                     MetaBox::addMetaBox('faq_schema_config_wrapper', __('Product FAQs'), function () {
-                        return (new FaqSupport())->renderMetaBox(func_get_args()[0] ?? null);
-                    }, $object::class, $context);
+                        $value = [];
+
+                        $args = func_get_args();
+                        if ($args[0] && $args[0]->id) {
+                            $value = MetaBox::getMetaData($args[0], 'faq_schema_config', true);
+                        }
+
+                        $hasValue = ! empty($value);
+
+                        $value = json_encode((array)$value);
+
+                        return view('plugins/faq::schema-config-box', compact('value', 'hasValue'))->render();
+                    }, get_class($object), $context);
 
                     return true;
                 }, 139, 2);
             }
 
-            add_action(BASE_ACTION_PUBLIC_RENDER_SINGLE, function ($screen, $object): void {
-                if (
-                    ! defined('FAQ_MODULE_SCREEN_NAME') ||
-                    ! $object instanceof Product ||
-                    ! config('plugins.ecommerce.general.enable_faq_in_product_details', false)
-                ) {
-                    return;
-                }
-
-                $schemaItems = new FaqCollection();
-
-                foreach ($object->faq_items as $item) {
-                    $schemaItems->push(
-                        new FaqItem(BaseHelper::clean($item[0]['value']), BaseHelper::clean(strip_tags($item[1]['value'])))
-                    );
-                }
-
-                app(FaqContract::class)->registerSchema($schemaItems);
-            }, 139, 2);
-
-            add_action(BASE_ACTION_PUBLIC_RENDER_SINGLE, function ($screen, $object): void {
-                add_filter(THEME_FRONT_HEADER, function (?string $html) use ($object) {
-                    if (! $object instanceof Product) {
+            add_action(BASE_ACTION_PUBLIC_RENDER_SINGLE, function ($screen, $object) {
+                add_filter(THEME_FRONT_HEADER, function ($html) use ($object) {
+                    if (! defined('FAQ_MODULE_SCREEN_NAME') ||
+                        get_class($object) != Product::class ||
+                        ! config('plugins.ecommerce.general.enable_faq_in_product_details', false)
+                    ) {
                         return $html;
                     }
 
-                    $offers = [
-                        '@type' => 'Offer',
-                        'price' => format_price($object->price()->getPrice(), null, true),
-                        'priceCurrency' => strtoupper(cms_currency()->getDefaultCurrency()->title),
-                        'priceValidUntil' => Carbon::now()->addDay()->toDateString(),
-                        'itemCondition' => 'https://schema.org/NewCondition',
-                        'url' => $object->url,
-                        'availability' => $object->isOutOfStock(
-                        ) ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
+                    $value = MetaBox::getMetaData($object, 'faq_schema_config', true);
+
+                    if (! $value || ! is_array($value)) {
+                        return $html;
+                    }
+
+                    foreach ($value as $key => $item) {
+                        if (! $item[0]['value'] && ! $item[1]['value']) {
+                            Arr::forget($value, $key);
+                        }
+                    }
+
+                    $schema = [
+                        '@context' => 'https://schema.org',
+                        '@type' => 'FAQPage',
+                        'mainEntity' => [],
                     ];
 
-                    if ($privacyPolicyUrl = theme_option('merchant_return_policy_url')) {
-                        $offers['hasMerchantReturnPolicy'] = [
-                            '@type' => 'MerchantReturnPolicy',
-                            'returnPolicyCategory' => $privacyPolicyUrl,
-                            'merchantReturnDays' => theme_option('merchant_return_days', 30),
+                    foreach ($value as $item) {
+                        $schema['mainEntity'][] = [
+                            '@type' => 'Question',
+                            'name' => BaseHelper::clean($item[0]['value']),
+                            'acceptedAnswer' => [
+                                '@type' => 'Answer',
+                                'text' => BaseHelper::clean($item[1]['value']),
+                            ],
                         ];
+                    }
+
+                    $schema = json_encode($schema);
+
+                    return $html . Html::tag('script', $schema, ['type' => 'application/ld+json'])->toHtml();
+                }, 139);
+
+                add_filter(THEME_FRONT_HEADER, function ($html) use ($object) {
+                    if (get_class($object) != Product::class) {
+                        return $html;
                     }
 
                     $schema = [
                         '@context' => 'https://schema.org',
                         '@type' => 'Product',
-                        'category' => trim(implode(', ', $object->categories->pluck('name')->all())),
+                        'category' => implode(', ', $object->categories->pluck('name')->all()),
                         'url' => $object->url,
-                        'description' => Str::limit(
-                            BaseHelper::clean(strip_tags($object->description ?: $object->content)),
-                            255
-                        ),
+                        'description' => BaseHelper::clean(strip_tags($object->description)),
                         'name' => BaseHelper::clean($object->name),
                         'image' => RvMedia::getImageUrl($object->image, null, false, RvMedia::getDefaultImage()),
-                        'sku' => $object->sku ?: $object->getKey(),
-                        'offers' => $offers,
-                    ];
-
-                    if ($object->brand->name) {
-                        $schema['brand'] = [
+                        'brand' => [
                             '@type' => 'Brand',
                             'name' => $object->brand->name,
-                        ];
-                    }
+                        ],
+                        'sku' => $object->sku,
+                        'offers' => [
+                            '@type' => 'Offer',
+                            'price' => format_price($object->front_sale_price, null, true),
+                            'priceCurrency' => strtoupper(cms_currency()->getDefaultCurrency()->title),
+                            'priceValidUntil' => Carbon::now()->addDay()->toIso8601String(),
+                            'itemCondition' => 'https://schema.org/NewCondition',
+                            'availability' => $object->isOutOfStock() ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
+                            'url' => $object->url,
+                        ],
+                    ];
 
                     if (EcommerceHelper::isReviewEnabled() && $object->reviews_count > 0) {
                         $schema['aggregateRating'] = [
@@ -576,57 +395,15 @@ class HookServiceProvider extends ServiceProvider
                         }
                     }
 
-                    $schema = apply_filters('ecommerce_product_schema', $schema, $object);
+                    $schema = json_encode($schema);
 
-                    $schema = json_encode($schema, JSON_UNESCAPED_UNICODE);
-
-                    $html = $html . Html::tag('script', $schema, ['type' => 'application/ld+json'])->toHtml();
-
-                    if (! empty($object->video)) {
-                        $video = Arr::first($object->video);
-
-                        if ($video['url']) {
-                            $schema = [
-                                '@context' => 'https://schema.org',
-                                '@type' => 'VideoObject',
-                                'name' => $object->name,
-                                'description' => $object->description,
-                                'contentUrl' => $video['url'],
-                                'embedUrl' => $video['url'],
-                                'thumbnailUrl' => [
-                                    $video['thumbnail'],
-                                ],
-                                'uploadDate' => $object->created_at->toIso8601String(),
-                                'publisher' => [
-                                    '@type' => 'Organization',
-                                    'name' => rescue(fn () => SeoHelper::openGraph()->getProperty('site_name')),
-                                    'url' => BaseHelper::getHomepageUrl(),
-                                    'logo' => [
-                                        '@type' => 'ImageObject',
-                                        'url' => RvMedia::getImageUrl(Theme::getLogo()),
-                                    ],
-                                ],
-                            ];
-
-                            $schema = apply_filters('ecommerce_product_video_schema', $schema, $object);
-
-                            $schema = json_encode($schema, JSON_UNESCAPED_UNICODE);
-
-                            $html = $html . Html::tag('script', $schema, ['type' => 'application/ld+json'])->toHtml();
-                        }
-                    }
-
-                    return $html;
+                    return $html . Html::tag('script', $schema, ['type' => 'application/ld+json'])->toHtml();
                 });
             }, 139, 2);
         });
 
-        add_action(BASE_ACTION_TOP_FORM_CONTENT_NOTIFICATION, function ($request, $data = null): void {
-            if (
-                ! $data instanceof Product
-                || Route::currentRouteName() != 'products.edit'
-                || ! FlashSaleFacade::isEnabled()
-            ) {
+        add_action(BASE_ACTION_TOP_FORM_CONTENT_NOTIFICATION, function ($request, $data = null) {
+            if (! $data instanceof Product || Route::currentRouteName() != 'products.edit') {
                 return;
             }
 
@@ -638,7 +415,7 @@ class HookServiceProvider extends ServiceProvider
                 $flashSale = FlashSaleFacade::getFacadeRoot()->flashSaleForProduct($data);
 
                 if ($flashSale) {
-                    $flashSale = FlashSale::query()->find($flashSale->pivot->flash_sale_id);
+                    $flashSale = FlashSale::find($flashSale->pivot->flash_sale_id);
                 }
             }
 
@@ -650,7 +427,14 @@ class HookServiceProvider extends ServiceProvider
                 if ($discountPrice < $flashSalePrice) {
                     $flashSale = null;
 
-                    $discount = Discount::getFacadeRoot()->promotionForProduct([$data->getKey()]);
+                    if (! $data->is_variation) {
+                        $productCollections = $data->productCollections;
+                    } else {
+                        $productCollections = $data->original_product->productCollections;
+                    }
+
+                    $discount = Discount::getFacadeRoot()
+                        ->promotionForProduct([$data->id], $productCollections->pluck('id')->all());
                 }
             }
 
@@ -662,122 +446,114 @@ class HookServiceProvider extends ServiceProvider
             }
         }, 145, 2);
 
-        add_action(
-            BASE_ACTION_TOP_FORM_CONTENT_NOTIFICATION,
-            function (Request $request, Model|string|null $data = null): void {
-                if (! EcommerceHelper::isEnableEmailVerification()) {
-                    return;
-                }
-
-                if (! $data instanceof Customer || Route::currentRouteName() !== 'customers.edit') {
-                    return;
-                }
-
-                if (Auth::user()->hasPermission('customers.edit')) {
-                    echo view(
-                        'plugins/ecommerce::customers.notification',
-                        compact('data')
-                    )->render();
-                }
-            },
-            45,
-            2
-        );
-
-        add_filter(FILTER_ECOMMERCE_PROCESS_PAYMENT, function (array $data, Request $request) {
-            session()->put('selected_payment_method', $data['type']);
-
-            $orderIds = (array) $request->input('order_id', []);
-
-            $request->merge([
-                'name' => trans('plugins/payment::payment.payment_description', [
-                    'order_id' => implode(', #', $orderIds),
-                    'site_url' => $request->getHost(),
-                ]),
-                'amount' => $data['amount'],
-            ]);
-
-            $paymentData = apply_filters(PAYMENT_FILTER_PAYMENT_DATA, [], $request);
-
-            switch ($request->input('payment_method')) {
-                case PaymentMethodEnum::COD:
-
-                    $minimumOrderAmount = (float) get_payment_setting('minimum_amount', PaymentMethodEnum::COD, 0);
-
-                    if ($minimumOrderAmount > Cart::instance('cart')->rawSubTotal()) {
-                        $data['error'] = true;
-                        $data['message'] = __(
-                            'Minimum order amount to use COD (Cash On Delivery) payment method is :amount, you need to buy more :more to place an order!',
-                            [
-                                'amount' => format_price($minimumOrderAmount),
-                                'more' => format_price($minimumOrderAmount - Cart::instance('cart')->rawSubTotal()),
-                            ]
-                        );
-
-                        break;
-                    }
-
-                    $data['charge_id'] = $this->app->make(CodPaymentService::class)->execute($paymentData);
-
-                    break;
-
-                case PaymentMethodEnum::BANK_TRANSFER:
-
-                    $minimumOrderAmount = (float) get_payment_setting('minimum_amount', PaymentMethodEnum::BANK_TRANSFER, 0);
-
-                    if ($minimumOrderAmount > Cart::instance('cart')->rawSubTotal()) {
-                        $data['error'] = true;
-                        $data['message'] = __(
-                            'Minimum order amount to use Bank Transfer payment method is :amount, you need to buy more :more to place an order!',
-                            [
-                                'amount' => format_price($minimumOrderAmount),
-                                'more' => format_price($minimumOrderAmount - Cart::instance('cart')->rawSubTotal()),
-                            ]
-                        );
-
-                        break;
-                    }
-
-                    $data['charge_id'] = $this->app->make(BankTransferPaymentService::class)->execute($paymentData);
-
-                    break;
-
-                default:
-                    $data = apply_filters(PAYMENT_FILTER_AFTER_POST_CHECKOUT, $data, $request);
-
-                    break;
+        add_action(BASE_ACTION_TOP_FORM_CONTENT_NOTIFICATION, function (Request $request, Model|string|null $data = null) {
+            if (! EcommerceHelper::isEnableEmailVerification()) {
+                return;
             }
 
-            return $data;
-        }, 120, 2);
-
-        add_filter('payment_method_display_body', function (?string $html, string $paymentName, ?string $paymentLabel) {
-            $minimumOrderAmount = (float) get_payment_setting('minimum_amount', $paymentName, 0);
-
-            if ($minimumOrderAmount > Cart::instance('cart')->rawSubTotal()) {
-                return view('plugins/ecommerce::orders.partials.minimum-order-amount-notice', compact('minimumOrderAmount', 'paymentName', 'paymentLabel'))->render();
+            if (! $data instanceof Customer || Route::currentRouteName() !== 'customers.edit') {
+                return;
             }
 
-            return $html;
-        }, 120, 3);
+            if (Auth::user()->hasPermission('customers.edit')) {
+                echo view(
+                    'plugins/ecommerce::customers.notification',
+                    compact('data')
+                )->render();
+            }
+        }, 45, 2);
 
-        add_filter('payment-transaction-card-actions', function ($data, $payment) {
-            $invoice = Invoice::query()->where('payment_id', $payment->id)->first();
+        if (function_exists('add_shortcode')) {
+            add_shortcode('recently-viewed-products', __('Customer Recently Viewed Products'), __('Customer Recently Viewed Products'), function () {
+                if (! EcommerceHelper::isEnabledCustomerRecentlyViewedProducts()) {
+                    return '';
+                }
 
-            if (! $invoice) {
+                $queryParams = array_merge([
+                    'paginate' => [
+                        'per_page' => 12,
+                        'current_paged' => (int)request()->input('page'),
+                    ],
+                    'with' => ['slugable'],
+                ], EcommerceHelper::withReviewsParams());
+
+                if (auth('customer')->check()) {
+                    $products = $this->app->make(ProductInterface::class)->getProductsRecentlyViewed(auth('customer')->id(), $queryParams);
+                } else {
+                    $products = new LengthAwarePaginator([], 0, 12);
+
+                    $itemIds = collect(Cart::instance('recently_viewed')->content())
+                        ->sortBy([['updated_at', 'desc']])
+                        ->pluck('id')
+                        ->all();
+
+                    if ($itemIds) {
+                        $products = $this->app->make(ProductInterface::class)->getProductsByIds($itemIds, $queryParams);
+                    }
+                }
+
+                $view = Theme::getThemeNamespace('views.ecommerce.viewed-products');
+
+                if (view()->exists($view)) {
+                    return view($view, compact('products'))->render();
+                }
+
+                return view('plugins/ecommerce::themes.viewed-products', compact('products'))->render();
+            });
+
+            if (EcommerceHelper::isEnabledCustomerRecentlyViewedProducts()) {
+                shortcode()->setAdminConfig('recently-viewed-products', function () {
+                    return Html::tag('div', __('Add shortcode [recently-viewed-products][/recently-viewed-products] to editor?'), ['class' => 'form-group mb-3'])->toHtml();
+                });
+            }
+
+            add_filter(FILTER_ECOMMERCE_PROCESS_PAYMENT, function (array $data, Request $request) {
+                session()->put('selected_payment_method', $data['type']);
+
+                $request->merge([
+                    'name' => __('Pay for your order at :site_title', ['site_title' => theme_option('site_title')]),
+                    'amount' => $data['amount'],
+                ]);
+
+                $paymentData = apply_filters(PAYMENT_FILTER_PAYMENT_DATA, [], $request);
+
+                switch ($request->input('payment_method')) {
+                    case PaymentMethodEnum::COD:
+
+                        $minimumOrderAmount = setting('payment_cod_minimum_amount', 0);
+
+                        if ($minimumOrderAmount > Cart::instance('cart')->rawSubTotal()) {
+                            $data['error'] = true;
+                            $data['message'] = __('Minimum order amount to use COD (Cash On Delivery) payment method is :amount, you need to buy more :more to place an order!', ['amount' => format_price($minimumOrderAmount), 'more' => format_price($minimumOrderAmount - Cart::instance('cart')->rawSubTotal())]);
+
+                            break;
+                        }
+
+                        $data['charge_id'] = $this->app->make(CodPaymentService::class)->execute($paymentData);
+
+                        break;
+
+                    case PaymentMethodEnum::BANK_TRANSFER:
+
+                        $data['charge_id'] = $this->app->make(BankTransferPaymentService::class)->execute($paymentData);
+
+                        break;
+                    default:
+                        $data = apply_filters(PAYMENT_FILTER_AFTER_POST_CHECKOUT, $data, $request);
+
+                        break;
+                }
+
                 return $data;
-            }
-
-            $button = view('plugins/ecommerce::invoices.invoice-buttons', compact('invoice'))->render();
-
-            return $data . $button;
-        }, 3, 2);
+            }, 120, 2);
+        }
 
         if (defined('PAYMENT_FILTER_PAYMENT_DATA')) {
             add_filter(PAYMENT_FILTER_PAYMENT_DATA, function (array $data, Request $request) {
-                $orderIds = (array) $request->input('order_id', []);
+                $orderIds = (array)$request->input('order_id', []);
 
-                $orders = Order::query()
+                $orders = $this->app->make(OrderInterface::class)
+                    ->getModel()
                     ->whereIn('id', $orderIds)
                     ->with(['address', 'products'])
                     ->get();
@@ -789,13 +565,10 @@ class HookServiceProvider extends ServiceProvider
                         $products[] = [
                             'id' => $product->product_id,
                             'name' => $product->product_name,
-                            'image' => RvMedia::getImageUrl($product->product_image),
                             'price' => $this->convertOrderAmount($product->price),
-                            'price_per_order' => $this->convertOrderAmount(
-                                ($product->price * $product->qty)
+                            'price_per_order' => $this->convertOrderAmount(($product->price * $product->qty)
                                 + ($order->tax_amount / $order->products->count())
-                                - ($order->sub_total > 0 ? (($product->price * $product->qty) / $order->sub_total * $order->discount_amount) : 0)
-                            ),
+                                - ($order->discount_amount / $order->products->count())),
                             'qty' => $product->qty,
                         ];
                     }
@@ -806,17 +579,14 @@ class HookServiceProvider extends ServiceProvider
                 $address = $firstOrder->address;
 
                 return [
-                    'amount' => $this->convertOrderAmount((float) $orders->sum('amount')),
-                    'shipping_amount' => $this->convertOrderAmount((float) $orders->sum('shipping_amount')),
+                    'amount' => $this->convertOrderAmount((float)$orders->sum('amount')),
+                    'shipping_amount' => $this->convertOrderAmount((float)$orders->sum('shipping_amount')),
                     'shipping_method' => $firstOrder->shipping_method->label(),
-                    'tax_amount' => $this->convertOrderAmount((float) $orders->sum('tax_amount')),
-                    'discount_amount' => $this->convertOrderAmount((float) $orders->sum('discount_amount')),
+                    'tax_amount' => $this->convertOrderAmount((float)$orders->sum('tax_amount')),
+                    'discount_amount' => $this->convertOrderAmount((float)$orders->sum('discount_amount')),
                     'currency' => strtoupper(get_application_currency()->title),
                     'order_id' => $orderIds,
-                    'description' => trans('plugins/payment::payment.payment_description', [
-                        'order_id' => implode(', #', $orderIds),
-                        'site_url' => $request->getHost(),
-                    ]),
+                    'description' => trans('plugins/payment::payment.payment_description', ['order_id' => implode(', #', $orderIds), 'site_url' => $request->getHost()]),
                     'customer_id' => auth('customer')->check() ? auth('customer')->id() : null,
                     'customer_type' => Customer::class,
                     'return_url' => PaymentHelper::getCancelURL(),
@@ -826,7 +596,7 @@ class HookServiceProvider extends ServiceProvider
                     'address' => [
                         'name' => $address->name ?: $firstOrder->user->name,
                         'email' => $address->email ?: $firstOrder->user->email,
-                        'phone' => $address->phone ?: $firstOrder->user->phone,
+                        'phone' => $address->phone,
                         'country' => $address->country_name,
                         'state' => $address->state_name,
                         'city' => $address->city_name,
@@ -836,153 +606,46 @@ class HookServiceProvider extends ServiceProvider
                     'checkout_token' => OrderHelper::getOrderSessionToken(),
                 ];
             }, 120, 2);
-        }
 
-        if (function_exists('add_shortcode')) {
-            add_shortcode(
-                'recently-viewed-products',
-                __('Customer Recently Viewed Products'),
-                __('Customer Recently Viewed Products'),
-                function (Shortcode $shortcode) {
-                    if (! EcommerceHelper::isEnabledCustomerRecentlyViewedProducts()) {
-                        return '';
+            if (! $this->app->runningInConsole()) {
+                add_action(INVOICE_PAYMENT_CREATED, function (Invoice $invoice) {
+                    try {
+                        $customer = $invoice->payment->customer;
+                        $localDisk = Storage::disk('local');
+                        $invoiceName = 'invoice-' . $invoice->code . '.pdf';
+                        $localDisk->put($invoiceName, (new InvoiceHelper())->makeInvoicePDF($invoice)->output());
+
+                        EmailHandler::setModule(ECOMMERCE_MODULE_SCREEN_NAME)
+                            ->setVariableValues([
+                                'customer_name' => $customer->name,
+                                'invoice_code' => $invoice->code,
+                                'invoice_link' => route('customer.invoices.show', $invoice->id),
+                            ])
+                            ->sendUsingTemplate('invoice-payment-created', $customer->email, [
+                                'attachments' => [$localDisk->path($invoiceName)],
+                            ]);
+
+                        $localDisk->delete($invoiceName);
+                    } catch (Exception $exception) {
+                        info($exception->getMessage());
                     }
-
-                    $queryParams = array_merge([
-                        'paginate' => [
-                            'per_page' => 12,
-                            'current_paged' => request()->integer('page', 1) ?: 1,
-                        ],
-                        'with' => ['slugable'],
-                    ], EcommerceHelper::withReviewsParams());
-
-                    $productRepository = $this->app->make(ProductInterface::class);
-
-                    if (auth('customer')->check()) {
-                        $products = $productRepository->getProductsRecentlyViewed(auth('customer')->id(), $queryParams);
-                    } else {
-                        $products = new LengthAwarePaginator([], 0, 12);
-
-                        $itemIds = collect(Cart::instance('recently_viewed')->content())
-                            ->sortBy([['updated_at', 'desc']])
-                            ->pluck('id')
-                            ->all();
-
-                        if ($itemIds) {
-                            $products = $productRepository->getProductsByIds($itemIds, $queryParams);
-                        }
-                    }
-
-                    $productItemView = EcommerceHelper::viewPath('includes.product-item');
-
-                    return view(
-                        EcommerceHelper::viewPath('shortcodes.recently-viewed-products'),
-                        compact('products', 'shortcode', 'productItemView')
-                    )->render();
-                }
-            );
-
-            if (EcommerceHelper::isEnabledCustomerRecentlyViewedProducts()) {
-                shortcode()->setAdminConfig('recently-viewed-products', function (array $attributes) {
-                    return ShortcodeForm::createFromArray($attributes)
-                        ->withLazyLoading()
-                        ->add('title', 'text', [
-                            'label' => trans('core/base::forms.title'),
-                        ]);
                 });
             }
-        }
 
-        add_action(INVOICE_PAYMENT_CREATED, function (Invoice $invoice): void {
-            try {
-                $invoicePath = InvoiceHelper::generateInvoice($invoice);
+            if (is_plugin_active('payment')) {
+                add_filter(PAYMENT_FILTER_PAYMENT_INFO_DETAIL, function ($data, $payment) {
+                    $invoice = Invoice::where('payment_id', $payment->id)->first();
 
-                EmailHandler::setModule(ECOMMERCE_MODULE_SCREEN_NAME)
-                    ->setVariableValues([
-                        'customer_name' => $invoice->customer_name,
-                        'invoice_code' => $invoice->code,
-                        'invoice_link' => $invoice->order?->user->id ? route(
-                            'customer.invoices.show',
-                            $invoice->getKey()
-                        ) : null,
-                    ])
-                    ->sendUsingTemplate('invoice-payment-created', $invoice->customer_email, [
-                        'attachments' => [$invoicePath],
-                    ]);
-            } catch (Exception $exception) {
-                info($exception->getMessage());
-            }
-        });
-
-        add_filter(BASE_FILTER_PUBLIC_SINGLE_DATA, [$this, 'handleSingleView'], 30);
-
-        if (defined('ACTION_AFTER_UPDATE_PAYMENT')) {
-            add_action(ACTION_AFTER_UPDATE_PAYMENT, function ($request, $payment): void {
-                if (
-                    in_array($payment->payment_channel, [PaymentMethodEnum::COD, PaymentMethodEnum::BANK_TRANSFER])
-                    && $request->input('status') == PaymentStatusEnum::COMPLETED
-                    && EcommerceHelper::isEnabledSupportDigitalProducts()
-                ) {
-                    /**
-                     * @var Order $order
-                     */
-                    $order = Order::query()->where('id', $payment->order_id)->with('products')->first();
-
-                    if ($order) {
-                        OrderHelper::confirmPayment($order);
+                    if (! $invoice) {
+                        return $data;
                     }
-                }
-            }, 123, 2);
+
+                    $button = view('plugins/ecommerce::invoices.invoice-buttons', compact('invoice'))->render();
+
+                    return $data . $button;
+                }, 3, 2);
+            }
         }
-
-        $this->app->make(GoogleTagManager::class)->pushScriptsToFooter();
-        $this->app->make(FacebookPixel::class)->pushScriptsToFooter();
-
-        add_filter('ecommerce_cart_after_item_content', function (?string $html, CartItem $item) {
-            $product = Product::query()->find($item->id);
-
-            if (! $product) {
-                return $html;
-            }
-
-            $quantityOfProduct = Cart::instance('cart')->rawQuantityByItemId($product->getKey());
-
-            $message = '';
-
-            if ($product->minimum_order_quantity > 0 && $quantityOfProduct < $product->minimum_order_quantity) {
-                $message = __('You need to add :quantity more items to place your order. ', [
-                    'product' => BaseHelper::clean($product->original_product->name),
-                    'quantity' => $product->minimum_order_quantity - $quantityOfProduct,
-                ]);
-            }
-
-            if ($product->maximum_order_quantity > 0 && $quantityOfProduct > $product->maximum_order_quantity) {
-                $message = __('Sorry, you can only order a maximum of :quantity units of :product at a time. Please adjust the quantity and try again.', ['quantity' => $product->maximum_order_quantity, 'product' => $product->name]);
-            }
-
-            if (! $message) {
-                return $html;
-            }
-
-            return $html . Html::tag('p', $message, ['class' => 'text-danger small mt-2'])->toHtml();
-        }, 123, 2);
-
-        add_filter('razorpay_is_valid_to_process_checkout', function () {
-            return EcommerceHelper::isValidToProcessCheckout();
-        }, 123);
-
-        add_filter('razorpay_order_notes', function (array $notes) {
-            return [
-                ...$notes,
-                'order_token' => OrderHelper::getOrderSessionToken(),
-            ];
-        }, 15);
-
-        add_filter('core_slug_can_be_reviewed', function (bool $canBeReviewed) {
-            return $canBeReviewed || (auth('customer')->check() && AdminHelper::isInAdmin());
-        }, 999, 2);
-
-        add_filter('facebook_comment_html', [$this, 'renderProductFacebookComments'], 99, 2);
     }
 
     protected function convertOrderAmount(float $amount): float
@@ -993,98 +656,18 @@ class HookServiceProvider extends ServiceProvider
             return $amount;
         }
 
-        return (float) format_price($amount * $currentCurrency->exchange_rate, $currentCurrency, true);
+        return (float)format_price($amount * $currentCurrency->exchange_rate, $currentCurrency, true);
     }
 
     public function addThemeOptions(): void
     {
-        $fields = [];
-
-        foreach (EcommerceHelper::getDefaultPageSlug() as $key => $value) {
-            $fields[] = [
-                'id' => sprintf('ecommerce_%s_page_slug', $key),
-                'type' => 'text',
-                'label' => trans(
-                    'plugins/ecommerce::ecommerce.theme_options.page_slug_name',
-                    ['page' => trans("plugins/ecommerce::ecommerce.theme_options.page_slugs.$key")]
-                ),
-                'attributes' => [
-                    'name' => sprintf('ecommerce_%s_page_slug', $key),
-                    'value' => $value,
-                    'options' => [
-                        'class' => 'form-control',
-                    ],
-                ],
-                'helper' => trans(
-                    'plugins/ecommerce::ecommerce.theme_options.page_slug_description',
-                    [
-                        'slug' => Html::link(
-                            url(EcommerceHelper::getPageSlug($key)),
-                            attributes: ['target' => '_blank']
-                        ),
-                        'default' => "<code>$value</code>",
-                    ]
-                ),
-            ];
-        }
-
-        $seoFields = [];
-        $seoPages = [
-            'products' => __('Products'),
-        ];
-
-        if (EcommerceHelper::isOrderTrackingEnabled()) {
-            $seoPages['order_tracking'] = __('Order Tracking');
-        }
-
-        if (EcommerceHelper::isCartEnabled()) {
-            $seoPages['cart'] = __('Cart');
-        }
-
-        if (EcommerceHelper::isWishlistEnabled()) {
-            $seoPages['wishlist'] = __('Wishlist');
-        }
-
-        if (EcommerceHelper::isCompareEnabled()) {
-            $seoPages['compare'] = __('Compare');
-        }
-
-        foreach ($seoPages as $pageId => $pageName) {
-            $seoFields[] = [
-                'id' => sprintf('ecommerce_%s_seo_title', $pageId),
-                'type' => 'text',
-                'label' => trans('plugins/ecommerce::ecommerce.theme_options.page_seo_title', ['page' => $pageName]),
-                'attributes' => [
-                    'name' => sprintf('ecommerce_%s_seo_title', $pageId),
-                    'value' => __($pageName),
-                    'options' => [
-                        'class' => 'form-control',
-                    ],
-                ],
-            ];
-
-            $seoFields[] = [
-                'id' => sprintf('ecommerce_%s_seo_description', $pageId),
-                'type' => 'textarea',
-                'label' => trans('plugins/ecommerce::ecommerce.theme_options.page_seo_description', ['page' => $pageName]),
-                'attributes' => [
-                    'name' => sprintf('ecommerce_%s_seo_description', $pageId),
-                    'value' => null,
-                    'options' => [
-                        'class' => 'form-control',
-                        'rows' => 3,
-                    ],
-                ],
-                'helper' => __('Leave it empty to use the default description from Theme options -> General.'),
-            ];
-        }
-
         theme_option()
             ->setSection([
                 'title' => trans('plugins/ecommerce::ecommerce.theme_options.name'),
+                'desc' => trans('plugins/ecommerce::ecommerce.theme_options.description'),
                 'id' => 'opt-text-subsection-ecommerce',
                 'subsection' => true,
-                'icon' => 'ti ti-shopping-bag',
+                'icon' => 'fa fa-shopping-cart',
                 'fields' => [
                     [
                         'id' => 'number_of_products_per_page',
@@ -1111,25 +694,12 @@ class HookServiceProvider extends ServiceProvider
                         ],
                     ],
                     [
-                        'id' => 'number_of_related_product',
-                        'type' => 'number',
-                        'label' => trans('plugins/ecommerce::ecommerce.theme_options.number_of_related_product'),
-                        'attributes' => [
-                            'name' => 'number_of_related_product',
-                            'value' => 4,
-                            'options' => [
-                                'class' => 'form-control',
-                            ],
-                        ],
-                        'helper' => trans('plugins/ecommerce::ecommerce.theme_options.number_of_related_product_helper'),
-                    ],
-                    [
                         'id' => 'max_filter_price',
                         'type' => 'number',
                         'label' => trans('plugins/ecommerce::ecommerce.theme_options.max_price_filter'),
                         'attributes' => [
                             'name' => 'max_filter_price',
-                            'value' => EcommerceHelper::getProductMaxPrice(),
+                            'value' => 100000,
                             'options' => [
                                 'class' => 'form-control',
                             ],
@@ -1147,69 +717,7 @@ class HookServiceProvider extends ServiceProvider
                             ],
                         ],
                     ],
-                    [
-                        'id' => 'login_background',
-                        'type' => 'mediaImage',
-                        'label' => trans('plugins/ecommerce::ecommerce.theme_options.login_background_image'),
-                        'attributes' => [
-                            'name' => 'login_background',
-                        ],
-                    ],
-                    [
-                        'id' => 'register_background',
-                        'type' => 'mediaImage',
-                        'label' => trans('plugins/ecommerce::ecommerce.theme_options.register_background_image'),
-                        'attributes' => [
-                            'name' => 'register_background',
-                        ],
-                    ],
-                    [
-                        'id' => 'merchant_return_policy_url',
-                        'type' => 'text',
-                        'label' => trans('plugins/ecommerce::ecommerce.theme_options.merchant_return_policy_url'),
-                        'attributes' => [
-                            'name' => 'merchant_return_policy_url',
-                            'value' => null,
-                            'options' => [
-                                'class' => 'form-control',
-                                'placeholder' => trans('plugins/ecommerce::ecommerce.theme_options.merchant_return_policy_url_placeholder'),
-                            ],
-                        ],
-                        'priority' => 1000,
-                    ],
-                    [
-                        'id' => 'merchant_return_days',
-                        'type' => 'number',
-                        'label' => trans('plugins/ecommerce::ecommerce.theme_options.merchant_return_days'),
-                        'attributes' => [
-                            'name' => 'merchant_return_days',
-                            'value' => 30,
-                            'options' => [
-                                'class' => 'form-control',
-                            ],
-                        ],
-                        'priority' => 1001,
-                    ],
                 ],
-                'priority' => 600,
-            ])
-            ->setSection([
-                'title' => trans('plugins/ecommerce::ecommerce.theme_options.slug_name'),
-                'description' => trans('plugins/ecommerce::ecommerce.theme_options.slug_description'),
-                'id' => 'opt-text-subsection-ecommerce-slug',
-                'subsection' => true,
-                'icon' => 'ti ti-link',
-                'fields' => $fields,
-                'priority' => 650,
-            ])
-            ->setSection([
-                'title' => trans('plugins/ecommerce::ecommerce.theme_options.seo_name'),
-                'description' => trans('plugins/ecommerce::ecommerce.theme_options.seo_description'),
-                'id' => 'opt-text-subsection-ecommerce-seo',
-                'subsection' => true,
-                'icon' => 'ti ti-timeline',
-                'priority' => 700,
-                'fields' => $seoFields,
             ]);
     }
 
@@ -1254,18 +762,23 @@ class HookServiceProvider extends ServiceProvider
     {
         try {
             if (Auth::user()->hasPermission('orders.edit')) {
-                $orders = Order::query()
-                    ->where([
+                $orders = $this->app->make(OrderInterface::class)->advancedGet([
+                    'condition' => [
                         'status' => BaseStatusEnum::PENDING,
                         'is_finished' => 1,
-                    ])
-                    ->orderByDesc('created_at')
-                    ->with(['address', 'user'])
-                    ->paginate(10);
+                    ],
+                    'paginate' => [
+                        'per_page' => 10,
+                        'current_paged' => 1,
+                    ],
+                    'order_by' => ['created_at' => 'DESC'],
+                ]);
 
                 if ($orders->count() == 0) {
                     return $options;
                 }
+
+                $orders->loadMissing(['address', 'user']);
 
                 return $options . view('plugins/ecommerce::orders.notification', compact('orders'))->render();
             }
@@ -1279,39 +792,44 @@ class HookServiceProvider extends ServiceProvider
     public function getPendingOrders(int|string|null $number, string $menuId): string
     {
         switch ($menuId) {
-            case 'cms-plugins-ecommerce':
-                if (! Auth::user()->hasPermission('orders.index')) {
-                    return $number;
-                }
-
-                return view('core/base::partials.navbar.badge-count', ['class' => 'ecommerce-count'])->render();
-
             case 'cms-plugins-ecommerce-order':
+
                 if (! Auth::user()->hasPermission('orders.index')) {
                     return $number;
                 }
 
-                return view('core/base::partials.navbar.badge-count', ['class' => 'pending-orders'])->render();
+                $attributes = [
+                    'class' => 'badge badge-success menu-item-count pending-orders',
+                    'style' => 'display: none;',
+                ];
+
+                return Html::tag('span', '', $attributes)->toHtml();
+
+            case 'cms-plugins-ecommerce':
+
+                if (! Auth::user()->hasPermission('orders.index')) {
+                    return $number;
+                }
+
+                $attributes = [
+                    'class' => 'badge badge-success menu-item-count ecommerce-count',
+                    'style' => 'display: none;',
+                ];
+
+                return Html::tag('span', '', $attributes)->toHtml();
 
             case 'cms-plugins-ecommerce-order-return':
+
                 if (! Auth::user()->hasPermission('orders.index')) {
                     return $number;
                 }
 
-                return view('core/base::partials.navbar.badge-count', ['class' => 'pending-order-returns'])->render();
+                $attributes = [
+                    'class' => 'badge badge-success menu-item-count pending-order-returns',
+                    'style' => 'display: none;',
+                ];
 
-            case 'cms-ecommerce-review':
-                if (! Auth::user()->hasPermission('reviews.index')) {
-                    return $number;
-                }
-
-                $pendingCount = Review::query()->where('status', BaseStatusEnum::PENDING)->count();
-
-                if ($pendingCount > 0) {
-                    return BaseHelper::renderBadge(number_format($pendingCount));
-                }
-
-                break;
+                return Html::tag('span', '', $attributes)->toHtml();
         }
 
         return $number;
@@ -1320,30 +838,28 @@ class HookServiceProvider extends ServiceProvider
     public function getMenuItemCount(array $data = []): array
     {
         if (Auth::check() && Auth::user()->hasPermission('orders.index')) {
-            $pendingOrders = Order::query()
-                ->where([
-                    'status' => BaseStatusEnum::PENDING,
-                    'is_finished' => 1,
-                ])
-                ->count();
+            $pendingOrders = app(OrderInterface::class)->count([
+                'status' => BaseStatusEnum::PENDING,
+                'is_finished' => 1,
+            ]);
 
             $data[] = [
                 'key' => 'pending-orders',
                 'value' => $pendingOrders,
             ];
 
-            $pendingOrderReturns = OrderReturn::query()
-                ->whereIn('return_status', [OrderReturnStatusEnum::PENDING, OrderReturnStatusEnum::PROCESSING])
-                ->count();
+            $data[] = [
+                'key' => 'ecommerce-count',
+                'value' => $pendingOrders,
+            ];
+
+            $pendingOrderReturns = app(OrderReturnInterface::class)->count([
+                ['return_status', 'IN', [OrderReturnStatusEnum::PENDING, OrderReturnStatusEnum::PROCESSING]],
+            ]);
 
             $data[] = [
                 'key' => 'pending-order-returns',
                 'value' => $pendingOrderReturns,
-            ];
-
-            $data[] = [
-                'key' => 'ecommerce-count',
-                'value' => $pendingOrders + $pendingOrderReturns,
             ];
         }
 
@@ -1357,19 +873,5 @@ class HookServiceProvider extends ServiceProvider
         }
 
         return $products;
-    }
-
-    public function handleSingleView(Slug|array $slug): BaseHttpResponse|array|Slug|RedirectResponse
-    {
-        return app(HandleFrontPages::class)->handle($slug);
-    }
-
-    public function renderProductFacebookComments(string $html, ?object $object = null): string
-    {
-        if ($object instanceof Product && theme_option('facebook_comment_enabled_in_product', 'no') === 'yes') {
-            return view('packages/theme::partials.facebook-comments')->render();
-        }
-
-        return $html;
     }
 }

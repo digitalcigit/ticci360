@@ -2,24 +2,19 @@
     {!! Form::open(Arr::except($formOptions, ['template'])) !!}
 @endif
 
-@php
-    do_action(BASE_ACTION_TOP_FORM_CONTENT_NOTIFICATION, request(), $form->getModel());
-@endphp
+@php do_action(BASE_ACTION_TOP_FORM_CONTENT_NOTIFICATION, request(), $form->getModel()) @endphp
 
 @if ($showFields)
-    {{ $form->getOpenWrapperFormColumns() }}
-
     @foreach ($fields as $field)
-        @continue(in_array($field->getName(), $exclude))
-
-        {!! $field->render() !!}
-        @if (defined('BASE_FILTER_SLUG_AREA') && $field->getName() == SlugHelper::getColumnNameToGenerateSlug($form->getModel()))
-            {!! apply_filters(BASE_FILTER_SLUG_AREA, null, $form->getModel()) !!}
+        @if (!in_array($field->getName(), $exclude))
+            {!! $field->render() !!}
+            @if (defined('BASE_FILTER_SLUG_AREA') && $field->getName() == SlugHelper::getColumnNameToGenerateSlug($form->getModel()))
+                {!! apply_filters(BASE_FILTER_SLUG_AREA, null, $form->getModel()) !!}
+            @endif
         @endif
     @endforeach
-
-    {{ $form->getCloseWrapperFormColumns() }}
 @endif
+<div class="clearfix"></div>
 
 @foreach ($form->getMetaBoxes() as $key => $metaBox)
     {!! $form->getMetaBox($key) !!}
@@ -46,3 +41,4 @@
         @endpush
     @endif
 @endif
+

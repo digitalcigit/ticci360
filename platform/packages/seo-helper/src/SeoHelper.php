@@ -2,18 +2,16 @@
 
 namespace Botble\SeoHelper;
 
+use Illuminate\Support\Arr;
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Facades\MetaBox;
-use Botble\Media\Facades\RvMedia;
+use Botble\Base\Models\BaseModel;
 use Botble\SeoHelper\Contracts\SeoHelperContract;
 use Botble\SeoHelper\Contracts\SeoMetaContract;
 use Botble\SeoHelper\Contracts\SeoOpenGraphContract;
 use Botble\SeoHelper\Contracts\SeoTwitterContract;
 use Exception;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
-use Illuminate\Support\Str;
+use Botble\Base\Facades\MetaBox;
 
 class SeoHelper implements SeoHelperContract
 {
@@ -25,21 +23,21 @@ class SeoHelper implements SeoHelperContract
         $this->openGraph()->addProperty('type', 'website');
     }
 
-    public function setSeoMeta(SeoMetaContract $seoMeta): static
+    public function setSeoMeta(SeoMetaContract $seoMeta): self
     {
         $this->seoMeta = $seoMeta;
 
         return $this;
     }
 
-    public function setSeoOpenGraph(SeoOpenGraphContract $seoOpenGraph): static
+    public function setSeoOpenGraph(SeoOpenGraphContract $seoOpenGraph): self
     {
         $this->seoOpenGraph = $seoOpenGraph;
 
         return $this;
     }
 
-    public function setSeoTwitter(SeoTwitterContract $seoTwitter): static
+    public function setSeoTwitter(SeoTwitterContract $seoTwitter): self
     {
         $this->seoTwitter = $seoTwitter;
 
@@ -51,7 +49,7 @@ class SeoHelper implements SeoHelperContract
         return $this->seoOpenGraph;
     }
 
-    public function setTitle(?string $title, ?string $siteName = null, ?string $separator = null): static
+    public function setTitle(string|null $title, string|null $siteName = null, string|null $separator = null): self
     {
         $this->meta()->setTitle($title, $siteName, $separator);
         $this->openGraph()->setTitle($title);
@@ -59,13 +57,6 @@ class SeoHelper implements SeoHelperContract
             $this->openGraph()->setSiteName($siteName);
         }
         $this->twitter()->setTitle($title);
-
-        return $this;
-    }
-
-    public function setImage(?string $image): SeoHelperContract
-    {
-        $this->openGraph()->setImage($image);
 
         return $this;
     }
@@ -80,26 +71,19 @@ class SeoHelper implements SeoHelperContract
         return $this->seoTwitter;
     }
 
-    public function getTitle(): ?string
+    public function getTitle(): string|null
     {
         return $this->meta()->getTitle();
     }
 
-    public function getTitleOnly(): ?string
-    {
-        return $this->meta()->getTitleOnly();
-    }
-
-    public function getDescription(): ?string
+    public function getDescription(): string|null
     {
         return $this->meta()->getDescription();
     }
 
-    public function setDescription($description): static
+    public function setDescription($description): self
     {
-        if ($description) {
-            $description = Str::limit(strip_tags(BaseHelper::cleanShortcodes($description)), 250);
-        }
+        $description = BaseHelper::cleanShortcodes($description);
 
         $this->meta()->setDescription($description);
         $this->openGraph()->setDescription($description);
@@ -125,12 +109,11 @@ class SeoHelper implements SeoHelperContract
         );
     }
 
-    public function saveMetaData(string $screen, Request $request, Model $object): bool
+    public function saveMetaData(string $screen, Request $request, BaseModel $object): bool
     {
-        if (
-            in_array($object::class, config('packages.seo-helper.general.supported', [])) &&
-            $request->has('seo_meta')
-        ) {
+        if (in_array(get_class($object), config('packages.seo-helper.general.supported', [])) && $request->has(
+            'seo_meta'
+        )) {
             try {
                 if (empty($request->input('seo_meta'))) {
                     MetaBox::deleteMetaData($object, 'seo_meta');
@@ -140,31 +123,12 @@ class SeoHelper implements SeoHelperContract
 
                 $seoMeta = $request->input('seo_meta', []);
 
-                if ($request->hasFile('seo_meta_image_input')) {
-                    $uploadFolder = $object->upload_folder ?: Str::plural(Str::slug(class_basename($this)));
-
-                    $result = RvMedia::handleUpload($request->file('seo_meta_image_input'), 0, $uploadFolder);
-
-                    if (! $result['error']) {
-                        $request->merge(['seo_meta_image' => $result['data']->url]);
-                    }
-                }
-
-                $seoMeta['seo_image'] = $request->input('seo_meta_image');
-
-                Arr::forget($seoMeta, 'seo_meta_image');
-                Arr::forget($seoMeta, 'seo_meta_image_input');
-
                 if (! Arr::get($seoMeta, 'seo_title')) {
                     Arr::forget($seoMeta, 'seo_title');
                 }
 
                 if (! Arr::get($seoMeta, 'seo_description')) {
                     Arr::forget($seoMeta, 'seo_description');
-                }
-
-                if (! Arr::get($seoMeta, 'seo_image')) {
-                    Arr::forget($seoMeta, 'seo_image');
                 }
 
                 if (! empty($seoMeta)) {
@@ -182,10 +146,10 @@ class SeoHelper implements SeoHelperContract
         return false;
     }
 
-    public function deleteMetaData(string $screen, Model $object): bool
+    public function deleteMetaData(string $screen, BaseModel $object): bool
     {
         try {
-            if (in_array($object::class, config('packages.seo-helper.general.supported', []))) {
+            if (in_array(get_class($object), config('packages.seo-helper.general.supported', []))) {
                 MetaBox::deleteMetaData($object, 'seo_meta');
             }
 
@@ -195,33 +159,18 @@ class SeoHelper implements SeoHelperContract
         }
     }
 
-    public function supportedModules(): array
-    {
-        return config('packages.seo-helper.general.supported', []);
-    }
-
-    public function registerModule(array|string $model): static
+    public function registerModule(array|string $model): self
     {
         if (! is_array($model)) {
             $model = [$model];
         }
 
         config([
-            'packages.seo-helper.general.supported' => array_merge($this->supportedModules(), $model),
+            'packages.seo-helper.general.supported' => array_merge(
+                config('packages.seo-helper.general.supported', []),
+                $model
+            ),
         ]);
-
-        return $this;
-    }
-
-    public function removeModule(array|string $model): static
-    {
-        if (! is_array($model)) {
-            $model = [$model];
-        }
-
-        $supported = collect($this->supportedModules())->reject(fn ($item) => in_array($item, $model))->toArray();
-
-        config()->set('packages.seo-helper.general.supported', $supported);
 
         return $this;
     }

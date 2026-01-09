@@ -2,72 +2,116 @@
 
 namespace Botble\Ecommerce\Http\Controllers;
 
-use Botble\Base\Http\Actions\DeleteResourceAction;
-use Botble\Base\Supports\Breadcrumb;
+use Botble\Base\Events\BeforeEditContentEvent;
+use Botble\Base\Events\CreatedContentEvent;
+use Botble\Base\Events\DeletedContentEvent;
+use Botble\Base\Events\UpdatedContentEvent;
+use Botble\Base\Facades\PageTitle;
+use Botble\Base\Forms\FormBuilder;
+use Botble\Base\Http\Controllers\BaseController;
+use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Ecommerce\Forms\ProductTagForm;
 use Botble\Ecommerce\Http\Requests\ProductTagRequest;
-use Botble\Ecommerce\Models\ProductTag;
+use Botble\Ecommerce\Repositories\Interfaces\ProductTagInterface;
 use Botble\Ecommerce\Tables\ProductTagTable;
+use Exception;
+use Illuminate\Http\Request;
 
 class ProductTagController extends BaseController
 {
-    protected function breadcrumb(): Breadcrumb
+    public function __construct(protected ProductTagInterface $productTagRepository)
     {
-        return parent::breadcrumb()
-            ->add(trans('plugins/ecommerce::product-tag.name'), route('product-tag.index'));
     }
 
     public function index(ProductTagTable $table)
     {
-        $this->pageTitle(trans('plugins/ecommerce::product-tag.name'));
+        PageTitle::setTitle(trans('plugins/ecommerce::product-tag.name'));
 
         return $table->renderTable();
     }
 
-    public function create()
+    public function create(FormBuilder $formBuilder)
     {
-        $this->pageTitle(trans('plugins/ecommerce::product-tag.create'));
+        PageTitle::setTitle(trans('plugins/ecommerce::product-tag.create'));
 
-        return ProductTagForm::create()->renderForm();
+        return $formBuilder->create(ProductTagForm::class)->renderForm();
     }
 
-    public function store(ProductTagRequest $request)
+    public function store(ProductTagRequest $request, BaseHttpResponse $response)
     {
-        $form = ProductTagForm::create();
+        $productTag = $this->productTagRepository->createOrUpdate($request->input());
 
-        $form->setRequest($request)->save();
+        event(new CreatedContentEvent(PRODUCT_TAG_MODULE_SCREEN_NAME, $request, $productTag));
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setPreviousUrl(route('product-tag.index'))
-            ->setNextUrl(route('product-tag.edit', $form->getModel()->id))
-            ->withCreatedSuccessMessage();
+            ->setNextUrl(route('product-tag.edit', $productTag->id))
+            ->setMessage(trans('core/base::notices.create_success_message'));
     }
 
-    public function edit(ProductTag $productTag)
+    public function edit(int|string $id, FormBuilder $formBuilder, Request $request)
     {
-        $this->pageTitle(trans('core/base::forms.edit_item', ['name' => $productTag->name]));
+        $productTag = $this->productTagRepository->findOrFail($id);
 
-        return ProductTagForm::createFromModel($productTag)->renderForm();
+        event(new BeforeEditContentEvent($request, $productTag));
+
+        PageTitle::setTitle(trans('core/base::forms.edit_item', ['name' => $productTag->name]));
+
+        return $formBuilder->create(ProductTagForm::class, ['model' => $productTag])->renderForm();
     }
 
-    public function update(ProductTag $productTag, ProductTagRequest $request)
+    public function update(int|string $id, ProductTagRequest $request, BaseHttpResponse $response)
     {
-        ProductTagForm::createFromModel($productTag)->setRequest($request)->save();
+        $productTag = $this->productTagRepository->findOrFail($id);
 
-        return $this
-            ->httpResponse()
+        $productTag->fill($request->input());
+
+        $this->productTagRepository->createOrUpdate($productTag);
+
+        event(new UpdatedContentEvent(PRODUCT_TAG_MODULE_SCREEN_NAME, $request, $productTag));
+
+        return $response
             ->setPreviousUrl(route('product-tag.index'))
-            ->withUpdatedSuccessMessage();
+            ->setMessage(trans('core/base::notices.update_success_message'));
     }
 
-    public function destroy(ProductTag $productTag)
+    public function destroy(int|string $id, Request $request, BaseHttpResponse $response)
     {
-        return DeleteResourceAction::make($productTag);
+        try {
+            $productTag = $this->productTagRepository->findOrFail($id);
+
+            $this->productTagRepository->delete($productTag);
+
+            event(new DeletedContentEvent(PRODUCT_TAG_MODULE_SCREEN_NAME, $request, $productTag));
+
+            return $response->setMessage(trans('core/base::notices.delete_success_message'));
+        } catch (Exception $exception) {
+            return $response
+                ->setError()
+                ->setMessage($exception->getMessage());
+        }
+    }
+
+    public function deletes(Request $request, BaseHttpResponse $response)
+    {
+        $ids = $request->input('ids');
+        if (empty($ids)) {
+            return $response
+                ->setError()
+                ->setMessage(trans('core/base::notices.no_select'));
+        }
+
+        foreach ($ids as $id) {
+            $productTag = $this->productTagRepository->findOrFail($id);
+            $this->productTagRepository->delete($productTag);
+            event(new DeletedContentEvent(PRODUCT_TAG_MODULE_SCREEN_NAME, $request, $productTag));
+        }
+
+        return $response->setMessage(trans('core/base::notices.delete_success_message'));
     }
 
     public function getAllTags()
     {
-        return ProductTag::query()->pluck('name')->all();
+        return $this->productTagRepository->pluck('name');
     }
 }

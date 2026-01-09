@@ -8,7 +8,12 @@ use Botble\SeoHelper\Contracts\Entities\WebmastersContract;
 
 class MiscTags implements MiscTagsContract
 {
-    protected string $currentUrl = '';
+    /**
+     * Current URL.
+     *
+     * @var string
+     */
+    protected $currentUrl = '';
 
     /**
      * Meta collection.
@@ -139,15 +144,25 @@ class MiscTags implements MiscTagsContract
         return $this->render();
     }
 
-    protected function hasUrl(): bool
+    /**
+     * Check if has the current URL.
+     *
+     * @return bool
+     */
+    protected function hasUrl()
     {
         return ! empty($this->getUrl());
     }
 
-    protected function addCanonical(): static
+    /**
+     * Add the canonical link.
+     *
+     * @return MiscTags
+     */
+    protected function addCanonical()
     {
         if ($this->hasUrl()) {
-            $this->add('canonical', apply_filters('core_seo_canonical', $this->currentUrl));
+            $this->add('canonical', $this->currentUrl);
         }
 
         return $this;

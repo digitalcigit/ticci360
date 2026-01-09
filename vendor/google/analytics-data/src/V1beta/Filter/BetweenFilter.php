@@ -20,13 +20,13 @@ class BetweenFilter extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>.google.analytics.data.v1beta.NumericValue from_value = 1;</code>
      */
-    protected $from_value = null;
+    private $from_value = null;
     /**
      * Ends with this number.
      *
      * Generated from protobuf field <code>.google.analytics.data.v1beta.NumericValue to_value = 2;</code>
      */
-    protected $to_value = null;
+    private $to_value = null;
 
     /**
      * Constructor.

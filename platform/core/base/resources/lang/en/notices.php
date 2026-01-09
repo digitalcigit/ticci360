@@ -14,5 +14,4 @@ return [
     'enum' => [
         'validate_message' => 'The :attribute value you have entered is invalid.',
     ],
-    'delete_failed_message' => 'Failed to delete, item not found.',
 ];

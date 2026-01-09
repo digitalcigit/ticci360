@@ -3,100 +3,113 @@
 namespace Botble\Ecommerce\Http\Controllers;
 
 use Botble\Base\Events\CreatedContentEvent;
+use Botble\Base\Events\DeletedContentEvent;
 use Botble\Base\Events\UpdatedContentEvent;
-use Botble\Base\Http\Actions\DeleteResourceAction;
-use Botble\Base\Supports\Breadcrumb;
+use Botble\Base\Facades\PageTitle;
+use Botble\Base\Forms\FormBuilder;
+use Botble\Base\Http\Controllers\BaseController;
+use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Ecommerce\Forms\BrandForm;
 use Botble\Ecommerce\Http\Requests\BrandRequest;
-use Botble\Ecommerce\Http\Resources\BrandResource;
-use Botble\Ecommerce\Models\Brand;
+use Botble\Ecommerce\Repositories\Interfaces\BrandInterface;
 use Botble\Ecommerce\Tables\BrandTable;
+use Exception;
 use Illuminate\Http\Request;
 
 class BrandController extends BaseController
 {
-    protected function breadcrumb(): Breadcrumb
+    public function __construct(protected BrandInterface $brandRepository)
     {
-        return parent::breadcrumb()
-            ->add(trans('plugins/ecommerce::brands.menu'), route('brands.index'));
     }
 
     public function index(BrandTable $dataTable)
     {
-        $this->pageTitle(trans('plugins/ecommerce::brands.menu'));
+        PageTitle::setTitle(trans('plugins/ecommerce::brands.menu'));
 
         return $dataTable->renderTable();
     }
 
-    public function create()
+    public function create(FormBuilder $formBuilder)
     {
-        $this->pageTitle(trans('plugins/ecommerce::brands.create'));
+        PageTitle::setTitle(trans('plugins/ecommerce::brands.create'));
 
-        return BrandForm::create()->renderForm();
+        return $formBuilder->create(BrandForm::class)->renderForm();
     }
 
-    public function store(BrandRequest $request)
+    public function store(BrandRequest $request, BaseHttpResponse $response)
     {
-        /**
-         * @var Brand $brand
-         */
-        $brand = Brand::query()->create($request->input());
+        $brand = $this->brandRepository->createOrUpdate($request->input());
 
-        $brand->categories()->detach();
-
-        $brand->categories()->sync((array) $request->input('categories', []));
+        if ($request->has('categories')) {
+            $brand->categories()->sync((array) $request->input('categories', []));
+        }
 
         event(new CreatedContentEvent(BRAND_MODULE_SCREEN_NAME, $request, $brand));
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setPreviousUrl(route('brands.index'))
             ->setNextUrl(route('brands.edit', $brand->id))
-            ->withCreatedSuccessMessage();
+            ->setMessage(trans('core/base::notices.create_success_message'));
     }
 
-    public function edit(Brand $brand)
+    public function edit(int|string $id, FormBuilder $formBuilder)
     {
-        $this->pageTitle(trans('core/base::forms.edit_item', ['name' => $brand->name]));
+        $brand = $this->brandRepository->findOrFail($id);
 
-        return BrandForm::createFromModel($brand)->renderForm();
+        PageTitle::setTitle(trans('core/base::forms.edit_item', ['name' => $brand->name]));
+
+        return $formBuilder->create(BrandForm::class, ['model' => $brand])->renderForm();
     }
 
-    public function update(Brand $brand, BrandRequest $request)
+    public function update(int|string $id, BrandRequest $request, BaseHttpResponse $response)
     {
+        $brand = $this->brandRepository->findOrFail($id);
         $brand->fill($request->input());
-        $brand->save();
 
-        $brand->categories()->detach();
+        $this->brandRepository->createOrUpdate($brand);
 
-        $brand->categories()->sync((array) $request->input('categories', []));
+        if ($request->has('categories')) {
+            $brand->categories()->sync((array) $request->input('categories', []));
+        }
 
         event(new UpdatedContentEvent(BRAND_MODULE_SCREEN_NAME, $request, $brand));
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setPreviousUrl(route('brands.index'))
-            ->withUpdatedSuccessMessage();
+            ->setMessage(trans('core/base::notices.update_success_message'));
     }
 
-    public function destroy(Brand $brand)
+    public function destroy(int|string $id, Request $request, BaseHttpResponse $response)
     {
-        return DeleteResourceAction::make($brand);
+        try {
+            $brand = $this->brandRepository->findOrFail($id);
+            $this->brandRepository->delete($brand);
+
+            event(new DeletedContentEvent(BRAND_MODULE_SCREEN_NAME, $request, $brand));
+
+            return $response->setMessage(trans('core/base::notices.delete_success_message'));
+        } catch (Exception $exception) {
+            return $response
+                ->setError()
+                ->setMessage($exception->getMessage());
+        }
     }
 
-    public function getSearch(Request $request)
+    public function deletes(Request $request, BaseHttpResponse $response)
     {
-        $term = $request->input('search', $request->input('q'));
+        $ids = $request->input('ids');
+        if (empty($ids)) {
+            return $response
+                ->setError()
+                ->setMessage(trans('core/base::notices.no_select'));
+        }
 
-        $categories = Brand::query()
-            ->select(['id', 'name'])
-            ->where('name', 'LIKE', '%' . $term . '%')
-            ->paginate(10);
+        foreach ($ids as $id) {
+            $brand = $this->brandRepository->findOrFail($id);
+            $this->brandRepository->delete($brand);
+            event(new DeletedContentEvent(BRAND_MODULE_SCREEN_NAME, $request, $brand));
+        }
 
-        $data = BrandResource::collection($categories);
-
-        return $this
-            ->httpResponse()
-            ->setData($data)->toApiResponse();
+        return $response->setMessage(trans('core/base::notices.delete_success_message'));
     }
 }

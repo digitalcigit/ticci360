@@ -10,12 +10,12 @@ return new class () extends Migration {
     public function up(): void
     {
         if (Schema::hasColumn('countries', 'code')) {
-            Schema::table('countries', function (Blueprint $table): void {
+            Schema::table('countries', function (Blueprint $table) {
                 $table->dropColumn('code');
             });
         }
 
-        Schema::table('countries', function (Blueprint $table): void {
+        Schema::table('countries', function (Blueprint $table) {
             $table->string('nationality', 120)->nullable()->change();
             $table->string('code', 10)->nullable();
         });

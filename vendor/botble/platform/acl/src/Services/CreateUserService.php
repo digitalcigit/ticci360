@@ -3,36 +3,44 @@
 namespace Botble\ACL\Services;
 
 use Botble\ACL\Events\RoleAssignmentEvent;
-use Botble\ACL\Models\Role;
 use Botble\ACL\Models\User;
+use Botble\ACL\Repositories\Interfaces\RoleInterface;
+use Botble\ACL\Repositories\Interfaces\UserInterface;
 use Botble\Support\Services\ProduceServiceInterface;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Http\Request;
 
 class CreateUserService implements ProduceServiceInterface
 {
-    public function __construct(protected ActivateUserService $activateUserService)
-    {
+    public function __construct(
+        protected UserInterface $userRepository,
+        protected RoleInterface $roleRepository,
+        protected ActivateUserService $activateUserService
+    ) {
     }
 
     public function execute(Request $request): User
     {
-        $user = new User();
-        $user->fill($request->input());
-        $user->password = Hash::make($request->input('password'));
-        $user->save();
+        /**
+         * @var User $user
+         */
+        $user = $this->userRepository->createOrUpdate($request->input());
 
-        if (
-            $this->activateUserService->activate($user) &&
-            ($roleId = $request->input('role_id')) &&
-            $role = Role::query()->find($roleId)
-        ) {
-            /**
-             * @var Role $role
-             */
-            $role->users()->attach($user->getKey());
+        if ($request->has('username') && $request->has('password')) {
+            $this->userRepository->update(['id' => $user->id], [
+                'username' => $request->input('username'),
+                'password' => Hash::make($request->input('password')),
+            ]);
 
-            event(new RoleAssignmentEvent($role, $user));
+            if ($this->activateUserService->activate($user) && $request->input('role_id')) {
+                $role = $this->roleRepository->findById($request->input('role_id'));
+
+                if (! empty($role)) {
+                    $role->users()->attach($user->id);
+
+                    event(new RoleAssignmentEvent($role, $user));
+                }
+            }
         }
 
         return $user;

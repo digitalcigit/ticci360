@@ -2,10 +2,9 @@
 
 namespace Botble\Dashboard\Supports;
 
-use Botble\Dashboard\Models\DashboardWidget;
-use Botble\Dashboard\Models\DashboardWidgetSetting;
+use Botble\Dashboard\Repositories\Interfaces\DashboardWidgetInterface;
+use Botble\Dashboard\Repositories\Interfaces\DashboardWidgetSettingInterface;
 use Carbon\Carbon;
-use Closure;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 
@@ -17,29 +16,27 @@ class DashboardWidgetInstance
 
     protected string $title;
 
-    protected string $icon = '';
+    protected string $icon;
 
-    protected string $color = '';
+    protected string $color;
 
     protected string $route;
 
-    protected string $bodyClass = '';
+    protected string $bodyClass;
 
     protected bool $isEqualHeight = true;
 
-    protected ?string $column = null;
+    protected string|null $column = null;
 
     protected string $permission;
 
-    protected int|string|Closure $statsTotal = 0;
+    protected int $statsTotal = 0;
 
     protected bool $hasLoadCallback = false;
 
     protected array $settings = [];
 
     protected array $predefinedRanges = [];
-
-    protected int $priority = 999;
 
     public function getType(): string
     {
@@ -161,24 +158,12 @@ class DashboardWidgetInstance
         return $this;
     }
 
-    public function getPriority(): int
+    public function getStatsTotal(): int
     {
-        return $this->priority;
+        return $this->statsTotal;
     }
 
-    public function setPriority(int $priority): self
-    {
-        $this->priority = $priority;
-
-        return $this;
-    }
-
-    public function getStatsTotal(): int|string
-    {
-        return value($this->statsTotal, $this);
-    }
-
-    public function setStatsTotal(int|string|Closure $statsTotal): self
+    public function setStatsTotal(int $statsTotal): self
     {
         $this->statsTotal = $statsTotal;
 
@@ -204,9 +189,9 @@ class DashboardWidgetInstance
         return $this;
     }
 
-    public function init(array &$widgets, Collection $widgetSettings): array
+    public function init(array $widgets, Collection $widgetSettings): array
     {
-        if (! Auth::guard()->user()->hasPermission($this->permission)) {
+        if (! Auth::user()->hasPermission($this->permission)) {
             return $widgets;
         }
 
@@ -214,17 +199,17 @@ class DashboardWidgetInstance
         $widgetSetting = $widget ? $widget->settings->first() : null;
 
         if (! $widget) {
-            $widget = DashboardWidget::query()->firstOrCreate(['name' => $this->key]);
+            $widget = app(DashboardWidgetInterface::class)
+                ->firstOrCreate(['name' => $this->key]);
         }
 
         $widget->title = $this->title;
         $widget->icon = $this->icon;
         $widget->color = $this->color;
         $widget->route = $this->route;
-        $widget->column = $this->column;
-
         if ($this->type === 'widget') {
             $widget->bodyClass = $this->bodyClass;
+            $widget->column = $this->column;
 
             $settings = array_merge(
                 $widgetSetting && $widgetSetting->settings ? $widgetSetting->settings : [],
@@ -250,12 +235,11 @@ class DashboardWidgetInstance
             return $widgets;
         }
 
-        $widget->statsTotal = $this->getStatsTotal();
+        $widget->statsTotal = $this->statsTotal;
 
         $widgets[$this->key] = [
             'id' => $widget->id,
             'type' => $this->type,
-            'priority' => $this->priority,
             'view' => view('core/dashboard::widgets.stats', compact('widget', 'widgetSetting'))->render(),
         ];
 
@@ -324,7 +308,7 @@ class DashboardWidgetInstance
         ];
     }
 
-    public function getFilterRange(?string $filterRangeInput)
+    public function getFilterRange(string|null $filterRangeInput)
     {
         $predefinedRanges = $this->getPredefinedRanges();
         $predefinedRanges = collect($predefinedRanges);
@@ -344,18 +328,18 @@ class DashboardWidgetInstance
 
     public function saveSettings(string $widgetName, array $settings): bool
     {
-        $widget = DashboardWidget::query()->where('name', $widgetName)->first();
+        $widget = app(DashboardWidgetInterface::class)->getFirstBy(['name' => $widgetName]);
 
         if (! $widget) {
             return false;
         }
 
-        $widgetSetting = DashboardWidgetSetting::query()->firstOrCreate([
+        $widgetSetting = app(DashboardWidgetSettingInterface::class)->firstOrCreate([
             'widget_id' => $widget->id,
-            'user_id' => Auth::guard()->id(),
+            'user_id' => Auth::id(),
         ]);
 
-        $widgetSetting->settings = array_merge((array) $widgetSetting->settings, $settings);
+        $widgetSetting->settings = array_merge((array)$widgetSetting->settings, $settings);
 
         $widgetSetting->save();
 

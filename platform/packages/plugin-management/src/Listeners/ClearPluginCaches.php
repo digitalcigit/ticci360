@@ -2,7 +2,6 @@
 
 namespace Botble\PluginManagement\Listeners;
 
-use Botble\Base\Facades\BaseHelper;
 use Botble\PluginManagement\PluginManifest;
 use Exception;
 use Illuminate\Support\Facades\File;
@@ -20,7 +19,7 @@ class ClearPluginCaches
                 File::delete($pluginsPath);
             }
         } catch (Exception $exception) {
-            BaseHelper::logError($exception);
+            info($exception->getMessage());
         }
     }
 }

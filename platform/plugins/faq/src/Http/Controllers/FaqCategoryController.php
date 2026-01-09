@@ -2,68 +2,103 @@
 
 namespace Botble\Faq\Http\Controllers;
 
-use Botble\Base\Http\Actions\DeleteResourceAction;
-use Botble\Base\Http\Controllers\BaseController;
-use Botble\Base\Supports\Breadcrumb;
-use Botble\Faq\Forms\FaqCategoryForm;
+use Botble\Base\Facades\PageTitle;
 use Botble\Faq\Http\Requests\FaqCategoryRequest;
 use Botble\Faq\Models\FaqCategory;
+use Botble\Faq\Repositories\Interfaces\FaqCategoryInterface;
+use Botble\Base\Http\Controllers\BaseController;
+use Illuminate\Http\Request;
+use Exception;
 use Botble\Faq\Tables\FaqCategoryTable;
+use Botble\Base\Events\CreatedContentEvent;
+use Botble\Base\Events\DeletedContentEvent;
+use Botble\Base\Events\UpdatedContentEvent;
+use Botble\Base\Http\Responses\BaseHttpResponse;
+use Botble\Faq\Forms\FaqCategoryForm;
+use Botble\Base\Forms\FormBuilder;
 
 class FaqCategoryController extends BaseController
 {
-    protected function breadcrumb(): Breadcrumb
+    public function __construct(protected FaqCategoryInterface $faqCategoryRepository)
     {
-        return parent::breadcrumb()
-            ->add(trans('plugins/faq::faq.name'))
-            ->add(trans('plugins/faq::faq-category.name'), route('faq_category.index'));
     }
 
     public function index(FaqCategoryTable $table)
     {
-        $this->pageTitle(trans('plugins/faq::faq-category.name'));
+        PageTitle::setTitle(trans('plugins/faq::faq-category.name'));
 
         return $table->renderTable();
     }
 
-    public function create()
+    public function create(FormBuilder $formBuilder)
     {
-        $this->pageTitle(trans('plugins/faq::faq-category.create'));
+        PageTitle::setTitle(trans('plugins/faq::faq-category.create'));
 
-        return FaqCategoryForm::create()->renderForm();
+        return $formBuilder->create(FaqCategoryForm::class)->renderForm();
     }
 
-    public function store(FaqCategoryRequest $request)
+    public function store(FaqCategoryRequest $request, BaseHttpResponse $response)
     {
-        $form = FaqCategoryForm::create()->setRequest($request);
-        $form->save();
+        $faqCategory = $this->faqCategoryRepository->createOrUpdate($request->input());
 
-        return $this
-            ->httpResponse()
-            ->setPreviousRoute('faq_category.index')
-            ->setNextRoute('faq_category.edit', $form->getModel()->getKey())
-            ->withCreatedSuccessMessage();
+        event(new CreatedContentEvent(FAQ_CATEGORY_MODULE_SCREEN_NAME, $request, $faqCategory));
+
+        return $response
+            ->setPreviousUrl(route('faq_category.index'))
+            ->setNextUrl(route('faq_category.edit', $faqCategory->id))
+            ->setMessage(trans('core/base::notices.create_success_message'));
     }
 
-    public function edit(FaqCategory $faqCategory)
+    public function edit(FaqCategory $faqCategory, FormBuilder $formBuilder)
     {
-        $this->pageTitle(trans('core/base::forms.edit_item', ['name' => $faqCategory->name]));
+        PageTitle::setTitle(trans('core/base::forms.edit_item', ['name' => $faqCategory->name]));
 
-        return FaqCategoryForm::createFromModel($faqCategory)->renderForm();
+        return $formBuilder->create(FaqCategoryForm::class, ['model' => $faqCategory])->renderForm();
     }
 
-    public function update(FaqCategory $faqCategory, FaqCategoryRequest $request)
+    public function update(FaqCategory $faqCategory, FaqCategoryRequest $request, BaseHttpResponse $response)
     {
-        FaqCategoryForm::createFromModel($faqCategory)->setRequest($request)->save();
+        $faqCategory->fill($request->input());
 
-        return $this
-            ->httpResponse()
-            ->setPreviousRoute('faq_category.index')
-            ->withUpdatedSuccessMessage();
+        $this->faqCategoryRepository->createOrUpdate($faqCategory);
+
+        event(new UpdatedContentEvent(FAQ_CATEGORY_MODULE_SCREEN_NAME, $request, $faqCategory));
+
+        return $response
+            ->setPreviousUrl(route('faq_category.index'))
+            ->setMessage(trans('core/base::notices.update_success_message'));
     }
 
-    public function destroy(FaqCategory $faqCategory)
+    public function destroy(FaqCategory $faqCategory, Request $request, BaseHttpResponse $response)
     {
-        return DeleteResourceAction::make($faqCategory);
+        try {
+            $this->faqCategoryRepository->delete($faqCategory);
+
+            event(new DeletedContentEvent(FAQ_CATEGORY_MODULE_SCREEN_NAME, $request, $faqCategory));
+
+            return $response->setMessage(trans('core/base::notices.delete_success_message'));
+        } catch (Exception $exception) {
+            return $response
+                ->setError()
+                ->setMessage($exception->getMessage());
+        }
+    }
+
+    public function deletes(Request $request, BaseHttpResponse $response)
+    {
+        $ids = $request->input('ids');
+        if (empty($ids)) {
+            return $response
+                ->setError()
+                ->setMessage(trans('core/base::notices.no_select'));
+        }
+
+        foreach ($ids as $id) {
+            $faqCategory = $this->faqCategoryRepository->findOrFail($id);
+            $this->faqCategoryRepository->delete($faqCategory);
+            event(new DeletedContentEvent(FAQ_CATEGORY_MODULE_SCREEN_NAME, $request, $faqCategory));
+        }
+
+        return $response->setMessage(trans('core/base::notices.delete_success_message'));
     }
 }

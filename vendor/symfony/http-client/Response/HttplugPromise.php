@@ -23,12 +23,14 @@ use Psr\Http\Message\ResponseInterface as Psr7ResponseInterface;
  */
 final class HttplugPromise implements HttplugPromiseInterface
 {
-    public function __construct(
-        private GuzzlePromiseInterface $promise,
-    ) {
+    private $promise;
+
+    public function __construct(GuzzlePromiseInterface $promise)
+    {
+        $this->promise = $promise;
     }
 
-    public function then(?callable $onFulfilled = null, ?callable $onRejected = null): self
+    public function then(callable $onFulfilled = null, callable $onRejected = null): self
     {
         return new self($this->promise->then(
             $this->wrapThenCallback($onFulfilled),
@@ -41,12 +43,17 @@ final class HttplugPromise implements HttplugPromiseInterface
         $this->promise->cancel();
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public function getState(): string
     {
         return $this->promise->getState();
     }
 
     /**
+     * {@inheritdoc}
+     *
      * @return Psr7ResponseInterface|mixed
      */
     public function wait($unwrap = true): mixed
@@ -66,6 +73,8 @@ final class HttplugPromise implements HttplugPromiseInterface
             return null;
         }
 
-        return static fn ($value) => Create::promiseFor($callback($value));
+        return static function ($value) use ($callback) {
+            return Create::promiseFor($callback($value));
+        };
     }
 }

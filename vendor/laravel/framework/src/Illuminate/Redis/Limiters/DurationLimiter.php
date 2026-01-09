@@ -3,7 +3,6 @@
 namespace Illuminate\Redis\Limiters;
 
 use Illuminate\Contracts\Redis\LimiterTimeoutException;
-use Illuminate\Support\Sleep;
 
 class DurationLimiter
 {
@@ -56,6 +55,7 @@ class DurationLimiter
      * @param  string  $name
      * @param  int  $maxLocks
      * @param  int  $decay
+     * @return void
      */
     public function __construct($redis, $name, $maxLocks, $decay)
     {
@@ -84,7 +84,7 @@ class DurationLimiter
                 throw new LimiterTimeoutException;
             }
 
-            Sleep::usleep($sleep * 1000);
+            usleep($sleep * 1000);
         }
 
         if (is_callable($callback)) {

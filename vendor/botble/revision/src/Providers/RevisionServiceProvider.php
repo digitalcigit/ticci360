@@ -2,8 +2,8 @@
 
 namespace Botble\Revision\Providers;
 
-use Botble\Base\Supports\ServiceProvider;
 use Botble\Base\Traits\LoadAndPublishDataTrait;
+use Illuminate\Support\ServiceProvider;
 
 class RevisionServiceProvider extends ServiceProvider
 {
@@ -11,13 +11,14 @@ class RevisionServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this
-            ->setNamespace('packages/revision')
+        $this->setNamespace('packages/revision')
             ->loadAndPublishViews()
             ->loadAndPublishConfigurations(['general'])
             ->loadMigrations()
             ->publishAssets();
 
-        $this->app->register(HookServiceProvider::class);
+        $this->app->booted(function () {
+            $this->app->register(HookServiceProvider::class);
+        });
     }
 }

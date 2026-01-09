@@ -2,8 +2,8 @@
 
 namespace Botble\Ecommerce\Enums;
 
-use Botble\Base\Facades\Html;
 use Botble\Base\Supports\Enum;
+use Botble\Base\Facades\Html;
 use Illuminate\Support\HtmlString;
 
 /**
@@ -23,7 +23,6 @@ class OrderReturnReasonEnum extends Enum
     public const ARRIVED_LATE = 'arrived_late';
     public const NOT_AS_DESCRIBED = 'not_as_described';
     public const OTHER = 'other';
-    public const NONE = '';
 
     public static $langPath = 'plugins/ecommerce::order.order_return_reasons';
 

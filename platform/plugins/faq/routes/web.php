@@ -1,28 +1,27 @@
 <?php
 
-use Botble\Base\Facades\AdminHelper;
+use Botble\Base\Facades\BaseHelper;
 use Illuminate\Support\Facades\Route;
 
-Route::group(['namespace' => 'Botble\Faq\Http\Controllers'], function (): void {
-    AdminHelper::registerRoutes(function (): void {
-        Route::group(['prefix' => 'faq-categories', 'as' => 'faq_category.'], function (): void {
+Route::group(['namespace' => 'Botble\Faq\Http\Controllers', 'middleware' => ['web', 'core']], function () {
+    Route::group(['prefix' => BaseHelper::getAdminPrefix(), 'middleware' => 'auth'], function () {
+        Route::group(['prefix' => 'faq-categories', 'as' => 'faq_category.'], function () {
             Route::resource('', 'FaqCategoryController')->parameters(['' => 'faq_category']);
-        });
 
-        Route::group(['prefix' => 'faqs', 'as' => 'faq.'], function (): void {
-            Route::resource('', 'FaqController')->parameters(['' => 'faq']);
-        });
-
-        Route::group(['prefix' => 'settings'], function (): void {
-            Route::get('faqs', [
-                'as' => 'faqs.settings',
-                'uses' => 'Settings\FaqSettingController@edit',
+            Route::delete('items/destroy', [
+                'as' => 'deletes',
+                'uses' => 'FaqCategoryController@deletes',
+                'permission' => 'faq_category.destroy',
             ]);
+        });
 
-            Route::put('faqs', [
-                'as' => 'faqs.settings.update',
-                'uses' => 'Settings\FaqSettingController@update',
-                'permission' => 'faqs.settings',
+        Route::group(['prefix' => 'faqs', 'as' => 'faq.'], function () {
+            Route::resource('', 'FaqController')->parameters(['' => 'faq']);
+
+            Route::delete('items/destroy', [
+                'as' => 'deletes',
+                'uses' => 'FaqController@deletes',
+                'permission' => 'faq.destroy',
             ]);
         });
     });

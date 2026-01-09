@@ -9,6 +9,8 @@ trait Action
     /**
      * Add an action column.
      *
+     * @param  array  $attributes
+     * @param  bool  $prepend
      * @return $this
      */
     public function addAction(array $attributes = [], bool $prepend = false): static

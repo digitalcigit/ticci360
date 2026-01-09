@@ -2,37 +2,26 @@
 
 <div class="checkout-wrapper">
     <div>
-        <x-core::form
-            :url="$action"
-            class="payment-checkout-form"
-            method="post"
-        >
-            <input name="name" type="hidden" value="{{ $name }}">
-            <input name="amount" type="hidden" value="{{ $amount }}">
-            <input name="currency" type="hidden" value="{{ $currency }}">
+        <form action="{{ $action }}" method="post" class="payment-checkout-form">
+            @csrf
+            <input type="hidden" name="name" value="{{ $name }}">
+            <input type="hidden" name="amount" value="{{ $amount }}">
+            <input type="hidden" name="currency" value="{{ $currency }}">
             @if (isset($returnUrl))
-                <input name="return_url" type="hidden" value="{{ $returnUrl }}">
+                <input type="hidden" name="return_url" value="{{ $returnUrl }}">
             @endif
             @if (isset($callbackUrl))
-                <input name="callback_url" type="hidden" value="{{ $callbackUrl }}">
+                <input type="hidden" name="callback_url" value="{{ $callbackUrl }}">
             @endif
-
             {!! apply_filters(PAYMENT_FILTER_PAYMENT_PARAMETERS, null) !!}
 
             @include('plugins/payment::partials.payment-methods')
 
-            {!! apply_filters(PAYMENT_FILTER_AFTER_PAYMENT_METHOD, null) !!}
-
-            <x-core::button
-                class="payment-checkout-btn"
-                color="primary w-100"
-                data-processing-text="{{ __('Processing. Please wait...') }}"
-                data-error-header="{{ __('Error') }}"
-                icon="ti ti-credit-card"
-            >
-                {{ __('Checkout') }}
-            </x-core::button>
-        </x-core::form>
+            <br>
+            <div class="text-center">
+                <button class="payment-checkout-btn btn btn-info" data-processing-text="{{ __('Processing. Please wait...') }}" data-error-header="{{ __('Error') }}">{{ __('Checkout') }}</button>
+            </div>
+        </form>
     </div>
 </div>
 

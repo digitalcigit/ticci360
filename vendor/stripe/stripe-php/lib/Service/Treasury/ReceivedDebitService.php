@@ -4,22 +4,17 @@
 
 namespace Stripe\Service\Treasury;
 
-/**
- * @phpstan-import-type RequestOptionsArray from \Stripe\Util\RequestOptions
- *
- * @psalm-import-type RequestOptionsArray from \Stripe\Util\RequestOptions
- */
 class ReceivedDebitService extends \Stripe\Service\AbstractService
 {
     /**
      * Returns a list of ReceivedDebits.
      *
-     * @param null|array{ending_before?: string, expand?: string[], financial_account: string, limit?: int, starting_after?: string, status?: string} $params
-     * @param null|RequestOptionsArray|\Stripe\Util\RequestOptions $opts
-     *
-     * @return \Stripe\Collection<\Stripe\Treasury\ReceivedDebit>
+     * @param null|array $params
+     * @param null|array|\Stripe\Util\RequestOptions $opts
      *
      * @throws \Stripe\Exception\ApiErrorException if the request fails
+     *
+     * @return \Stripe\Collection<\Stripe\Treasury\ReceivedDebit>
      */
     public function all($params = null, $opts = null)
     {
@@ -31,12 +26,12 @@ class ReceivedDebitService extends \Stripe\Service\AbstractService
      * ReceivedDebit ID from the ReceivedDebit list.
      *
      * @param string $id
-     * @param null|array{expand?: string[]} $params
-     * @param null|RequestOptionsArray|\Stripe\Util\RequestOptions $opts
-     *
-     * @return \Stripe\Treasury\ReceivedDebit
+     * @param null|array $params
+     * @param null|array|\Stripe\Util\RequestOptions $opts
      *
      * @throws \Stripe\Exception\ApiErrorException if the request fails
+     *
+     * @return \Stripe\Treasury\ReceivedDebit
      */
     public function retrieve($id, $params = null, $opts = null)
     {

@@ -18,63 +18,26 @@ namespace Stripe\Apps;
  * @property string $id Unique identifier for the object.
  * @property string $object String representing the object's type. Objects of the same type share the same value.
  * @property int $created Time at which the object was created. Measured in seconds since the Unix epoch.
- * @property null|bool $deleted If true, indicates that this secret has been deleted
  * @property null|int $expires_at The Unix timestamp for the expiry time of the secret, after which the secret deletes.
  * @property bool $livemode Has the value <code>true</code> if the object exists in live mode or the value <code>false</code> if the object exists in test mode.
  * @property string $name A name for the secret that's unique within the scope.
  * @property null|string $payload The plaintext secret value to be stored.
- * @property (object{type: string, user?: string}&\Stripe\StripeObject) $scope
+ * @property \Stripe\StripeObject $scope
  */
 class Secret extends \Stripe\ApiResource
 {
     const OBJECT_NAME = 'apps.secret';
 
-    /**
-     * Create or replace a secret in the secret store.
-     *
-     * @param null|array{expand?: string[], expires_at?: int, name: string, payload: string, scope: array{type: string, user?: string}} $params
-     * @param null|array|string $options
-     *
-     * @return Secret the created resource
-     *
-     * @throws \Stripe\Exception\ApiErrorException if the request fails
-     */
-    public static function create($params = null, $options = null)
-    {
-        self::_validateParams($params);
-        $url = static::classUrl();
-
-        list($response, $opts) = static::_staticRequest('post', $url, $params, $options);
-        $obj = \Stripe\Util\Util::convertToStripeObject($response->json, $opts);
-        $obj->setLastResponse($response);
-
-        return $obj;
-    }
-
-    /**
-     * List all secrets stored on the given scope.
-     *
-     * @param null|array{ending_before?: string, expand?: string[], limit?: int, scope: array{type: string, user?: string}, starting_after?: string} $params
-     * @param null|array|string $opts
-     *
-     * @return \Stripe\Collection<Secret> of ApiResources
-     *
-     * @throws \Stripe\Exception\ApiErrorException if the request fails
-     */
-    public static function all($params = null, $opts = null)
-    {
-        $url = static::classUrl();
-
-        return static::_requestPage($url, \Stripe\Collection::class, $params, $opts);
-    }
+    use \Stripe\ApiOperations\All;
+    use \Stripe\ApiOperations\Create;
 
     /**
      * @param null|array $params
      * @param null|array|string $opts
      *
-     * @return Secret the deleted secret
-     *
      * @throws \Stripe\Exception\ApiErrorException if the request fails
+     *
+     * @return \Stripe\Apps\Secret the deleted secret
      */
     public static function deleteWhere($params = null, $opts = null)
     {
@@ -90,9 +53,9 @@ class Secret extends \Stripe\ApiResource
      * @param null|array $params
      * @param null|array|string $opts
      *
-     * @return Secret the finded secret
-     *
      * @throws \Stripe\Exception\ApiErrorException if the request fails
+     *
+     * @return \Stripe\Apps\Secret the finded secret
      */
     public static function find($params = null, $opts = null)
     {

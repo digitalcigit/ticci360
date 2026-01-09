@@ -21,7 +21,7 @@ class CaseExpression extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>string dimension_name = 1;</code>
      */
-    protected $dimension_name = '';
+    private $dimension_name = '';
 
     /**
      * Constructor.

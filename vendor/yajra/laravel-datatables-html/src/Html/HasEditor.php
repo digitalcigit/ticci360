@@ -8,6 +8,8 @@ trait HasEditor
 {
     /**
      * Collection of Editors.
+     *
+     * @var array
      */
     protected array $editors = [];
 
@@ -16,7 +18,6 @@ trait HasEditor
      *
      * @param  array|mixed  ...$editors
      * @return $this
-     *
      * @see https://editor.datatables.net/
      */
     public function editors(...$editors): static
@@ -41,8 +42,8 @@ trait HasEditor
     /**
      * Integrate with DataTables Editor.
      *
+     * @param  Editor  $editor
      * @return $this
-     *
      * @see https://editor.datatables.net/
      */
     public function editor(Editor $editor): static
@@ -65,6 +66,9 @@ trait HasEditor
         return $this;
     }
 
+    /**
+     * @return array
+     */
     public function getEditors(): array
     {
         return $this->editors;

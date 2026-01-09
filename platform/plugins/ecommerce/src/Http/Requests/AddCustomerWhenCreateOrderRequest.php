@@ -2,12 +2,8 @@
 
 namespace Botble\Ecommerce\Http\Requests;
 
-use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Rules\EmailRule;
 use Botble\Ecommerce\Facades\EcommerceHelper;
-use Botble\Ecommerce\Models\Customer;
 use Botble\Support\Http\Requests\Request;
-use Illuminate\Validation\Rule;
 
 class AddCustomerWhenCreateOrderRequest extends Request
 {
@@ -18,10 +14,7 @@ class AddCustomerWhenCreateOrderRequest extends Request
         }
 
         $rules = EcommerceHelper::getCustomerAddressValidationRules();
-
-        $rules['phone'] = 'required|' . BaseHelper::getPhoneValidationRule();
-
-        $rules['email'] = ['nullable', new EmailRule(), Rule::unique((new Customer())->getTable(), 'email')];
+        $rules['email'] = 'required|max:60|min:6|email|unique:ec_customers';
 
         return $rules;
     }

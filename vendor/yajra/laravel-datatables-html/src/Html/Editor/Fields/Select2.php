@@ -10,6 +10,7 @@ class Select2 extends Select
     protected string $type = 'select2';
 
     /**
+     * @param  bool  $state
      * @return $this
      */
     public function allowClear(bool $state = true): static
@@ -18,6 +19,7 @@ class Select2 extends Select
     }
 
     /**
+     * @param  string  $value
      * @return $this
      */
     public function placeholder(string $value): static
@@ -26,6 +28,8 @@ class Select2 extends Select
     }
 
     /**
+     * @param  string  $text
+     * @param  string  $id
      * @return $this
      */
     public function optsPlaceholder(string $text = '', string $id = ''): static
@@ -38,14 +42,10 @@ class Select2 extends Select
         ]);
     }
 
-    public function multiple(bool $value = true): static
-    {
-        return $this->opts(['multiple' => $value]);
-    }
-
     /**
      * Set select2 ajax option.
      *
+     * @param  array|string  $value
      * @return $this
      */
     public function ajax(array|string $value): static
@@ -62,6 +62,7 @@ class Select2 extends Select
     /**
      * Set select2 ajax url option.
      *
+     * @param  string  $value
      * @return $this
      */
     public function ajaxUrl(string $value): static
@@ -72,6 +73,7 @@ class Select2 extends Select
     /**
      * Set select2 ajaxDelay option.
      *
+     * @param  int  $value
      * @return $this
      */
     public function ajaxDelay(int $value = 250): static
@@ -82,6 +84,7 @@ class Select2 extends Select
     /**
      * Set select2 ajax data option.
      *
+     * @param  array|string  $data
      * @return $this
      */
     public function ajaxData(array|string $data): static
@@ -89,7 +92,7 @@ class Select2 extends Select
         if (is_array($data)) {
             $script = 'function(params) {';
             foreach ($data as $key => $value) {
-                $value = json_encode($value, JSON_THROW_ON_ERROR);
+                $value = json_encode($value);
                 $script .= " params.$key = $value; ";
             }
             $script .= 'return params; }';
@@ -103,6 +106,9 @@ class Select2 extends Select
     /**
      * Set select2 ajax processResults option to process a paginated results.
      *
+     * @param  string  $display
+     * @param  string  $id
+     * @param  string  $wrap
      * @return $this
      */
     public function processPaginatedResults(string $display = 'text', string $id = 'id', string $wrap = 'results'): static
@@ -119,6 +125,7 @@ class Select2 extends Select
     /**
      * Set select2 ajax processResults option.
      *
+     * @param  string  $value
      * @return $this
      */
     public function processResults(string $value): static

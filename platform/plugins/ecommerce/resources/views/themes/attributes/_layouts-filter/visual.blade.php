@@ -1,23 +1,20 @@
-@if (($attributes = $attributes->where('attribute_set_id', $set->id)) && $attributes->isNotEmpty())
-    <div class="bb-product-filter-attribute-item">
-        <h4 class="bb-product-filter-title">{{ $set->title }}</h4>
-
-        <div class="bb-product-filter-content">
-            <ul class="bb-product-filter-items filter-visual">
-                @foreach ($attributes as $attribute)
-                    <li class="bb-product-filter-item">
-                        <input
-                            id="attribute-{{ $attribute->id }}"
-                            name="attributes[{{ $set->slug }}][]"
-                            type="checkbox"
-                            value="{{ $attribute->id }}"
-                            @checked(in_array($attribute->id, $selected))
-                        >
-                        <label for="attribute-{{ $attribute->id }}">{{ $attribute->title }}</label>
-                        <span class="bb-product-attribute-swatch-display" style="{{ $attribute->getAttributeStyle() }}"></span>
-                    </li>
-                @endforeach
-            </ul>
-        </div>
+<li class="visual-swatches-wrapper" data-type="visual">
+    <h6 class="widget-title" data-title="{{ $set->title }}">{{ $set->title }}</h6>
+    <div class="attribute-values">
+        <ul class="visual-swatch">
+            @foreach($attributes->where('attribute_set_id', $set->id) as $attribute)
+                <li data-slug="{{ $attribute->slug }}"
+                    data-bs-toggle="tooltip"
+                    data-placement="top"
+                    title="{{ $attribute->title }}">
+                    <div class="custom-checkbox">
+                        <label>
+                            <input class="product-filter-item" type="checkbox" name="attributes[]" value="{{ $attribute->id }}" @checked(in_array($attribute->id, $selected))>
+                            <span style="{{ $attribute->getAttributeStyle() }}"></span>
+                        </label>
+                    </div>
+                </li>
+            @endforeach
+        </ul>
     </div>
-@endif
+</li>

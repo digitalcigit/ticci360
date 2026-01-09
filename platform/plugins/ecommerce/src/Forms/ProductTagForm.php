@@ -2,26 +2,44 @@
 
 namespace Botble\Ecommerce\Forms;
 
-use Botble\Base\Forms\FieldOptions\DescriptionFieldOption;
-use Botble\Base\Forms\FieldOptions\NameFieldOption;
-use Botble\Base\Forms\FieldOptions\StatusFieldOption;
-use Botble\Base\Forms\Fields\SelectField;
-use Botble\Base\Forms\Fields\TextareaField;
-use Botble\Base\Forms\Fields\TextField;
+use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Base\Forms\FormAbstract;
 use Botble\Ecommerce\Http\Requests\ProductTagRequest;
 use Botble\Ecommerce\Models\ProductTag;
 
 class ProductTagForm extends FormAbstract
 {
-    public function setup(): void
+    public function buildForm(): void
     {
         $this
-            ->model(ProductTag::class)
+            ->setupModel(new ProductTag())
             ->setValidatorClass(ProductTagRequest::class)
-            ->add('name', TextField::class, NameFieldOption::make())
-            ->add('description', TextareaField::class, DescriptionFieldOption::make())
-            ->add('status', SelectField::class, StatusFieldOption::make())
+            ->withCustomFields()
+            ->add('name', 'text', [
+                'label' => trans('core/base::forms.name'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'placeholder' => trans('core/base::forms.name_placeholder'),
+                    'data-counter' => 120,
+                ],
+            ])
+            ->add('description', 'textarea', [
+                'label' => trans('core/base::forms.description'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'rows' => 4,
+                    'placeholder' => trans('core/base::forms.description_placeholder'),
+                    'data-counter' => 400,
+                ],
+            ])
+            ->add('status', 'customSelect', [
+                'label' => trans('core/base::tables.status'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'class' => 'form-control address',
+                ],
+                'choices' => BaseStatusEnum::labels(),
+            ])
             ->setBreakFieldPoint('status');
     }
 }

@@ -2,27 +2,37 @@
 
 namespace Botble\Blog\Http\Controllers\API;
 
-use Botble\Base\Http\Controllers\BaseController;
+use App\Http\Controllers\Controller;
+use Botble\Base\Enums\BaseStatusEnum;
+use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Blog\Http\Resources\TagResource;
-use Botble\Blog\Models\Tag;
+use Botble\Blog\Repositories\Interfaces\TagInterface;
 use Illuminate\Http\Request;
 
-class TagController extends BaseController
+class TagController extends Controller
 {
+    public function __construct(protected TagInterface $tagRepository)
+    {
+    }
+
     /**
      * List tags
      *
      * @group Blog
      */
-    public function index(Request $request)
+    public function index(Request $request, BaseHttpResponse $response)
     {
-        $data = Tag::query()
-            ->wherePublished()
-            ->with('slugable')
-            ->paginate($request->integer('per_page', 10) ?: 10);
+        $data = $this->tagRepository
+            ->advancedGet([
+                'with' => ['slugable'],
+                'condition' => ['status' => BaseStatusEnum::PUBLISHED],
+                'paginate' => [
+                    'per_page' => $request->integer('per_page', 10),
+                    'current_paged' => $request->integer('page', 1),
+                ],
+            ]);
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setData(TagResource::collection($data))
             ->toApiResponse();
     }

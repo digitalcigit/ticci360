@@ -21,22 +21,23 @@
     "require": {
         "ext-zip": "*",
         "ext-gd": "*",
-        "barryvdh/laravel-dompdf": "^3.1",
+        "barryvdh/laravel-dompdf": "^2.0",
         "botble/assets": "^1.0",
-        "botble/form-builder": "^1.0",
-        "intervention/image": "^3.4",
-        "maennchen/zipstream-php": "3.1.*",
-        "mobiledetect/mobiledetectlib": "^4.8",
-        "mpdf/mpdf": "^8.2",
-        "tightenco/ziggy": "^2.0",
-        "yajra/laravel-datatables-buttons": "^12.0",
-        "yajra/laravel-datatables-oracle": "^12.0",
+        "intervention/image": "^2.6",
+        "kris/laravel-form-builder": "dev-master",
+        "laravelcollective/html": "^6.2",
+        "xantios/mimey": "^2.2",
+        "tightenco/ziggy": "^1.4",
+        "yajra/laravel-datatables-buttons": "^9.1",
+        "yajra/laravel-datatables-oracle": "^10.2",
+        "guzzlehttp/guzzle": "^6.0|^7.0",
         "mews/purifier": "^3.3",
         "maatwebsite/excel": "^3.1",
-        "symfony/http-client": "^7.2",
-        "symfony/postmark-mailer": "^7.2",
-        "symfony/mailgun-mailer": "^7.2",
-        "twig/twig": "^3.14",
+        "symfony/http-client": "^6.0",
+        "symfony/postmark-mailer": "^6.0",
+        "symfony/mailgun-mailer": "^6.0",
+        "twig/twig": "^3.0",
+        "doctrine/dbal": "^3.2",
         "league/flysystem-aws-s3-v3": "^3.0"
     },
     "autoload": {
@@ -50,9 +51,7 @@
             "Botble\\Setting\\": "setting/src",
             "Botble\\Table\\": "table/src",
             "Botble\\JsValidation\\": "js-validation/src",
-            "Botble\\Chart\\": "chart/src",
-            "Botble\\Icon\\": "icon/src",
-            "Tightenco\\Ziggy\\": "base/src/Ziggy"
+            "Botble\\Chart\\": "chart/src"
         }
     },
     "extra": {
@@ -61,6 +60,7 @@
                 "Botble\\Base\\Providers\\BaseServiceProvider",
                 "Botble\\Base\\Providers\\CommandServiceProvider",
                 "Botble\\Base\\Providers\\EventServiceProvider",
+                "Botble\\Base\\Providers\\BreadcrumbsServiceProvider",
                 "Botble\\Base\\Providers\\ComposerServiceProvider",
                 "Botble\\Base\\Providers\\MailConfigServiceProvider",
                 "Botble\\Base\\Providers\\FormServiceProvider",
@@ -70,29 +70,24 @@
                 "Botble\\Dashboard\\Providers\\DashboardServiceProvider",
                 "Botble\\Media\\Providers\\MediaServiceProvider",
                 "Botble\\JsValidation\\Providers\\JsValidationServiceProvider",
-                "Botble\\Chart\\Providers\\ChartServiceProvider",
-                "Botble\\Icon\\Providers\\IconServiceProvider"
+                "Botble\\Chart\\Providers\\ChartServiceProvider"
             ],
             "aliases": {
                 "Action": "Botble\\Base\\Facades\\Action",
-                "AdminAppearance": "Botble\\Base\\Facades\\AdminAppearance",
-                "AdminHelper": "Botble\\Base\\Facades\\AdminHelper",
                 "Assets": "Botble\\Base\\Facades\\Assets",
                 "BaseHelper": "Botble\\Base\\Facades\\BaseHelper",
                 "Breadcrumbs": "Botble\\Base\\Facades\\Breadcrumbs",
                 "DashboardMenu": "Botble\\Base\\Facades\\DashboardMenu",
-                "CoreIcon": "Botble\\Icon\\Facades\\Icon",
                 "EmailHandler": "Botble\\Base\\Facades\\EmailHandler",
                 "Filter": "Botble\\Base\\Facades\\Filter",
                 "Form": "Botble\\Base\\Facades\\Form",
                 "Html": "Botble\\Base\\Facades\\Html",
-                "JsValidator": "Botble\\JsValidation\\Facades\\JsValidator",
                 "MacroableModels": "Botble\\Base\\Facades\\MacroableModels",
                 "MetaBox": "Botble\\Base\\Facades\\MetaBox",
                 "PageTitle": "Botble\\Base\\Facades\\PageTitle",
-                "PanelSectionManager": "Botble\\Base\\Facades\\PanelSectionManager",
-                "RvMedia": "Botble\\Media\\Facades\\RvMedia",
-                "Setting": "Botble\\Setting\\Facades\\Setting"
+                "JsValidator": "Botble\\JsValidation\\Facades\\JsValidator",
+                "Setting": "Botble\\Setting\\Facades\\Setting",
+                "RvMedia": "Botble\\Media\\Facades\\RvMedia"
             }
         }
     },

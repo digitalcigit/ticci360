@@ -34,11 +34,17 @@ class Pool
      * Create a new requests pool.
      *
      * @param  \Illuminate\Http\Client\Factory|null  $factory
+     * @return void
      */
-    public function __construct(?Factory $factory = null)
+    public function __construct(Factory $factory = null)
     {
         $this->factory = $factory ?: new Factory();
-        $this->handler = Utils::chooseHandler();
+
+        if (method_exists(Utils::class, 'chooseHandler')) {
+            $this->handler = Utils::chooseHandler();
+        } else {
+            $this->handler = \GuzzleHttp\choose_handler();
+        }
     }
 
     /**
@@ -77,7 +83,7 @@ class Pool
      *
      * @param  string  $method
      * @param  array  $parameters
-     * @return \Illuminate\Http\Client\PendingRequest|\GuzzleHttp\Promise\Promise
+     * @return \Illuminate\Http\Client\PendingRequest
      */
     public function __call($method, $parameters)
     {

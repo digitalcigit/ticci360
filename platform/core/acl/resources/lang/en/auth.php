@@ -9,9 +9,8 @@ return [
         'remember' => 'Remember me?',
         'login' => 'Sign in',
         'placeholder' => [
-            'username' => 'Enter your username or email address',
-            'email' => 'Enter your email address',
-            'password' => 'Enter your password',
+            'username' => 'Please enter your username',
+            'email' => 'Please enter your email',
         ],
         'success' => 'Login successfully!',
         'fail' => 'Wrong username or password.',
@@ -43,10 +42,6 @@ return [
             'fail' => 'Can not send email in this time. Please try again later.',
         ],
         'new-password' => 'New password',
-        'placeholder' => [
-            'new_password' => 'Enter your new password',
-            'new_password_confirmation' => 'Confirm your new password',
-        ],
     ],
     'email' => [
         'reminder' => [
@@ -69,14 +64,6 @@ return [
         'email' => [
             'title' => 'ACL',
             'description' => 'ACL email configuration',
-            'templates' => [
-                'password_reminder' => [
-                    'title' => 'Reset password',
-                    'description' => 'Send email to user when requesting reset password',
-                    'subject' => 'Reset Password',
-                    'reset_link' => 'Reset password link',
-                ],
-            ],
         ],
     ],
 ];

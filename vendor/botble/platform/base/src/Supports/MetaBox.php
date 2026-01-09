@@ -2,23 +2,28 @@
 
 namespace Botble\Base\Supports;
 
-use Botble\Base\Contracts\BaseModel;
-use Botble\Base\Models\MetaBox as MetaBoxModel;
+use Botble\Base\Repositories\Interfaces\MetaBoxInterface;
 use Closure;
+use Exception;
 use Illuminate\Database\Eloquent\Model;
+use Botble\Base\Models\MetaBox as MetaBoxModel;
 
 class MetaBox
 {
     protected array $metaBoxes = [];
 
+    public function __construct(protected MetaBoxInterface $metaBoxRepository)
+    {
+    }
+
     public function addMetaBox(
         string $id,
         string $title,
         string|array|callable|Closure $callback,
-        ?string $reference = null,
+        string|null $reference = null,
         string $context = 'advanced',
         string $priority = 'default',
-        ?array $callbackArgs = null
+        array|null $callbackArgs = null
     ): void {
         if (! isset($this->metaBoxes[$reference])) {
             $this->metaBoxes[$reference] = [];
@@ -86,21 +91,17 @@ class MetaBox
         ];
     }
 
-    public function doMetaBoxes(string $context, array|Model|string|null $object = null): void
+    public function doMetaBoxes(string $context, Model|string|null $object = null): void
     {
-        if (! $object) {
-            return;
-        }
-
         $data = '';
-        $reference = $object instanceof BaseModel ? $object::class : $object;
+        $reference = get_class($object);
         if (isset($this->metaBoxes[$reference][$context])) {
             foreach (['high', 'sorted', 'core', 'default', 'low'] as $priority) {
                 if (! isset($this->metaBoxes[$reference][$context][$priority])) {
                     continue;
                 }
 
-                foreach ((array) $this->metaBoxes[$reference][$context][$priority] as $box) {
+                foreach ((array)$this->metaBoxes[$reference][$context][$priority] as $box) {
                     if (! $box || ! $box['title']) {
                         continue;
                     }
@@ -115,7 +116,7 @@ class MetaBox
         echo view('core/base::elements.meta-box', compact('data', 'context'))->render();
     }
 
-    public function removeMetaBox(string $id, ?string $reference, string $context): void
+    public function removeMetaBox(string $id, string|null $reference, string $context): void
     {
         if (! isset($this->metaBoxes[$reference])) {
             $this->metaBoxes[$reference] = [];
@@ -132,36 +133,35 @@ class MetaBox
 
     public function saveMetaBoxData(Model $object, string $key, $value, $options = null): void
     {
-        if (! $object->getKey()) {
-            return;
-        }
-
         $key = apply_filters('stored_meta_box_key', $key, $object);
 
-        $data = [
-            'meta_key' => $key,
-            'reference_id' => $object->getKey(),
-            'reference_type' => $object::class,
-        ];
+        try {
+            $fieldMeta = $this->metaBoxRepository->getFirstBy([
+                'meta_key' => $key,
+                'reference_id' => $object->getKey(),
+                'reference_type' => get_class($object),
+            ]);
 
-        $fieldMeta = MetaBoxModel::query()->firstOrNew($data);
+            if (! $fieldMeta) {
+                $fieldMeta = $this->metaBoxRepository->getModel();
+                $fieldMeta->reference_id = $object->getKey();
+                $fieldMeta->meta_key = $key;
+                $fieldMeta->reference_type = get_class($object);
+            }
 
-        $fieldMeta->fill($data);
+            if (! empty($options)) {
+                $fieldMeta->options = $options;
+            }
 
-        if (! empty($options)) {
-            $fieldMeta->options = $options;
+            $fieldMeta->meta_value = [$value];
+            $this->metaBoxRepository->createOrUpdate($fieldMeta);
+        } catch (Exception $exception) {
+            info($exception->getMessage());
         }
-
-        $fieldMeta->meta_value = [$value];
-        $fieldMeta->save();
     }
 
-    public function getMetaData(
-        Model $object,
-        string $key,
-        bool $single = false,
-        array $select = ['meta_value']
-    ): string|array|null {
+    public function getMetaData(Model $object, string $key, bool $single = false, array $select = ['meta_value']): string|array|null
+    {
         if ($object instanceof MetaBoxModel) {
             $field = $object;
         } else {
@@ -172,33 +172,33 @@ class MetaBox
             return $single ? '' : [];
         }
 
-        return $single ? $field->meta_value[0] : $field->meta_value;
+        if ($single) {
+            return $field->meta_value[0];
+        }
+
+        return $field->meta_value;
     }
 
     public function getMeta(Model $object, string $key, array $select = ['meta_value']): ?Model
     {
         $key = apply_filters('stored_meta_box_key', $key, $object);
 
-        return MetaBoxModel::query()->where([
+        return $this->metaBoxRepository->getFirstBy([
             'meta_key' => $key,
             'reference_id' => $object->getKey(),
-            'reference_type' => $object::class,
-        ], $select)->first();
+            'reference_type' => get_class($object),
+        ], $select);
     }
 
     public function deleteMetaData(Model $object, string $key): bool
     {
-        if (! $object->getKey()) {
-            return false;
-        }
-
         $key = apply_filters('stored_meta_box_key', $key, $object);
 
-        return MetaBoxModel::query()->where([
+        return $this->metaBoxRepository->deleteBy([
             'meta_key' => $key,
             'reference_id' => $object->getKey(),
-            'reference_type' => $object::class,
-        ])->delete();
+            'reference_type' => get_class($object),
+        ]);
     }
 
     public function getMetaBoxes(): array

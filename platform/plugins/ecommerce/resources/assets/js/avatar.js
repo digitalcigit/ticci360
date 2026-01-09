@@ -2,16 +2,16 @@
  * Created by Botble Technologies on 06/09/2015.
  */
 
-var handleError = function (data, form) {
-    if (typeof data.errors !== 'undefined' && !_.isArray(data.errors)) {
+var handleError = function(data, form) {
+    if (typeof (data.errors) !== 'undefined' && !_.isArray(data.errors)) {
         handleValidationError(data.errors, form)
     } else {
-        if (typeof data.responseJSON !== 'undefined') {
-            if (typeof data.responseJSON.errors !== 'undefined') {
+        if (typeof (data.responseJSON) !== 'undefined') {
+            if (typeof (data.responseJSON.errors) !== 'undefined') {
                 if (data.status === 422) {
                     handleValidationError(data.responseJSON.errors, form)
                 }
-            } else if (typeof data.responseJSON.message !== 'undefined') {
+            } else if (typeof (data.responseJSON.message) !== 'undefined') {
                 $(form).find('.error-message').html(data.responseJSON.message).show()
             } else {
                 var message = ''
@@ -29,7 +29,7 @@ var handleError = function (data, form) {
     }
 }
 
-var handleValidationError = function (errors, form) {
+var handleValidationError = function(errors, form) {
     let message = ''
     $.each(errors, (index, item) => {
         message += item + '<br />'
@@ -70,7 +70,7 @@ CropAvatar.prototype = {
         formData: !!window.FormData,
     },
 
-    init: function () {
+    init: function() {
         this.support.datauri = this.support.fileList && this.support.fileReader
 
         if (!this.support.formData) {
@@ -81,24 +81,24 @@ CropAvatar.prototype = {
         this.addListener()
     },
 
-    addListener: function () {
+    addListener: function() {
         this.$avatarView.on('click', $.proxy(this.click, this))
         this.$avatarInput.on('change', $.proxy(this.change, this))
         this.$avatarForm.on('submit', $.proxy(this.submit, this))
     },
 
-    initModal: function () {
+    initModal: function() {
         this.$avatarModal.modal('hide')
         this.initPreview()
     },
 
-    initPreview: function () {
+    initPreview: function() {
         var url = this.$avatar.prop('src')
 
         this.$avatarPreview.empty().html('<img src="' + url + '" alt="avatar">')
     },
 
-    initIframe: function () {
+    initIframe: function() {
         var iframeName = 'avatar-iframe-' + Math.random().toString().replace('.', ''),
             $iframe = $('<iframe name="' + iframeName + '" style="display:none;"></iframe>'),
             firstLoad = true,
@@ -107,8 +107,10 @@ CropAvatar.prototype = {
         this.$iframe = $iframe
         this.$avatarForm.attr('target', iframeName).after($iframe)
 
-        this.$iframe.on('load', function () {
-            var data, win, doc
+        this.$iframe.on('load', function() {
+            var data,
+                win,
+                doc
 
             try {
                 win = this.contentWindow
@@ -116,7 +118,8 @@ CropAvatar.prototype = {
 
                 doc = doc ? doc : win.document
                 data = doc ? doc.body.innerText : null
-            } catch (e) {}
+            } catch (e) {
+            }
 
             if (data) {
                 _this.submitDone(data)
@@ -132,12 +135,13 @@ CropAvatar.prototype = {
         })
     },
 
-    click: function () {
+    click: function() {
         this.$avatarModal.modal('show')
     },
 
-    change: function () {
-        var files, file
+    change: function() {
+        var files,
+            file
 
         if (this.support.datauri) {
             files = this.$avatarInput.prop('files')
@@ -158,7 +162,7 @@ CropAvatar.prototype = {
         }
     },
 
-    submit: function () {
+    submit: function() {
         if (!this.$avatarSrc.val() && !this.$avatarInput.val()) {
             alert('Please select image!')
             return false
@@ -170,26 +174,26 @@ CropAvatar.prototype = {
         }
     },
 
-    isImageFile: function (file) {
+    isImageFile: function(file) {
         if (file.type) {
             return /^image\/\w+$/.test(file.type)
         }
         return /\.(jpg|jpeg|png|gif)$/.test(file)
     },
 
-    read: function (file) {
+    read: function(file) {
         var _this = this,
             fileReader = new FileReader()
 
         fileReader.readAsDataURL(file)
 
-        fileReader.onload = function () {
+        fileReader.onload = function() {
             _this.url = this.result
             _this.startCropper()
         }
     },
 
-    startCropper: function () {
+    startCropper: function() {
         var _this = this
 
         if (this.active) {
@@ -201,7 +205,7 @@ CropAvatar.prototype = {
                 aspectRatio: 1,
                 rotatable: true,
                 preview: this.$avatarPreview.selector,
-                done: function (data) {
+                done: function(data) {
                     var json = [
                         '{"x":' + data.x,
                         '"y":' + data.y,
@@ -217,7 +221,7 @@ CropAvatar.prototype = {
         }
     },
 
-    stopCropper: function () {
+    stopCropper: function() {
         if (this.active) {
             this.$img.cropper('destroy')
             this.$img.remove()
@@ -225,7 +229,7 @@ CropAvatar.prototype = {
         }
     },
 
-    ajaxUpload: function () {
+    ajaxUpload: function() {
         var url = this.$avatarForm.attr('action'),
             data = new FormData(this.$avatarForm[0]),
             _this = this
@@ -236,37 +240,39 @@ CropAvatar.prototype = {
             processData: false,
             contentType: false,
 
-            beforeSend: function () {
+            beforeSend: function() {
                 _this.submitStart()
             },
 
-            success: function (data) {
+            success: function(data) {
                 _this.submitDone(data)
             },
 
-            error: function (data) {
+            error: function(data) {
                 handleError(data)
             },
 
-            complete: function () {
+            complete: function() {
                 _this.submitEnd()
             },
         })
     },
 
-    syncUpload: function () {
+    syncUpload: function() {
         this.$avatarSave.click()
     },
 
-    submitStart: function () {
+    submitStart: function() {
         this.$loading.fadeIn()
         this.$avatarSave.attr('disabled', true).text('Saving...')
     },
 
-    submitDone: function (data) {
+    submitDone: function(data) {
+
         try {
             data = $.parseJSON(data)
-        } catch (e) {}
+        } catch (e) {
+        }
 
         if (data && !data.error) {
             if (!data.error) {
@@ -290,12 +296,12 @@ CropAvatar.prototype = {
         }
     },
 
-    submitEnd: function () {
+    submitEnd: function() {
         this.$loading.fadeOut()
         this.$avatarSave.removeAttr('disabled').text('Save')
     },
 
-    cropDone: function () {
+    cropDone: function() {
         this.$avatarSrc.val('')
         this.$avatarData.val('')
         this.$avatar.prop('src', this.url)
@@ -306,41 +312,6 @@ CropAvatar.prototype = {
     },
 }
 
-$(function () {
+$(function() {
     new CropAvatar($('.crop-avatar'))
-
-    $(document).on('change', '[data-bb-toggle="change-customer-avatar"]', (e) => {
-        const currentTarget = $(e.currentTarget)
-
-        const url = currentTarget.data('url')
-        const file = currentTarget[0].files[0]
-
-        if (typeof url === 'undefined' || typeof file === 'undefined') {
-            return
-        }
-
-        const formData = new FormData()
-        formData.append('avatar_file', file)
-
-        $.ajax({
-            url: url,
-            type: 'POST',
-            data: formData,
-            contentType: false,
-            processData: false,
-            success: ({ data, message, error }) => {
-                if (typeof Theme !== 'undefined' && error) {
-                    Theme.showError(message)
-
-                    return
-                }
-
-                if (typeof Theme !== 'undefined') {
-                    Theme.showSuccess(message)
-                }
-
-                $('[data-bb-value="customer-avatar"]').prop('src', data.url)
-            },
-        })
-    })
 })

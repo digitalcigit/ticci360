@@ -7,10 +7,9 @@ use Closure;
 use Illuminate\Contracts\Support\DeferringDisplayableValue;
 use Illuminate\Support\Enumerable;
 use IteratorAggregate;
-use Stringable;
 use Traversable;
 
-class InvokableComponentVariable implements DeferringDisplayableValue, IteratorAggregate, Stringable
+class InvokableComponentVariable implements DeferringDisplayableValue, IteratorAggregate
 {
     /**
      * The callable instance to resolve the variable value.
@@ -23,6 +22,7 @@ class InvokableComponentVariable implements DeferringDisplayableValue, IteratorA
      * Create a new variable instance.
      *
      * @param  \Closure  $callable
+     * @return void
      */
     public function __construct(Closure $callable)
     {
@@ -40,7 +40,7 @@ class InvokableComponentVariable implements DeferringDisplayableValue, IteratorA
     }
 
     /**
-     * Get an iterator instance for the variable.
+     * Get an interator instance for the variable.
      *
      * @return \ArrayIterator
      */
@@ -87,7 +87,7 @@ class InvokableComponentVariable implements DeferringDisplayableValue, IteratorA
     /**
      * Resolve the variable as a string.
      *
-     * @return string
+     * @return mixed
      */
     public function __toString()
     {

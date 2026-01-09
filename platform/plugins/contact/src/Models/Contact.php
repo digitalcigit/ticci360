@@ -3,14 +3,13 @@
 namespace Botble\Contact\Models;
 
 use Botble\Base\Casts\SafeContent;
-use Botble\Base\Models\BaseModel;
 use Botble\Base\Supports\Avatar;
 use Botble\Contact\Enums\ContactStatusEnum;
-use Botble\Media\Facades\RvMedia;
-use Botble\Support\Services\Cache\Cache;
+use Botble\Base\Models\BaseModel;
+use Exception;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Throwable;
+use Botble\Media\Facades\RvMedia;
 
 class Contact extends BaseModel
 {
@@ -24,7 +23,6 @@ class Contact extends BaseModel
         'subject',
         'content',
         'status',
-        'custom_fields',
     ];
 
     protected $casts = [
@@ -33,7 +31,6 @@ class Contact extends BaseModel
         'address' => SafeContent::class,
         'subject' => SafeContent::class,
         'content' => SafeContent::class,
-        'custom_fields' => 'array',
     ];
 
     public function replies(): HasMany
@@ -43,23 +40,14 @@ class Contact extends BaseModel
 
     protected function avatarUrl(): Attribute
     {
-        return Attribute::get(function () {
-            try {
-                return Avatar::createBase64Image($this->name);
-            } catch (Throwable) {
-                return RvMedia::getDefaultImage();
-            }
-        });
-    }
-
-    protected static function booted(): void
-    {
-        static::saved(function (): void {
-            Cache::make(static::class)->flush();
-        });
-
-        static::deleted(function (): void {
-            Cache::make(static::class)->flush();
-        });
+        return Attribute::make(
+            get: function () {
+                try {
+                    return (new Avatar())->create($this->name)->toBase64();
+                } catch (Exception) {
+                    return RvMedia::getDefaultImage();
+                }
+            },
+        );
     }
 }

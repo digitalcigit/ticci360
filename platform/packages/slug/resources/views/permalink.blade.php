@@ -1,85 +1,40 @@
 @php
-    $prefix = apply_filters(FILTER_SLUG_PREFIX, SlugHelper::getPrefix($model::class), $model);
+    $prefix = apply_filters(FILTER_SLUG_PREFIX, $prefix);
     $value = $value ?: old('slug');
     $endingURL = SlugHelper::getPublicSingleEndingURL();
-    $canBeReviewed = apply_filters('core_slug_can_be_reviewed', Auth::user() && is_in_admin(true), $model);
-
-    $previewURL = str_replace('--slug--', (string) $value, url($prefix) . '/' . config('packages.slug.general.pattern')) . $endingURL . ($canBeReviewed && $preview ? '?preview=true' : '');
+    $previewURL = str_replace('--slug--', (string) $value, url($prefix) . '/' . config('packages.slug.general.pattern')) . $endingURL . (Auth::user() && $preview ? '?preview=true' : '');
 @endphp
 
-<div
-    class="slug-field-wrapper"
-    data-field-name="{{ SlugHelper::getColumnNameToGenerateSlug($model) }}"
->
-    @if (in_array(
-        Route::currentRouteName(), ['pages.create', 'pages.edit'])
-        && BaseHelper::isHomepage(Route::current()->parameter('page.id'))
-    )
-        <x-core::form.text-input
-            :label="trans('core/base::forms.permalink')"
-            name="slug"
-            :group-flat="true"
-            :value="BaseHelper::getHomepageUrl()"
-            :readonly="true"
-        />
+<div id="edit-slug-box" @if (empty($value) && !$errors->has($name)) class="hidden" @endif data-field-name="{{ SlugHelper::getColumnNameToGenerateSlug($model) }}">
+    @if (in_array(Route::currentRouteName(), ['pages.create', 'pages.edit']) && BaseHelper::isHomepage(Route::current()->parameter('page.id')))
+        <label class="control-label" for="current-slug">{{ trans('core/base::forms.permalink') }}:</label>
+        <span id="sample-permalink" class="d-inline-block" dir="ltr">
+            <a class="permalink" target="_blank" href="{{ route('public.index') }}">
+                <span class="default-slug">{{ route('public.index') }}</span>
+            </a>
+        </span>
     @else
-        <x-core::form.text-input
-            :label="trans('core/base::forms.permalink')"
-            :required="true"
-            name="slug"
-            :group-flat="true"
-            class="ps-0"
-            :value="$value"
-        >
-            <x-slot:prepend>
-                <span class="input-group-text">
-                    {{ url($prefix) }}/
-                </span>
-            </x-slot:prepend>
+        <label class="control-label @if ($editable) required @endif" for="current-slug">{{ trans('core/base::forms.permalink') }}:</label>
+        <span id="sample-permalink" class="d-inline-block" dir="ltr">
+            <a class="permalink" target="_blank" href="{{ $previewURL }}">
+                <span class="default-slug">{{ url($prefix) }}/<span id="editable-post-name">{{ $value }}</span>{{ $endingURL }}</span>
+            </a>
+        </span>
 
-            <x-slot:append>
-                <span class="input-group-text slug-actions">
-                    <a
-                        href="#"
-                        @class(['link-secondary', 'd-none' => ! $value])
-                        data-bs-toggle="tooltip"
-                        aria-label="{{ trans('packages/slug::slug.generate_url') }}"
-                        data-bs-original-title="{{ trans('packages/slug::slug.generate_url') }}"
-                        data-bb-toggle="generate-slug"
-                    >
-                        <x-core::icon name="ti ti-wand" />
-                    </a>
-                </span>
-            </x-slot:append>
-        </x-core::form.text-input>
-        @if ($canBeReviewed)
-            <x-core::form.helper-text class="mt-n2 text-truncate">
-                {{ trans('packages/slug::slug.preview') }}: <a href="{{ $previewURL }}" target="_blank">{{ $previewURL }}</a>
-            </x-core::form.helper-text>
-        @endif
         @if ($editable)
-            <input
-                class="slug-current"
-                name="{{ $name }}"
-                type="hidden"
-                value="{{ $value }}"
-            >
-            <div
-                class="slug-data"
-                data-url="{{ route('slug.create') }}"
-                data-view="{{ rtrim(str_replace('--slug--', '', url($prefix) . '/' . config('packages.slug.general.pattern')), '/') . '/' }}"
-                data-id="{{ $id ?: 0 }}"
-            ></div>
-            <input
-                name="slug_id"
-                type="hidden"
-                value="{{ $id ?: 0 }}"
-            >
-            <input
-                name="is_slug_editable"
-                type="hidden"
-                value="1"
-            >
+            <span id="edit-slug-buttons">
+                <button type="button" class="btn btn-secondary" id="change_slug">{{ trans('core/base::forms.edit') }}</button>
+                <button type="button" class="save btn btn-secondary" id="btn-ok">{{ trans('core/base::forms.ok') }}</button>
+                <button type="button" class="cancel button-link">{{ trans('core/base::forms.cancel') }}</button>
+                @if (Auth::user() && $preview && $id)
+                    <a class="btn btn-info btn-preview" target="_blank" href="{{ $previewURL }}">{{ trans('packages/slug::slug.preview') }}</a>
+                @endif
+            </span>
+
+            <input type="hidden" id="current-slug" name="{{ $name }}" value="{{ $value }}">
+            <div data-url="{{ route('slug.create') }}" data-view="{{ rtrim(str_replace('--slug--', '', url($prefix) . '/' . config('packages.slug.general.pattern')), '/') . '/' }}" id="slug_id" data-id="{{ $id ?: 0 }}"></div>
+            <input type="hidden" name="slug_id" value="{{ $id ?: 0 }}">
+            <input type="hidden" name="is_slug_editable" value="1">
         @endif
     @endif
 </div>

@@ -2,10 +2,10 @@
 
 namespace Botble\Ecommerce\Enums;
 
-use Botble\Base\Facades\Html;
 use Botble\Base\Supports\Enum;
-use Botble\Ecommerce\Facades\EcommerceHelper;
 use Botble\Ecommerce\Models\Shipping;
+use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Base\Facades\Html;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Lang;
 use Illuminate\Support\HtmlString;
@@ -23,7 +23,7 @@ class ShippingRuleTypeEnum extends Enum
     public const BASED_ON_ZIPCODE = 'based_on_zipcode';
     public const BASED_ON_LOCATION = 'based_on_location';
 
-    public static $langPath = 'plugins/ecommerce::shipping.rule.enum_types';
+    public static $langPath = 'plugins/ecommerce::shipping.rule.types';
 
     public function toHtml(): HtmlString|string
     {
@@ -72,7 +72,7 @@ class ShippingRuleTypeEnum extends Enum
         return self::getLabel($this->getValue());
     }
 
-    public function toUnit(): ?string
+    public function toUnit(): string
     {
         return match ($this->value) {
             self::BASED_ON_PRICE => get_application_currency()->symbol,
@@ -129,7 +129,6 @@ class ShippingRuleTypeEnum extends Enum
     public static function availableLabels(?Shipping $shipping = null): array
     {
         $labels = parent::labels();
-
         if ($shipping && ! $shipping->country) {
             Arr::forget($labels, self::BASED_ON_ZIPCODE);
             Arr::forget($labels, self::BASED_ON_LOCATION);

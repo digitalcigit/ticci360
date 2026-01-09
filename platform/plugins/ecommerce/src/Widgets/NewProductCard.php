@@ -2,15 +2,17 @@
 
 namespace Botble\Ecommerce\Widgets;
 
+use Botble\Base\Enums\BaseStatusEnum;
+use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
 use Botble\Base\Widgets\Card;
-use Botble\Ecommerce\Models\Product;
 use Carbon\CarbonPeriod;
 
 class NewProductCard extends Card
 {
     public function getOptions(): array
     {
-        $data = Product::query()
+        $data = app(ProductInterface::class)
+            ->getModel()
             ->whereDate('created_at', '>=', $this->startDate)
             ->whereDate('created_at', '<=', $this->endDate)
             ->selectRaw('count(id) as total, date_format(created_at, "' . $this->dateFormat . '") as period')
@@ -29,11 +31,14 @@ class NewProductCard extends Card
 
     public function getViewData(): array
     {
-        $count = Product::query()
+        $count = app(ProductInterface::class)
+            ->getModel()
             ->whereDate('created_at', '>=', $this->startDate)
             ->whereDate('created_at', '<=', $this->endDate)
-            ->where('is_variation', false)
-            ->wherePublished()
+            ->where([
+                'status' => BaseStatusEnum::PUBLISHED,
+                'is_variation' => false,
+            ])
             ->count();
 
         $startDate = clone $this->startDate;
@@ -42,12 +47,14 @@ class NewProductCard extends Card
         $currentPeriod = CarbonPeriod::create($startDate, $endDate);
         $previousPeriod = CarbonPeriod::create($startDate->subDays($currentPeriod->count()), $endDate->subDays($currentPeriod->count()));
 
-        $currentProducts = Product::query()
+        $currentProducts = app(ProductInterface::class)
+            ->getModel()
             ->whereDate('created_at', '>=', $currentPeriod->getStartDate())
             ->whereDate('created_at', '<=', $currentPeriod->getEndDate())
             ->count();
 
-        $previousProducts = Product::query()
+        $previousProducts = app(ProductInterface::class)
+            ->getModel()
             ->whereDate('created_at', '>=', $previousPeriod->getStartDate())
             ->whereDate('created_at', '<=', $previousPeriod->getEndDate())
             ->count();

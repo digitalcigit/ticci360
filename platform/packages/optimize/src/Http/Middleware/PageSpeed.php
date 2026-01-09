@@ -2,12 +2,11 @@
 
 namespace Botble\Optimize\Http\Middleware;
 
-use Botble\Optimize\Facades\OptimizerHelper;
 use Closure;
 use Illuminate\Http\Request;
+use Botble\Optimize\Facades\OptimizerHelper;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 abstract class PageSpeed
 {
@@ -22,7 +21,6 @@ abstract class PageSpeed
             || $request->expectsJson()
             || in_array($response->headers->get('Content-Type'), ['application/json', 'application/pdf'])
             || $response instanceof BinaryFileResponse
-            || $response instanceof StreamedResponse
         ) {
             return $response;
         }
@@ -48,7 +46,7 @@ abstract class PageSpeed
 
     protected function isEnable(): bool
     {
-        return (bool) setting('optimize_page_speed_enable', false);
+        return (bool)setting('optimize_page_speed_enable', false);
     }
 
     protected function shouldProcessPageSpeed(Request $request): bool

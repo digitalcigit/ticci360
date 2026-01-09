@@ -674,7 +674,6 @@ class PclZip
                     // ----- Look for options that request an EREG or PREG expression
                 case PCLZIP_OPT_BY_EREG:
                     $p_options_list[$index] = PCLZIP_OPT_BY_PREG;
-
                     // ereg() is deprecated starting with PHP 5.3. Move PCLZIP_OPT_BY_EREG
                     // to PCLZIP_OPT_BY_PREG
                     break;
@@ -1062,7 +1061,7 @@ class PclZip
     //   (see PclZip::listContent() for list entry format)
     // --------------------------------------------------------------------------------
 
-    public function privOptionDefaultThreshold(&$p_options): int
+    public function privOptionDefaultThreshold(&$p_options)
     {
         $v_result = 1;
 
@@ -1071,20 +1070,20 @@ class PclZip
         }
 
         // ----- Get 'memory_limit' configuration value
-        $v_memory_limit = @ini_get('memory_limit');
+        $v_memory_limit = ini_get('memory_limit');
         $v_memory_limit = trim($v_memory_limit);
         $last = strtolower(substr($v_memory_limit, -1));
 
         if ($last == 'g') {
             //$v_memory_limit = $v_memory_limit*1024*1024*1024;
-            $v_memory_limit = (int) $v_memory_limit * 1073741824;
+            $v_memory_limit = (int)$v_memory_limit * 1073741824;
         }
         if ($last == 'm') {
             //$v_memory_limit = $v_memory_limit*1024*1024;
-            $v_memory_limit = (int) $v_memory_limit * 1048576;
+            $v_memory_limit = (int)$v_memory_limit * 1048576;
         }
         if ($last == 'k') {
-            $v_memory_limit = (int) $v_memory_limit * 1024;
+            $v_memory_limit = (int)$v_memory_limit * 1024;
         }
 
         $p_options[PCLZIP_OPT_TEMP_FILE_THRESHOLD] = floor($v_memory_limit * PCLZIP_TEMPORARY_FILE_RATIO);
@@ -4812,7 +4811,7 @@ class PclZip
         $this->privErrorReset();
 
         // ----- Look if the $p_archive is a PclZip object
-        if ((is_object($p_archive)) && ($p_archive instanceof PclZip)) {
+        if ((is_object($p_archive)) && (get_class($p_archive) == 'pclzip')) {
             // ----- Duplicate the archive
             $v_result = $this->privDuplicate($p_archive->zipname);
         } elseif (is_string($p_archive)) {
@@ -4919,7 +4918,7 @@ class PclZip
         }
 
         // ----- Look if the $p_archive_to_add is a PclZip object
-        if ((is_object($p_archive_to_add)) && ($p_archive_to_add instanceof PclZip)) {
+        if ((is_object($p_archive_to_add)) && (get_class($p_archive_to_add) == 'pclzip')) {
             // ----- Merge the archive
             $v_result = $this->privMerge($p_archive_to_add);
         } elseif (is_string($p_archive_to_add)) {

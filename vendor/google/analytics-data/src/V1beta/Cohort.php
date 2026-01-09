@@ -25,14 +25,14 @@ class Cohort extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>string name = 1;</code>
      */
-    protected $name = '';
+    private $name = '';
     /**
      * Dimension used by the cohort. Required and only supports
      * `firstSessionDate`.
      *
      * Generated from protobuf field <code>string dimension = 2;</code>
      */
-    protected $dimension = '';
+    private $dimension = '';
     /**
      * The cohort selects users whose first touch date is between start date and
      * end date defined in the `dateRange`. This `dateRange` does not specify the
@@ -51,7 +51,7 @@ class Cohort extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>.google.analytics.data.v1beta.DateRange date_range = 3;</code>
      */
-    protected $date_range = null;
+    private $date_range = null;
 
     /**
      * Constructor.

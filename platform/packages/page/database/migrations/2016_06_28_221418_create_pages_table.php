@@ -7,12 +7,12 @@ use Illuminate\Support\Facades\Schema;
 return new class () extends Migration {
     public function up(): void
     {
-        Schema::create('pages', function (Blueprint $table): void {
+        Schema::create('pages', function (Blueprint $table) {
             $table->id();
             $table->string('name', 120);
             $table->longText('content')->nullable();
-            $table->foreignId('user_id')->index()->nullable();
-            $table->string('image')->nullable();
+            $table->foreignId('user_id')->index();
+            $table->string('image', 255)->nullable();
             $table->string('template', 60)->nullable();
             $table->tinyInteger('is_featured')->default(0);
             $table->string('description', 400)->nullable();

@@ -1,159 +1,76 @@
 <div id="product-variations-wrapper">
+    <div class="variation-actions">
+        <a href="#" class="btn-trigger-delete-selected-variations text-danger" style="display: none" data-target="{{ route('products.delete-versions') }}">{{ trans('plugins/ecommerce::products.delete_selected_variations') }}</a>
+        <a href="#" class="btn-trigger-select-product-attributes" data-target="{{ route('products.store-related-attributes', $product->id) }}">{{ trans('plugins/ecommerce::products.edit_attribute') }}</a>
+        <a href="#" class="btn-trigger-generate-all-versions" data-target="{{ route('products.generate-all-versions', $product->id) }}">{{ trans('plugins/ecommerce::products.generate_all_variations') }}</a>
+    </div>
+
     {!! $productVariationTable->renderTable() !!}
+
+    <br>
+    <a href="#" class="btn-trigger-add-new-product-variation"
+       data-target="{{ route('products.add-version', $product->id) }}"
+       data-load-form="{{ route('products.get-version-form', ['id' => 0, 'product_id' => $product->id]) }}"
+       data-processing="{{ trans('plugins/ecommerce::products.processing') }}"
+    >{{ trans('plugins/ecommerce::products.add_new_variation') }}</a>
 </div>
 
-<x-core::modal
+<x-core-base::modal
     id="select-attribute-sets-modal"
     :title="trans('plugins/ecommerce::products.select_attribute')"
+    button-id="store-related-attributes-button"
+    :button-label="trans('plugins/ecommerce::products.save_changes')"
 >
-    @include('plugins/ecommerce::products.partials.attribute-sets', compact('productAttributeSets'))
-
-    <x-slot:footer>
-        <x-core::button
-            type="button"
-            data-bs-dismiss="modal"
-        >
-            {{ trans('core/base::base.close') }}
-        </x-core::button>
-
-        <x-core::button
-            type="button"
-            color="primary"
-            id="store-related-attributes-button"
-            class="ms-auto"
-        >
-            {{ trans('plugins/ecommerce::products.save_changes') }}
-        </x-core::button>
-    </x-slot:footer>
-</x-core::modal>
+    {!! view('plugins/ecommerce::products.partials.attribute-sets', compact('productAttributeSets'))->render() !!}
+</x-core-base::modal>
 
 @push('footer')
-    <x-core::modal
+    <x-core-base::modal
         id="add-new-product-variation-modal"
         :title="trans('plugins/ecommerce::products.add_new_variation')"
-        size="xl"
+        button-id="store-product-variation-button"
+        :button-label="trans('plugins/ecommerce::products.save_changes')"
+        size="lg"
     >
-        <x-core::loading />
-        <x-slot:footer>
-            <x-core::button
-                type="button"
-                data-bs-dismiss="modal"
-            >
-                {{ trans('core/base::base.close') }}
-            </x-core::button>
+        {!! view('core/base::elements.loading')->render() !!}
+    </x-core-base::modal>
 
-            <x-core::button
-                type="button"
-                color="primary"
-                id="store-product-variation-button"
-                class="ms-auto"
-            >
-                {{ trans('plugins/ecommerce::products.save_changes') }}
-            </x-core::button>
-        </x-slot:footer>
-    </x-core::modal>
-
-    <x-core::modal
+    <x-core-base::modal
         id="edit-product-variation-modal"
-        :title="trans('plugins/ecommerce::products.edit_variation')"
-        size="xl"
+        :title="trans('plugins/ecommerce::products.add_new_variation')"
+        button-id="update-product-variation-button"
+        :button-label="trans('plugins/ecommerce::products.save_changes')"
+        size="lg"
     >
-        <x-core::loading />
-        <x-slot:footer>
-            <x-core::button
-                type="button"
-                data-bs-dismiss="modal"
-            >
-                {{ trans('core/base::base.close') }}
-            </x-core::button>
+        {!! view('core/base::elements.loading')->render() !!}
+    </x-core-base::modal>
 
-            <x-core::button
-                type="button"
-                color="primary"
-                id="update-product-variation-button"
-                class="ms-auto"
-            >
-                {{ trans('plugins/ecommerce::products.save_changes') }}
-            </x-core::button>
-        </x-slot:footer>
-    </x-core::modal>
-
-    <x-core::modal
-        id="generate-versions-modal"
-        :title="trans('plugins/ecommerce::products.generate_variations')"
-        :description="trans('plugins/ecommerce::products.generate_variations_confirmation')"
+    <x-core-base::modal
+        id="generate-all-versions-modal"
+        :title="trans('plugins/ecommerce::products.generate_all_variations')"
+        button-id="generate-all-versions-button"
+        :button-label="trans('plugins/ecommerce::products.continue')"
     >
-        <x-core::form.label>
-            {{ trans('plugins/ecommerce::products.select_attributes') }}
-        </x-core::form.label>
-        <div class="row row-cols-2">
-            @foreach($productAttributeSets as $productAttributeSet)
-                @continue(! $productAttributeSet->is_selected)
-                <div class="col">
-                    <h4 class="my-2">{{ $productAttributeSet->title }}</h4>
+        {{ trans('plugins/ecommerce::products.generate_all_variations_confirmation') }}
+    </x-core-base::modal>
 
-                    <fieldset class="form-fieldset">
-                        <div data-bb-toggle="tree-checkboxes">
-                            <ul class="list-unstyled">
-                                <li>
-                                    <x-core::form.checkbox
-                                        :label="trans('plugins/ecommerce::products.all')"
-                                        :checked="true"
-                                    />
-
-                                    <ul class="list-unstyled ms-2 mt-2">
-                                        @foreach($productAttributeSet->attributes as $attribute)
-                                            <li>
-                                                <x-core::form.checkbox
-                                                    :label="$attribute->title"
-                                                    name="attributes[]"
-                                                    value="{{ $attribute->id }}"
-                                                    :checked="true"
-                                                />
-                                            </li>
-                                        @endforeach
-                                    </ul>
-                                </li>
-                            </ul>
-                        </div>
-                    </fieldset>
-                </div>
-            @endforeach
-        </div>
-        <x-slot:footer>
-            <x-core::button
-                type="button"
-                data-bs-dismiss="modal"
-            >
-                {{ trans('core/base::base.close') }}
-            </x-core::button>
-
-            <x-core::button
-                type="button"
-                color="primary"
-                data-bb-toggle="generate-versions-button"
-                class="ms-auto"
-            >
-                {{ trans('plugins/ecommerce::products.continue') }}
-            </x-core::button>
-        </x-slot:footer>
-    </x-core::modal>
-
-    <x-core::modal.action
+    <x-core-base::modal
         id="confirm-delete-version-modal"
-        type="danger"
         :title="trans('plugins/ecommerce::products.delete_variation')"
-        :description="trans('plugins/ecommerce::products.delete_variation_confirmation')"
-        :submit-button-attrs="['id' => 'delete-version-button']"
-        :submit-button-label="trans('plugins/ecommerce::products.continue')"
-    />
-
-    <x-core::modal.action
-        id="delete-variations-modal"
         type="danger"
+        button-id="delete-version-button"
+        :button-label="trans('plugins/ecommerce::products.continue')"
+    >
+        {{ trans('plugins/ecommerce::products.delete_variation_confirmation') }}
+    </x-core-base::modal>
+
+    <x-core-base::modal
+        id="delete-variations-modal"
         :title="trans('plugins/ecommerce::products.delete_variations')"
-        :description="trans('plugins/ecommerce::products.delete_variations_confirmation')"
-        :submit-button-attrs="['id' => 'delete-selected-variations-button']"
-        :submit-button-label="trans('plugins/ecommerce::products.continue')"
-    />
+        type="danger"
+        button-id="delete-selected-variations-button"
+        :button-label="trans('plugins/ecommerce::products.continue')"
+    >
+        {{ trans('plugins/ecommerce::products.delete_variations_confirmation') }}
+    </x-core-base::modal>
 @endpush

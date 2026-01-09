@@ -6,10 +6,21 @@ use Illuminate\Support\Arr;
 
 trait HasTable
 {
-    protected ?string $theadClass = null;
+    /**
+     * Retrieves HTML table attribute value.
+     *
+     * @param  string  $attribute
+     * @return string
+     */
+    public function getTableAttribute(string $attribute): string
+    {
+        return $this->tableAttributes[$attribute] ?? '';
+    }
 
     /**
      * Get table computed table attributes.
+     *
+     * @return array
      */
     public function getTableAttributes(): array
     {
@@ -19,6 +30,7 @@ trait HasTable
     /**
      * Sets HTML table "id" attribute.
      *
+     * @param  string  $id
      * @return $this
      */
     public function setTableId(string $id): static
@@ -27,11 +39,23 @@ trait HasTable
     }
 
     /**
+     * Get HTML table "id" attribute.
+     *
+     * @return string
+     */
+    public function getTableId(): string
+    {
+        return $this->getTableAttribute('id');
+    }
+
+    /**
      * Sets HTML table attribute(s).
      *
+     * @param  array|string  $attribute
+     * @param  string|null  $value
      * @return $this
      */
-    public function setTableAttribute(array|string $attribute, ?string $value = null): static
+    public function setTableAttribute(array|string $attribute, string $value = null): static
     {
         if (is_array($attribute)) {
             return $this->setTableAttributes($attribute);
@@ -45,6 +69,7 @@ trait HasTable
     /**
      * Sets multiple HTML table attributes at once.
      *
+     * @param  array  $attributes
      * @return $this
      */
     public function setTableAttributes(array $attributes): static
@@ -57,24 +82,9 @@ trait HasTable
     }
 
     /**
-     * Get HTML table "id" attribute.
-     */
-    public function getTableId(): string
-    {
-        return $this->getTableAttribute('id');
-    }
-
-    /**
-     * Retrieves HTML table attribute value.
-     */
-    public function getTableAttribute(string $attribute): string
-    {
-        return $this->tableAttributes[$attribute] ?? '';
-    }
-
-    /**
      * Add class names to the "class" attribute of HTML table.
      *
+     * @param  array|string  $class
      * @return $this
      */
     public function addTableClass(array|string $class): static
@@ -89,20 +99,9 @@ trait HasTable
     }
 
     /**
-     * Set table > thead class names.
-     *
-     * @return $this
-     */
-    public function setTableHeadClass(string $class): static
-    {
-        $this->theadClass = " class=\"$class\"";
-
-        return $this;
-    }
-
-    /**
      * Remove class names from the "class" attribute of HTML table.
      *
+     * @param  array|string  $class
      * @return $this
      */
     public function removeTableClass(array|string $class): static
@@ -111,7 +110,7 @@ trait HasTable
         $currentClass = $this->getTableAttribute('class');
 
         $classes = array_diff(
-            (array) preg_split('#\s+#', (string) $currentClass, -1, PREG_SPLIT_NO_EMPTY),
+            (array) preg_split('#\s+#', $currentClass, -1, PREG_SPLIT_NO_EMPTY),
             (array) preg_split('#\s+#', $class, -1, PREG_SPLIT_NO_EMPTY)
         );
         $class = implode(' ', array_unique($classes));
@@ -121,6 +120,8 @@ trait HasTable
 
     /**
      * Compile table headers and to support responsive extension.
+     *
+     * @return array
      */
     protected function compileTableHeaders(): array
     {
@@ -147,6 +148,8 @@ trait HasTable
 
     /**
      * Compile table search headers.
+     *
+     * @return array
      */
     protected function compileTableSearchHeaders(): array
     {
@@ -161,6 +164,8 @@ trait HasTable
 
     /**
      * Compile table footer contents.
+     *
+     * @return array
      */
     protected function compileTableFooter(): array
     {

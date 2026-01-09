@@ -1,6 +1,7 @@
 <?php
 
 return [
+
     'skip' => [
         '*.xml',
         '*.less',

@@ -3,12 +3,9 @@
 namespace Botble\Captcha;
 
 use Botble\Base\Facades\Html;
-use Botble\Captcha\Events\CaptchaRendered;
-use Botble\Captcha\Events\CaptchaRendering;
 use Exception;
 use Illuminate\Session\SessionManager;
 use Illuminate\Session\Store;
-use Illuminate\Support\HtmlString;
 
 class MathCaptcha
 {
@@ -49,12 +46,7 @@ class MathCaptcha
 
         $attributes = array_merge($default, $attributes);
 
-        CaptchaRendering::dispatch($attributes, [], '', '');
-
-        return tap(
-            Html::tag('input', '', $attributes),
-            fn (HtmlString $rendered) => CaptchaRendered::dispatch($rendered),
-        );
+        return '<input ' . Html::attributes($attributes) . '>';
     }
 
     public function verify(string $value): bool

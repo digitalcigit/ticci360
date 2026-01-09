@@ -2,11 +2,9 @@
 
 namespace Botble\Marketplace\Repositories\Caches;
 
-use Botble\Marketplace\Repositories\Eloquent\RevenueRepository;
+use Botble\Support\Repositories\Caches\CacheAbstractDecorator;
+use Botble\Marketplace\Repositories\Interfaces\RevenueInterface;
 
-/**
- * @deprecated
- */
-class RevenueCacheDecorator extends RevenueRepository
+class RevenueCacheDecorator extends CacheAbstractDecorator implements RevenueInterface
 {
 }

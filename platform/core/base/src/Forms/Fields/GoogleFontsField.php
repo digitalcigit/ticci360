@@ -2,7 +2,7 @@
 
 namespace Botble\Base\Forms\Fields;
 
-class GoogleFontsField extends SelectField
+class GoogleFontsField extends SelectType
 {
     protected function getTemplate(): string
     {

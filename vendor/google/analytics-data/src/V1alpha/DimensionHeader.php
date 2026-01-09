@@ -23,7 +23,7 @@ class DimensionHeader extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>string name = 1;</code>
      */
-    protected $name = '';
+    private $name = '';
 
     /**
      * Constructor.

@@ -10,7 +10,7 @@
  * <?php
  * include 'vendor/autoload.php';
  *
- * $private = Crypt\RSA::createKey();
+ * $private = \phpseclib3\Crypt\RSA::createKey();
  * $public = $private->getPublicKey();
  *
  * $plaintext = 'terrafrost';
@@ -26,7 +26,7 @@
  * <?php
  * include 'vendor/autoload.php';
  *
- * $private = Crypt\RSA::createKey();
+ * $private = \phpseclib3\Crypt\RSA::createKey();
  * $public = $private->getPublicKey();
  *
  * $plaintext = 'terrafrost';
@@ -180,7 +180,7 @@ abstract class RSA extends AsymmetricKey
     /**
      * Hash function for the Mask Generation Function
      *
-     * @var Hash
+     * @var \phpseclib3\Crypt\Hash
      */
     protected $mgfHash;
 
@@ -194,21 +194,21 @@ abstract class RSA extends AsymmetricKey
     /**
      * Modulus (ie. n)
      *
-     * @var Math\BigInteger
+     * @var \phpseclib3\Math\BigInteger
      */
     protected $modulus;
 
     /**
      * Modulus length
      *
-     * @var Math\BigInteger
+     * @var \phpseclib3\Math\BigInteger
      */
     protected $k;
 
     /**
      * Exponent (ie. e or d)
      *
-     * @var Math\BigInteger
+     * @var \phpseclib3\Math\BigInteger
      */
     protected $exponent;
 
@@ -252,7 +252,7 @@ abstract class RSA extends AsymmetricKey
     /**
      * Public Exponent
      *
-     * @var Math\BigInteger
+     * @var \phpseclib3\Math\BigInteger
      */
     protected $publicExponent;
 
@@ -297,7 +297,7 @@ abstract class RSA extends AsymmetricKey
      *
      * The public key can be extracted from the private key
      *
-     * @return PrivateKey
+     * @return RSA\PrivateKey
      * @param int $bits
      */
     public static function createKey($bits = 2048)
@@ -332,7 +332,6 @@ abstract class RSA extends AsymmetricKey
                 openssl_pkey_export($rsa, $privatekeystr, null, $config);
 
                 // clear the buffer of error strings stemming from a minimalistic openssl.cnf
-                // https://github.com/php/php-src/issues/11054 talks about other errors this'll pick up
                 while (openssl_error_string() !== false) {
                 }
 
@@ -510,7 +509,7 @@ abstract class RSA extends AsymmetricKey
      *
      * See {@link http://tools.ietf.org/html/rfc3447#section-4.1 RFC3447#section-4.1}.
      *
-     * @param bool|Math\BigInteger $x
+     * @param bool|\phpseclib3\Math\BigInteger $x
      * @param int $xLen
      * @return bool|string
      */
@@ -532,7 +531,7 @@ abstract class RSA extends AsymmetricKey
      * See {@link http://tools.ietf.org/html/rfc3447#section-4.2 RFC3447#section-4.2}.
      *
      * @param string $x
-     * @return Math\BigInteger
+     * @return \phpseclib3\Math\BigInteger
      */
     protected function os2ip($x)
     {
@@ -703,7 +702,7 @@ abstract class RSA extends AsymmetricKey
     {
         $new = clone $this;
 
-        // Crypt\Hash supports algorithms that PKCS#1 doesn't support.  md5-96 and sha1-96, for example.
+        // \phpseclib3\Crypt\Hash supports algorithms that PKCS#1 doesn't support.  md5-96 and sha1-96, for example.
         switch (strtolower($hash)) {
             case 'md2':
             case 'md5':
@@ -738,7 +737,7 @@ abstract class RSA extends AsymmetricKey
     {
         $new = clone $this;
 
-        // Crypt\Hash supports algorithms that PKCS#1 doesn't support.  md5-96 and sha1-96, for example.
+        // \phpseclib3\Crypt\Hash supports algorithms that PKCS#1 doesn't support.  md5-96 and sha1-96, for example.
         switch (strtolower($hash)) {
             case 'md2':
             case 'md5':
@@ -842,15 +841,15 @@ abstract class RSA extends AsymmetricKey
             self::ENCRYPTION_PKCS1,
             self::ENCRYPTION_NONE
         ];
-        $encryptedCount = 0;
+        $numSelected = 0;
         $selected = 0;
         foreach ($masks as $mask) {
             if ($padding & $mask) {
                 $selected = $mask;
-                $encryptedCount++;
+                $numSelected++;
             }
         }
-        if ($encryptedCount > 1) {
+        if ($numSelected > 1) {
             throw new InconsistentSetupException('Multiple encryption padding modes have been selected; at most only one should be selected');
         }
         $encryptionPadding = $selected;
@@ -860,26 +859,22 @@ abstract class RSA extends AsymmetricKey
             self::SIGNATURE_RELAXED_PKCS1,
             self::SIGNATURE_PKCS1
         ];
-        $signatureCount = 0;
+        $numSelected = 0;
         $selected = 0;
         foreach ($masks as $mask) {
             if ($padding & $mask) {
                 $selected = $mask;
-                $signatureCount++;
+                $numSelected++;
             }
         }
-        if ($signatureCount > 1) {
+        if ($numSelected > 1) {
             throw new InconsistentSetupException('Multiple signature padding modes have been selected; at most only one should be selected');
         }
         $signaturePadding = $selected;
 
         $new = clone $this;
-        if ($encryptedCount) {
-            $new->encryptionPadding = $encryptionPadding;
-        }
-        if ($signatureCount) {
-            $new->signaturePadding = $signaturePadding;
-        }
+        $new->encryptionPadding = $encryptionPadding;
+        $new->signaturePadding = $signaturePadding;
         return $new;
     }
 

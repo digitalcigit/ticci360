@@ -3,30 +3,23 @@
 namespace Botble\PluginManagement\Services;
 
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Services\ClearCacheService;
 use Botble\Base\Supports\Helper;
 use Botble\PluginManagement\Events\ActivatedPluginEvent;
-use Botble\PluginManagement\Events\DeactivatedPlugin;
-use Botble\PluginManagement\Events\RemovedPlugin;
 use Botble\PluginManagement\PluginManifest;
-use Botble\Setting\Facades\Setting;
 use Composer\Autoload\ClassLoader;
 use Exception;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
-use Throwable;
+use Botble\Setting\Facades\Setting;
 
 class PluginService
 {
-    protected static array $activatedPlugins = [];
-
     public function __construct(
         protected Application $app,
         protected Filesystem $files,
@@ -42,7 +35,9 @@ class PluginService
             return $validate;
         }
 
-        $content = $this->getPluginInfo($plugin);
+        $content = BaseHelper::getFileData(plugin_path($plugin) . '/plugin.json');
+
+        $pluginName = Arr::get($content, 'name') ?? Str::studly($plugin);
 
         if (empty($content)) {
             return [
@@ -50,8 +45,6 @@ class PluginService
                 'message' => trans('packages/plugin-management::plugin.invalid_json'),
             ];
         }
-
-        $pluginName = Arr::get($content, 'name') ?? Str::studly($plugin);
 
         $minimumCoreVersion = Arr::get($content, 'minimum_core_version');
         $coreVersion = get_core_version();
@@ -83,12 +76,12 @@ class PluginService
         if (! in_array($plugin, $activatedPlugins)) {
             $requiredPlugins = $this->getDependencies($plugin);
 
-            if ($missingPlugins = array_diff($requiredPlugins, $activatedPlugins)) {
+            if ($requiredPlugins) {
                 return [
                     'error' => true,
                     'message' => trans(
                         'packages/plugin-management::plugin.missing_required_plugins',
-                        ['plugins' => implode(',', $missingPlugins)]
+                        ['plugins' => implode(',', $requiredPlugins)]
                     ),
                 ];
             }
@@ -152,22 +145,16 @@ class PluginService
             ];
         }
 
-        if (! $this->getPluginInfo($plugin)) {
+        if (! $this->files->exists($location . '/plugin.json')) {
             return [
                 'error' => true,
                 'message' => trans('packages/plugin-management::plugin.missing_json_file'),
             ];
         }
 
-        if ($this->isInBlacklist($plugin)) {
-            return [
-                'error' => true,
-                'message' => trans('packages/plugin-management::plugin.plugin_invalid'),
-            ];
-        }
-
         return [
             'error' => false,
+            'message' => trans('packages/plugin-management::plugin.plugin_invalid'),
         ];
     }
 
@@ -233,29 +220,27 @@ class PluginService
 
         $this->deactivate($plugin);
 
-        $content = $this->getPluginInfo($plugin);
+        $location = plugin_path($plugin);
 
-        if (! empty($content)) {
-            if (! class_exists($content['provider'])) {
-                $loader = new ClassLoader();
-                $loader->setPsr4($content['namespace'], plugin_path($plugin . '/src'));
-                $loader->register(true);
-            }
+        $content = [];
 
-            Schema::disableForeignKeyConstraints();
+        if ($this->files->exists($location . '/plugin.json')) {
+            $content = BaseHelper::getFileData($location . '/plugin.json');
 
-            try {
+            if (! empty($content)) {
+                if (! class_exists($content['provider'])) {
+                    $loader = new ClassLoader();
+                    $loader->setPsr4($content['namespace'], plugin_path($plugin . '/src'));
+                    $loader->register(true);
+                }
+
+                Schema::disableForeignKeyConstraints();
                 if (class_exists($content['namespace'] . 'Plugin')) {
                     call_user_func([$content['namespace'] . 'Plugin', 'remove']);
                 }
-            } catch (Throwable $exception) {
-                BaseHelper::logError($exception);
+                Schema::enableForeignKeyConstraints();
             }
-
-            Schema::enableForeignKeyConstraints();
         }
-
-        $location = plugin_path($plugin);
 
         $migrations = [];
         foreach (BaseHelper::scanFolder($location . '/database/migrations') as $file) {
@@ -280,8 +265,6 @@ class PluginService
 
         $this->pluginManifest->generateManifest();
 
-        RemovedPlugin::dispatch($plugin);
-
         return [
             'error' => false,
             'message' => trans('packages/plugin-management::plugin.plugin_removed'),
@@ -296,26 +279,11 @@ class PluginService
             return $validate;
         }
 
-        $activatedPlugins = get_active_plugins();
-        $content = $this->getPluginInfo($plugin);
-
-        $requiredBy = [];
-
-        foreach ($activatedPlugins as $activePlugin) {
-            $pluginInfo = $this->getPluginInfo($activePlugin);
-
-            if ($pluginInfo && isset($pluginInfo['required_plugins']) && in_array($plugin, $pluginInfo['required_plugins'])) {
-                $requiredBy[$activePlugin] = $pluginInfo['name'];
-            }
-        }
-
-        if (! empty($requiredBy)) {
+        $content = BaseHelper::getFileData(plugin_path($plugin) . '/plugin.json');
+        if (empty($content)) {
             return [
                 'error' => true,
-                'message' => trans(
-                    'packages/plugin-management::plugin.required_by_other_plugins',
-                    ['plugin' => $content['name'], 'required_by' => implode(',', $requiredBy)]
-                ),
+                'message' => trans('packages/plugin-management::plugin.invalid_json'),
             ];
         }
 
@@ -327,6 +295,7 @@ class PluginService
             $loader->register(true);
         }
 
+        $activatedPlugins = get_active_plugins();
         if (in_array($plugin, $activatedPlugins)) {
             if (class_exists($content['namespace'] . 'Plugin')) {
                 call_user_func([$content['namespace'] . 'Plugin', 'deactivate']);
@@ -345,8 +314,6 @@ class PluginService
             $this->clearCache();
 
             $this->pluginManifest->generateManifest();
-
-            DeactivatedPlugin::dispatch($plugin);
 
             return [
                 'error' => false,
@@ -373,7 +340,7 @@ class PluginService
 
         $plugins = array_intersect($plugins, $availablePlugins);
 
-        Setting::forceSet('activated_plugins', json_encode($plugins))->save();
+        Setting::set('activated_plugins', json_encode($plugins))->save();
 
         return $plugins;
     }
@@ -381,14 +348,10 @@ class PluginService
     public function clearCache(): void
     {
         Helper::clearCache();
-        $cacheService = ClearCacheService::make();
 
-        Cache::forget('core_installed_plugins');
-
-        self::$activatedPlugins = [];
-
-        $cacheService->clearConfig();
-        $cacheService->clearRoutesCache();
+        foreach ($this->files->glob(app()->bootstrapPath('cache/*')) as $cacheFile) {
+            $this->files->delete($cacheFile);
+        }
     }
 
     public function runMigrations(string $plugin): void
@@ -406,7 +369,7 @@ class PluginService
     {
         $plugin = strtolower($plugin);
 
-        $content = $this->getPluginInfo($plugin);
+        $content = BaseHelper::getFileData(plugin_path($plugin . '/plugin.json'));
         $requiredPlugins = $content['require'] ?? [];
 
         $activatedPlugins = get_active_plugins();
@@ -422,13 +385,7 @@ class PluginService
 
     public function getPluginInfo(string $plugin): array
     {
-        $jsonFilePath = plugin_path($plugin . '/plugin.json');
-
-        if (! $this->files->exists($jsonFilePath)) {
-            return [];
-        }
-
-        return BaseHelper::getFileData($jsonFilePath);
+        return BaseHelper::getFileData(plugin_path($plugin . '/plugin.json'));
     }
 
     public function validatePlugin(string $plugin, bool $throw = false): bool
@@ -474,7 +431,14 @@ class PluginService
 
         if (! empty($plugins)) {
             foreach ($plugins as $plugin) {
-                $getInfoPlugin = $this->getPluginInfo($plugin);
+                $path = plugin_path($plugin);
+                $pluginJson = $path . '/plugin.json';
+
+                if (! File::isDirectory($path) || ! File::exists($pluginJson)) {
+                    continue;
+                }
+
+                $getInfoPlugin = BaseHelper::getFileData($pluginJson);
 
                 if (! empty($getInfoPlugin['id'])) {
                     $installedPlugins[$getInfoPlugin['id']] = $getInfoPlugin['version'];
@@ -483,90 +447,5 @@ class PluginService
         }
 
         return $installedPlugins;
-    }
-
-    protected function isInBlacklist(string $plugin): bool
-    {
-        $blacklist = [
-            'activator',
-            'botble-activator',
-            'botble-activator-main',
-            'shaqi/botble-activator',
-        ];
-
-        if (in_array($plugin, $blacklist)) {
-            return true;
-        }
-
-        $pluginInfo = $this->getPluginInfo($plugin);
-
-        if ($pluginInfo && isset($pluginInfo['id']) && in_array($pluginInfo['id'], $blacklist)) {
-            return true;
-        }
-
-        return false;
-    }
-
-    public static function getActivatedPlugins(): array
-    {
-        if (self::$activatedPlugins && ! app()->runningInConsole()) {
-            return self::$activatedPlugins;
-        }
-
-        if (
-            Cache::has($key = 'core_installed_plugins')
-            && ! app()->runningInConsole()
-            && ($activatedPlugins = Cache::get($key))
-        ) {
-            self::$activatedPlugins = $activatedPlugins;
-
-            return $activatedPlugins;
-        }
-
-        $activatedPlugins = Setting::get('activated_plugins');
-
-        if (! $activatedPlugins) {
-            return [];
-        }
-
-        $activatedPlugins = json_decode($activatedPlugins, true);
-
-        if (! $activatedPlugins) {
-            return [];
-        }
-
-        $plugins = array_unique($activatedPlugins);
-
-        $existingPlugins = BaseHelper::scanFolder(plugin_path());
-
-        $activatedPlugins = array_diff($plugins, array_diff($plugins, $existingPlugins));
-
-        $activatedPlugins = array_values($activatedPlugins);
-
-        Cache::forever('core_installed_plugins', $activatedPlugins);
-
-        self::$activatedPlugins = $activatedPlugins;
-
-        return $activatedPlugins;
-    }
-
-    public static function getInstalledPlugins(): array
-    {
-        $list = [];
-
-        $plugins = BaseHelper::scanFolder(plugin_path());
-
-        if (! empty($plugins)) {
-            foreach ($plugins as $plugin) {
-                $path = plugin_path($plugin);
-                if (! File::isDirectory($path) || ! File::exists($path . '/plugin.json')) {
-                    continue;
-                }
-
-                $list[] = $plugin;
-            }
-        }
-
-        return $list;
     }
 }

@@ -41,7 +41,7 @@ class Sitemap
         $this->model = new Model($config);
     }
 
-    public function setCache(?string $key = null, $duration = null, bool $useCache = true): void
+    public function setCache(string|null $key = null, $duration = null, bool $useCache = true): void
     {
         $this->model->setUseCache($useCache);
 
@@ -59,11 +59,11 @@ class Sitemap
      */
     public function add(
         string $loc,
-        ?string $lastMod = null,
-        ?string $priority = null,
-        ?string $freq = null,
+        string|null $lastMod = null,
+        string|null $priority = null,
+        string|null $freq = null,
         array $images = [],
-        ?string $title = null,
+        string|null $title = null,
         array $translations = [],
         array $videos = [],
         array $googleNews = [],
@@ -190,8 +190,9 @@ class Sitemap
      * Returns document with all sitemap items from $items array.
      *
      * @param string $format (options: xml, html, txt, ror-rss, ror-rdf, google-news)
+     * @return Response
      */
-    public function render(string $format = 'xml'): Response
+    public function render(string $format = 'xml')
     {
         // limit size of sitemap
         if ($this->model->getMaxSize() > 0 && count($this->model->getItems()) > $this->model->getMaxSize()) {
@@ -318,13 +319,14 @@ class Sitemap
      * @param string $filename (without file extension, may be a path like 'sitemaps/sitemap1' but must exist)
      * @param string|null $path (path to store sitemap like '/www/site/public')
      * @param string|null $style (path to custom xls style like '/styles/xsl/xml-sitemap.xsl')
+     * @return void
      */
     public function store(
         string $format = 'xml',
         string $filename = 'sitemap',
-        ?string $path = null,
-        ?string $style = null
-    ): void {
+        string|null $path = null,
+        string|null $style = null
+    ) {
         // turn off caching for this method
         $this->model->setUseCache(false);
 
@@ -423,7 +425,7 @@ class Sitemap
     /**
      * Add new sitemap to $sitemaps array.
      */
-    public function addSitemap(string $loc, ?string $lastMod = null): void
+    public function addSitemap(string $loc, string|null $lastMod = null): void
     {
         $this->model->setSitemaps([
             'loc' => $loc,

@@ -3,45 +3,64 @@
 namespace Botble\Marketplace\Http\Controllers\Fronts;
 
 use Botble\Base\Facades\Assets;
-use Botble\Base\Http\Controllers\BaseController;
-use Botble\Ecommerce\Facades\EcommerceHelper;
-use Botble\Ecommerce\Models\Order;
-use Botble\Ecommerce\Models\Product;
+use Botble\Base\Enums\BaseStatusEnum;
+use Botble\Base\Facades\PageTitle;
+use Botble\Base\Http\Responses\BaseHttpResponse;
+use Botble\Ecommerce\Repositories\Interfaces\CustomerInterface;
+use Botble\Ecommerce\Repositories\Interfaces\OrderInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
 use Botble\Marketplace\Enums\RevenueTypeEnum;
 use Botble\Marketplace\Enums\WithdrawalStatusEnum;
-use Botble\Marketplace\Facades\MarketplaceHelper;
-use Botble\Marketplace\Models\Revenue;
-use Botble\Marketplace\Models\Withdrawal;
+use Botble\Marketplace\Http\Requests\BecomeVendorRequest;
+use Botble\Marketplace\Models\Store;
+use Botble\Marketplace\Repositories\Interfaces\RevenueInterface;
+use Botble\Marketplace\Repositories\Interfaces\StoreInterface;
+use Botble\Marketplace\Repositories\Interfaces\VendorInfoInterface;
+use Botble\Marketplace\Repositories\Interfaces\WithdrawalInterface;
 use Botble\Media\Chunks\Exceptions\UploadMissingFileException;
 use Botble\Media\Chunks\Handler\DropZoneUploadHandler;
 use Botble\Media\Chunks\Receiver\FileReceiver;
-use Botble\Media\Facades\RvMedia;
-use Botble\Theme\Facades\Theme;
+use Botble\Ecommerce\Facades\EcommerceHelper;
 use Exception;
+use Illuminate\Auth\Events\Registered;
+use Illuminate\Contracts\Config\Repository;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Botble\Marketplace\Facades\MarketplaceHelper;
+use Botble\Media\Facades\RvMedia;
+use Botble\SeoHelper\Facades\SeoHelper;
+use Botble\Slug\Facades\SlugHelper;
+use Botble\Theme\Facades\Theme;
 
-class DashboardController extends BaseController
+class DashboardController
 {
-    public function __construct()
-    {
-        $version = get_cms_version();
+    public function __construct(
+        protected Repository $config,
+        protected CustomerInterface $customerRepository,
+        protected StoreInterface $storeRepository,
+        protected VendorInfoInterface $vendorInfoRepository,
+        protected RevenueInterface $revenueRepository,
+        protected ProductInterface $productRepository,
+        protected WithdrawalInterface $withdrawalRepository,
+        protected OrderInterface $orderRepository
+    ) {
+        Assets::setConfig($config->get('plugins.marketplace.assets', []));
 
         Theme::asset()
-            ->add('customer-style', 'vendor/core/plugins/ecommerce/css/customer.css', ['bootstrap-css'], version: $version);
+            ->add('customer-style', 'vendor/core/plugins/ecommerce/css/customer.css');
 
         Theme::asset()
             ->container('footer')
-            ->add('ecommerce-utilities-js', 'vendor/core/plugins/ecommerce/js/utilities.js', ['jquery'], version: $version)
-            ->add('cropper-js', 'vendor/core/plugins/ecommerce/libraries/cropper.js', ['jquery'], version: $version)
-            ->add('avatar-js', 'vendor/core/plugins/ecommerce/js/avatar.js', ['jquery'], version: $version);
+            ->add('ecommerce-utilities-js', 'vendor/core/plugins/ecommerce/js/utilities.js', ['jquery'])
+            ->add('cropper-js', 'vendor/core/plugins/ecommerce/libraries/cropper.js', ['jquery'])
+            ->add('avatar-js', 'vendor/core/plugins/ecommerce/js/avatar.js', ['jquery']);
     }
 
-    public function index(Request $request)
+    public function index(Request $request, BaseHttpResponse $response)
     {
-        $this->pageTitle(__('Dashboard'));
+        PageTitle::setTitle(__('Dashboard'));
 
         Assets::addScriptsDirectly([
                 'vendor/core/plugins/ecommerce/libraries/daterangepicker/daterangepicker.js',
@@ -63,33 +82,35 @@ class DashboardController extends BaseController
         $store = $user->store;
         $data = compact('startDate', 'endDate', 'predefinedRange');
 
-        $revenue = Revenue::query()
+        $revenue = $this->revenueRepository
+            ->getModel()
             ->selectRaw(
                 'SUM(CASE WHEN type IS NULL OR type = ? THEN sub_amount WHEN type = ? THEN sub_amount * -1 ELSE 0 END) as sub_amount,
                 SUM(CASE WHEN type IS NULL OR type = ? THEN amount WHEN type = ? THEN amount * -1 ELSE 0 END) as amount,
                 SUM(fee) as fee',
                 [RevenueTypeEnum::ADD_AMOUNT, RevenueTypeEnum::SUBTRACT_AMOUNT, RevenueTypeEnum::ADD_AMOUNT, RevenueTypeEnum::SUBTRACT_AMOUNT]
             )
-            ->where('customer_id', $user->getKey())
-            ->where(function ($query) use ($startDate, $endDate): void {
+            ->where('customer_id', $user->id)
+            ->where(function ($query) use ($startDate, $endDate) {
                 $query->whereDate('created_at', '>=', $startDate)
                     ->whereDate('created_at', '<=', $endDate);
             })
             ->groupBy('customer_id')
             ->first();
 
-        $withdrawal = Withdrawal::query()
+        $withdrawal = $this->withdrawalRepository
+            ->getModel()
             ->select([
                 DB::raw('SUM(mp_customer_withdrawals.amount) as amount'),
                 DB::raw('SUM(mp_customer_withdrawals.fee)'),
             ])
-            ->where('mp_customer_withdrawals.customer_id', $user->getKey())
+            ->where('mp_customer_withdrawals.customer_id', $user->id)
             ->whereIn('mp_customer_withdrawals.status', [
                 WithdrawalStatusEnum::COMPLETED,
                 WithdrawalStatusEnum::PENDING,
                 WithdrawalStatusEnum::PROCESSING,
             ])
-            ->where(function ($query) use ($startDate, $endDate): void {
+            ->where(function ($query) use ($startDate, $endDate) {
                 $query->whereDate('mp_customer_withdrawals.created_at', '>=', $startDate)
                     ->whereDate('mp_customer_withdrawals.created_at', '<=', $endDate);
             })
@@ -105,7 +126,8 @@ class DashboardController extends BaseController
 
         $data['revenue'] = $revenues;
 
-        $data['orders'] = Order::query()
+        $data['orders'] = $this->orderRepository
+            ->getModel()
             ->select([
                 'id',
                 'status',
@@ -116,17 +138,19 @@ class DashboardController extends BaseController
                 'shipping_amount',
                 'payment_id',
             ])
-            ->with(['user'])
+            ->with(['user', 'payment'])
             ->where([
                 'is_finished' => 1,
                 'store_id' => $store->id,
             ])
             ->whereDate('created_at', '>=', $startDate)
-            ->whereDate('created_at', '<=', $endDate)->latest()
+            ->whereDate('created_at', '<=', $endDate)
+            ->orderBy('created_at', 'desc')
             ->limit(10)
             ->get();
 
-        $data['products'] = Product::query()
+        $data['products'] = $this->productRepository
+            ->getModel()
             ->select([
                 'id',
                 'name',
@@ -146,58 +170,45 @@ class DashboardController extends BaseController
             ->whereDate('created_at', '>=', $startDate)
             ->whereDate('created_at', '<=', $endDate)
             ->where([
+                'status' => BaseStatusEnum::PUBLISHED,
                 'is_variation' => false,
                 'store_id' => $store->id,
             ])
-            ->wherePublished()
             ->limit(10)
             ->get();
 
         $totalProducts = $store->products()->count();
-        $totalOrders = $store->count();
+        $totalOrders = $store->orders()->count();
         $compact = compact('user', 'store', 'data', 'totalProducts', 'totalOrders');
 
         if ($request->ajax()) {
-            return $this
-                ->httpResponse()
+            return $response
                 ->setData([
-                    'html' => MarketplaceHelper::view('vendor-dashboard.partials.dashboard-content', $compact)->render(),
+                    'html' => MarketplaceHelper::view('dashboard.partials.dashboard-content', $compact)->render(),
                 ]);
         }
 
-        return MarketplaceHelper::view('vendor-dashboard.index', $compact);
+        return MarketplaceHelper::view('dashboard.index', $compact);
     }
 
-    public function postUpload(Request $request)
+    public function postUpload(Request $request, BaseHttpResponse $response)
     {
-        $customer = auth('customer')->user();
-
-        $uploadFolder = $customer->store?->upload_folder ?: $customer->upload_folder;
-
         if (! RvMedia::isChunkUploadEnabled()) {
             $validator = Validator::make($request->all(), [
-                'file.0' => ['required', 'image', 'mimes:jpg,jpeg,png'],
+                'file.0' => 'required|image|mimes:jpg,jpeg,png',
             ]);
 
             if ($validator->fails()) {
-                return $this
-                    ->httpResponse()
-                    ->setError()
-                    ->setMessage($validator->getMessageBag()->first());
+                return $response->setError()->setMessage($validator->getMessageBag()->first());
             }
 
-            $result = RvMedia::handleUpload(Arr::first($request->file('file')), 0, $uploadFolder);
+            $result = RvMedia::handleUpload(Arr::first($request->file('file')), 0, 'customers');
 
             if ($result['error']) {
-                return $this
-                    ->httpResponse()
-                    ->setError()
-                    ->setMessage($result['message']);
+                return $response->setError()->setMessage($result['message']);
             }
 
-            return $this
-                ->httpResponse()
-                ->setData($result['data']);
+            return $response->setData($result['data']);
         }
 
         try {
@@ -211,18 +222,13 @@ class DashboardController extends BaseController
             $save = $receiver->receive();
             // Check if the upload has finished (in chunk mode it will send smaller files)
             if ($save->isFinished()) {
-                $result = RvMedia::handleUpload($save->getFile(), 0, $uploadFolder);
+                $result = RvMedia::handleUpload($save->getFile(), 0, 'accounts');
 
                 if (! $result['error']) {
-                    return $this
-                        ->httpResponse()
-                        ->setData($result['data']);
+                    return $response->setData($result['data']);
                 }
 
-                return $this
-                    ->httpResponse()
-                    ->setError()
-                    ->setMessage($result['message']);
+                return $response->setError()->setMessage($result['message']);
             }
             // We are in chunk mode, lets send the current progress
             $handler = $save->handler();
@@ -232,19 +238,60 @@ class DashboardController extends BaseController
                 'status' => true,
             ]);
         } catch (Exception $exception) {
-            return $this
-                ->httpResponse()
-                ->setError()
-                ->setMessage($exception->getMessage());
+            return $response->setError()->setMessage($exception->getMessage());
         }
     }
 
     public function postUploadFromEditor(Request $request)
     {
+        return RvMedia::uploadFromEditor($request);
+    }
+
+    public function getBecomeVendor()
+    {
         $customer = auth('customer')->user();
+        if ($customer->is_vendor) {
+            if (MarketplaceHelper::getSetting('verify_vendor', 1) && ! $customer->vendor_verified_at) {
+                SeoHelper::setTitle(__('Become Vendor'));
 
-        $uploadFolder = $customer->store?->upload_folder ?: $customer->upload_folder;
+                Theme::breadcrumb()
+                    ->add(__('Home'), route('public.index'))
+                    ->add(__('Approving'));
 
-        return RvMedia::uploadFromEditor($request, 0, $uploadFolder);
+                return Theme::scope('marketplace.approving-vendor', [], 'plugins/marketplace::themes.approving-vendor')
+                    ->render();
+            }
+
+            return redirect()->route('marketplace.vendor.dashboard');
+        }
+
+        SeoHelper::setTitle(__('Become Vendor'));
+
+        Theme::breadcrumb()
+            ->add(__('Home'), route('public.index'))
+            ->add(__('Become Vendor'), route('marketplace.vendor.become-vendor'));
+
+        return Theme::scope('marketplace.become-vendor', [], 'plugins/marketplace::themes.become-vendor')
+            ->render();
+    }
+
+    public function postBecomeVendor(BecomeVendorRequest $request, BaseHttpResponse $response)
+    {
+        $customer = auth('customer')->user();
+        if ($customer->is_vendor) {
+            abort(404);
+        }
+
+        $existing = SlugHelper::getSlug($request->input('shop_url'), SlugHelper::getPrefix(Store::class));
+
+        if ($existing) {
+            return $response->setError()->setMessage(__('Shop URL is existing. Please choose another one!'));
+        }
+
+        event(new Registered($customer));
+
+        return $response
+            ->setNextUrl(route('marketplace.vendor.dashboard'))
+            ->setMessage(__('Registered successfully!'));
     }
 }

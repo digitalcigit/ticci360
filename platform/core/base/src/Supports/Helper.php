@@ -2,15 +2,17 @@
 
 namespace Botble\Base\Supports;
 
-use Botble\Base\Facades\BaseHelper;
 use Botble\Base\Models\BaseModel;
-use Botble\Base\Services\ClearCacheService;
+use Exception;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Request;
 use Throwable;
 
 class Helper
@@ -18,11 +20,6 @@ class Helper
     public static function autoload(string $directory): void
     {
         $helpers = File::glob($directory . '/*.php');
-
-        if (empty($helpers) || ! is_array($helpers)) {
-            return;
-        }
-
         foreach ($helpers as $helper) {
             File::requireOnce($helper);
         }
@@ -30,13 +27,13 @@ class Helper
 
     public static function handleViewCount(BaseModel $object, string $sessionName): bool
     {
-        if (! array_key_exists($object->getKey(), session($sessionName, []))) {
+        if (! array_key_exists($object->id, session()->get($sessionName, []))) {
             try {
                 $object::withoutEvents(fn () => $object::withoutTimestamps(fn () => $object->increment('views')));
-                session()->put($sessionName . '.' . $object->getKey(), time());
+                session()->put($sessionName . '.' . $object->id, time());
 
                 return true;
-            } catch (Throwable) {
+            } catch (Exception) {
                 return false;
             }
         }
@@ -47,7 +44,7 @@ class Helper
     public static function formatLog(array $input, string $line = '', string $function = '', string $class = ''): array
     {
         return array_merge($input, [
-            'user_id' => Auth::guard()->check() ? Auth::guard()->id() : 'System',
+            'user_id' => Auth::check() ? Auth::id() : 'System',
             'ip' => Request::ip(),
             'line' => $line,
             'function' => $function,
@@ -59,25 +56,16 @@ class Helper
     public static function removeModuleFiles(string $module, string $type = 'packages'): bool
     {
         $folders = [
-            public_path('vendor' . DIRECTORY_SEPARATOR . 'core' . DIRECTORY_SEPARATOR . $type . DIRECTORY_SEPARATOR . $module),
-            resource_path('assets' . DIRECTORY_SEPARATOR . $type . DIRECTORY_SEPARATOR . $module),
-            resource_path('views' . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . $type . DIRECTORY_SEPARATOR . $module),
-            config_path($type . DIRECTORY_SEPARATOR . $module),
+            public_path('vendor/core/' . $type . '/' . $module),
+            resource_path('assets/' . $type . '/' . $module),
+            resource_path('views/vendor/' . $type . '/' . $module),
+            lang_path('vendor/' . $type . '/' . $module),
+            config_path($type . '/' . $module),
         ];
 
         foreach ($folders as $folder) {
             if (File::isDirectory($folder)) {
                 File::deleteDirectory($folder);
-            }
-        }
-
-        $langPath = lang_path('vendor' . DIRECTORY_SEPARATOR . $type . DIRECTORY_SEPARATOR . $module);
-
-        if (File::isDirectory($langPath)) {
-            try {
-                File::deleteDirectory($langPath);
-            } catch (Throwable $throwable) {
-                BaseHelper::logError($throwable);
             }
         }
 
@@ -87,26 +75,49 @@ class Helper
     public static function isConnectedDatabase(): bool
     {
         try {
-            return Schema::hasTable('settings');
-        } catch (Throwable) {
+            if (App::runningInConsole()) {
+                return Schema::hasTable('settings');
+            }
+
+            if (Cache::get('cms_connected_to_database')) {
+                return true;
+            }
+
+            $connected = Schema::hasTable('settings');
+
+            Cache::set('cms_connected_to_database', $connected, 86400);
+
+            return $connected;
+        } catch (Exception) {
             return false;
         }
     }
 
     public static function clearCache(): bool
     {
-        $clearCacheService = ClearCacheService::make();
+        Event::dispatch('cache:clearing');
 
-        $clearCacheService->clearFrameworkCache();
-        $clearCacheService->clearBootstrapCache();
-        $clearCacheService->clearRoutesCache();
-        $clearCacheService->clearPurifier();
-        $clearCacheService->clearDebugbar();
+        try {
+            Cache::flush();
+            if (! File::exists($storagePath = storage_path('framework/cache'))) {
+                return true;
+            }
+
+            foreach (File::files($storagePath) as $file) {
+                if (preg_match('/facade-.*\.php$/', $file)) {
+                    File::delete($file);
+                }
+            }
+        } catch (Exception $exception) {
+            info($exception->getMessage());
+        }
+
+        Event::dispatch('cache:cleared');
 
         return true;
     }
 
-    public static function getCountryNameByCode(?string $countryCode): ?string
+    public static function getCountryNameByCode(string|null $countryCode): string|null
     {
         if (empty($countryCode)) {
             return null;
@@ -115,7 +126,7 @@ class Helper
         return Arr::get(self::countries(), $countryCode, $countryCode);
     }
 
-    public static function getCountryCodeByName(?string $countryName): ?string
+    public static function getCountryCodeByName(string|null $countryName): string|null
     {
         if (empty($countryName)) {
             return null;
@@ -134,11 +145,7 @@ class Helper
 
     public static function countries(): array
     {
-        $countries = config('core.base.general.countries', []);
-
-        $translatedCountries = array_change_key_case(trans('core/base::countries', []), CASE_UPPER);
-
-        return array_map('html_entity_decode', [...$countries, ...$translatedCountries]);
+        return config('core.base.general.countries', []);
     }
 
     public static function getIpFromThirdParty(): bool|string|null
@@ -146,9 +153,9 @@ class Helper
         $defaultIpAddress = Request::ip() ?: '127.0.0.1';
 
         try {
-            $ip = trim(Http::withoutVerifying()->get('https://ipecho.net/plain')->body());
+            $ip = Http::withoutVerifying()->get('https://ipecho.net/plain')->body();
 
-            return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : $defaultIpAddress;
+            return trim($ip) ?: $defaultIpAddress;
         } catch (Throwable) {
             return $defaultIpAddress;
         }
@@ -182,7 +189,7 @@ class Helper
     public static function convertHrToBytes(string|float|int|null $value): float|int
     {
         $value = strtolower(trim($value));
-        $bytes = (int) $value;
+        $bytes = (int)$value;
 
         if (str_contains($value, 'g')) {
             $bytes *= 1024 * 1024 * 1024;

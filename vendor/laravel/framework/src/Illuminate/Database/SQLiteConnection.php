@@ -2,7 +2,7 @@
 
 namespace Illuminate\Database;
 
-use Exception;
+use Illuminate\Database\PDO\SQLiteDriver;
 use Illuminate\Database\Query\Grammars\SQLiteGrammar as QueryGrammar;
 use Illuminate\Database\Query\Processors\SQLiteProcessor;
 use Illuminate\Database\Schema\Grammars\SQLiteGrammar as SchemaGrammar;
@@ -13,35 +13,27 @@ use Illuminate\Filesystem\Filesystem;
 class SQLiteConnection extends Connection
 {
     /**
-     * {@inheritdoc}
-     */
-    public function getDriverTitle()
-    {
-        return 'SQLite';
-    }
-
-    /**
-     * Escape a binary value for safe SQL embedding.
+     * Create a new database connection instance.
      *
-     * @param  string  $value
-     * @return string
+     * @param  \PDO|\Closure  $pdo
+     * @param  string  $database
+     * @param  string  $tablePrefix
+     * @param  array  $config
+     * @return void
      */
-    protected function escapeBinary($value)
+    public function __construct($pdo, $database = '', $tablePrefix = '', array $config = [])
     {
-        $hex = bin2hex($value);
+        parent::__construct($pdo, $database, $tablePrefix, $config);
 
-        return "x'{$hex}'";
-    }
+        $enableForeignKeyConstraints = $this->getForeignKeyConstraintsConfigurationValue();
 
-    /**
-     * Determine if the given database exception was caused by a unique constraint violation.
-     *
-     * @param  \Exception  $exception
-     * @return bool
-     */
-    protected function isUniqueConstraintError(Exception $exception)
-    {
-        return boolval(preg_match('#(column(s)? .* (is|are) not unique|UNIQUE constraint failed: .*)#i', $exception->getMessage()));
+        if ($enableForeignKeyConstraints === null) {
+            return;
+        }
+
+        $enableForeignKeyConstraints
+            ? $this->getSchemaBuilder()->enableForeignKeyConstraints()
+            : $this->getSchemaBuilder()->disableForeignKeyConstraints();
     }
 
     /**
@@ -51,7 +43,7 @@ class SQLiteConnection extends Connection
      */
     protected function getDefaultQueryGrammar()
     {
-        return new QueryGrammar($this);
+        return $this->withTablePrefix(new QueryGrammar);
     }
 
     /**
@@ -75,7 +67,7 @@ class SQLiteConnection extends Connection
      */
     protected function getDefaultSchemaGrammar()
     {
-        return new SchemaGrammar($this);
+        return $this->withTablePrefix(new SchemaGrammar);
     }
 
     /**
@@ -86,7 +78,7 @@ class SQLiteConnection extends Connection
      *
      * @throws \RuntimeException
      */
-    public function getSchemaState(?Filesystem $files = null, ?callable $processFactory = null)
+    public function getSchemaState(Filesystem $files = null, callable $processFactory = null)
     {
         return new SqliteSchemaState($this, $files, $processFactory);
     }
@@ -99,5 +91,25 @@ class SQLiteConnection extends Connection
     protected function getDefaultPostProcessor()
     {
         return new SQLiteProcessor;
+    }
+
+    /**
+     * Get the Doctrine DBAL driver.
+     *
+     * @return \Illuminate\Database\PDO\SQLiteDriver
+     */
+    protected function getDoctrineDriver()
+    {
+        return new SQLiteDriver;
+    }
+
+    /**
+     * Get the database connection foreign key constraints configuration option.
+     *
+     * @return bool|null
+     */
+    protected function getForeignKeyConstraintsConfigurationValue()
+    {
+        return $this->getConfig('foreign_key_constraints');
     }
 }

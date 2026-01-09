@@ -1,12 +1,10 @@
 import SalesReportsChart from './components/SalesReportsChart'
 import RevenueChart from './components/RevenueChart'
 
-if (typeof vueApp !== 'undefined') {
-    vueApp.booting((vue) => {
-        vue.component('sales-reports-chart', SalesReportsChart)
-        vue.component('revenue-chart', RevenueChart)
-    })
-}
+vueApp.booting(vue => {
+    vue.component('sales-reports-chart', SalesReportsChart)
+    vue.component('revenue-chart', RevenueChart)
+})
 
 $(() => {
     if (!window.moment || !jQuery().daterangepicker) {
@@ -31,7 +29,10 @@ $(() => {
         [rangesTrans.last_7_days]: [moment().subtract(6, 'days'), today],
         [rangesTrans.last_30_days]: [moment().subtract(29, 'days'), today],
         [rangesTrans.this_month]: [moment().startOf('month'), endDate],
-        [rangesTrans.this_year]: [moment().startOf('year'), moment().endOf('year')],
+        [rangesTrans.this_year]: [
+            moment().startOf('year'),
+            moment().endOf('year'),
+        ],
     }
 
     $dateRange.daterangepicker(
@@ -48,7 +49,7 @@ $(() => {
             },
             autoUpdateInput: false,
         },
-        function (start, end, label) {
+        function(start, end, label) {
             $.ajax({
                 url: $dateRange.data('href'),
                 data: {
@@ -57,45 +58,51 @@ $(() => {
                     predefined_range: label,
                 },
                 type: 'GET',
-                success: (data) => {
+                success: data => {
                     if (data.error) {
                         Botble.showError(data.message)
                     } else {
-                        if (!$('#report-stats-content').length) {
-                            const newUrl = new URL(window.location.href)
+                        $('.widget-item').each((key, widget) => {
+                            const widgetEl = $(widget).prop('id')
+                            $(`#${widgetEl}`).replaceWith($(data.data).find(`#${widgetEl}`))
+                        })
 
-                            newUrl.searchParams.set('date_from', start.format('YYYY-MM-DD'))
-                            newUrl.searchParams.set('date_to', end.format('YYYY-MM-DD'))
+                        if ($('.report-chart-content').length) {
+                            $('.report-chart-content').html(data.data.html)
+                            window.vueApp.vue.component('sales-reports-chart', SalesReportsChart)
 
-                            history.pushState({ urlPath: newUrl.href }, '', newUrl.href)
-
-                            window.location.reload()
-                        } else {
-                            $('.widget-item').each((key, widget) => {
-                                const widgetEl = $(widget).prop('id')
-                                $(`#${widgetEl}`).replaceWith($(data.data).find(`#${widgetEl}`))
+                            new window.vueApp.vue({
+                                el: '#report-chart',
                             })
                         }
 
                         if (window.LaravelDataTables) {
-                            Object.keys(window.LaravelDataTables).map((key) => {
-                                let table = window.LaravelDataTables[key]
-                                let url = new URL(table.ajax.url())
-                                url.searchParams.set('date_from', start.format('YYYY-MM-DD'))
-                                url.searchParams.set('date_to', end.format('YYYY-MM-DD'))
-                                table.ajax.url(url.href).load()
-                            })
+                            Object.keys(window.LaravelDataTables).map(
+                                (key) => {
+                                    let table = window.LaravelDataTables[key]
+                                    let url = new URL(table.ajax.url())
+                                    url.searchParams.set(
+                                        'date_from',
+                                        start.format('YYYY-MM-DD'),
+                                    )
+                                    url.searchParams.set(
+                                        'date_to',
+                                        end.format('YYYY-MM-DD'),
+                                    )
+                                    table.ajax.url(url.href).load()
+                                },
+                            )
                         }
                     }
                 },
-                error: (data) => {
+                error: data => {
                     Botble.handleError(data)
                 },
             })
-        }
+        },
     )
 
-    $dateRange.on('apply.daterangepicker', function (ev, picker) {
+    $dateRange.on('apply.daterangepicker', function(ev, picker) {
         let $this = $(this)
         let formatValue = $this.data('format-value')
         if (!formatValue) {

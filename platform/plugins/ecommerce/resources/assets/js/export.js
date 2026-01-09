@@ -1,26 +1,48 @@
 $(() => {
+
     let isExporting = false
 
-    $(document).on('click', '[data-bb-toggle="data-export"]', function (event) {
+    $(document).on('click', '.btn-export-data', function(event) {
         event.preventDefault()
 
-        const _self = $(event.currentTarget)
+        if (isExporting) {
+            return
+        }
 
-        $httpClient
-            .make()
-            .withButtonLoading(_self)
-            .withLoading(_self.closest('.card'))
-            .withResponseType('blob')
-            .post(_self.attr('href'))
-            .then(({ data }) => {
+        const $this = $(event.currentTarget)
+        const $content = $this.html()
+
+        $.ajax({
+            url: $this.attr('href'),
+            method: 'POST',
+            xhrFields: {
+                responseType: 'blob',
+            },
+            beforeSend: () => {
+                $this.html($this.data('loading-text'))
+                $this.attr('disabled', 'true')
+                isExporting = true
+            },
+            success: data => {
                 let a = document.createElement('a')
                 let url = window.URL.createObjectURL(data)
                 a.href = url
-                a.download = _self.data('filename')
+                a.download = $this.data('filename')
                 document.body.append(a)
                 a.click()
                 a.remove()
                 window.URL.revokeObjectURL(url)
-            })
+            },
+            error: data => {
+                Botble.handleError(data)
+            },
+            complete: () => {
+                setTimeout(() => {
+                    $this.html($content)
+                    $this.removeAttr('disabled')
+                    isExporting = false
+                }, 2000)
+            },
+        })
     })
 })

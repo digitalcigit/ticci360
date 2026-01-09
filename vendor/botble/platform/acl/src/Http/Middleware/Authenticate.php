@@ -7,12 +7,8 @@ use Illuminate\Auth\Middleware\Authenticate as BaseAuthenticate;
 
 class Authenticate extends BaseAuthenticate
 {
-    protected array $guards;
-
     public function handle($request, Closure $next, ...$guards)
     {
-        $this->guards = $guards;
-
         $this->authenticate($request, $guards);
 
         if (! $guards) {
@@ -22,10 +18,10 @@ class Authenticate extends BaseAuthenticate
                 $flag = $route->getName();
             }
 
-            $flag = preg_replace('/.store$/', '.create', $flag);
-            $flag = preg_replace('/.update$/', '.edit', $flag);
+            $flag = preg_replace('/.create.store$/', '.create', $flag);
+            $flag = preg_replace('/.edit.update$/', '.edit', $flag);
 
-            if ($flag && ! $request->user()->hasAnyPermission((array) $flag)) {
+            if ($flag && ! $request->user()->hasAnyPermission((array)$flag)) {
                 if ($request->expectsJson()) {
                     return response()->json(['message' => 'Unauthenticated.'], 401);
                 }
@@ -37,18 +33,10 @@ class Authenticate extends BaseAuthenticate
         return $next($request);
     }
 
-    protected function redirectTo($request): ?string
+    protected function redirectTo($request)
     {
-        if ($this->guards || $request->expectsJson()) {
-            $redirectCallback = apply_filters('cms_unauthenticated_redirect_to', null, $request);
-
-            if ($redirectCallback) {
-                return $redirectCallback;
-            }
-
-            return parent::redirectTo($request);
+        if (! $request->expectsJson()) {
+            return route('access.login');
         }
-
-        return route('access.login');
     }
 }

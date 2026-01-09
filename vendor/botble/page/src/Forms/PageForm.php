@@ -2,45 +2,60 @@
 
 namespace Botble\Page\Forms;
 
-use Botble\Base\Forms\FieldOptions\ContentFieldOption;
-use Botble\Base\Forms\FieldOptions\DescriptionFieldOption;
-use Botble\Base\Forms\FieldOptions\MediaImageFieldOption;
-use Botble\Base\Forms\FieldOptions\NameFieldOption;
-use Botble\Base\Forms\FieldOptions\SelectFieldOption;
-use Botble\Base\Forms\FieldOptions\StatusFieldOption;
-use Botble\Base\Forms\Fields\EditorField;
-use Botble\Base\Forms\Fields\MediaImageField;
-use Botble\Base\Forms\Fields\SelectField;
-use Botble\Base\Forms\Fields\TextareaField;
-use Botble\Base\Forms\Fields\TextField;
+use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Base\Forms\FormAbstract;
 use Botble\Page\Http\Requests\PageRequest;
 use Botble\Page\Models\Page;
-use Botble\Page\Supports\Template;
 
 class PageForm extends FormAbstract
 {
-    public function setup(): void
+    protected $template = 'core/base::forms.form-tabs';
+
+    public function buildForm(): void
     {
         $this
-            ->model(Page::class)
+            ->setupModel(new Page())
             ->setValidatorClass(PageRequest::class)
-            ->add('name', TextField::class, NameFieldOption::make()->maxLength(120)->required())
-            ->add('description', TextareaField::class, DescriptionFieldOption::make())
-            ->add('content', EditorField::class, ContentFieldOption::make()->allowedShortcodes())
-            ->add('status', SelectField::class, StatusFieldOption::make())
-            ->when(Template::getPageTemplates(), function (PageForm $form, array $templates) {
-                return $form
-                    ->add(
-                        'template',
-                        SelectField::class,
-                        SelectFieldOption::make()
-                            ->label(trans('core/base::forms.template'))
-                            ->required()
-                            ->choices($templates)
-                    );
-            })
-            ->add('image', MediaImageField::class, MediaImageFieldOption::make())
+            ->withCustomFields()
+            ->add('name', 'text', [
+                'label' => trans('core/base::forms.name'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'placeholder' => trans('core/base::forms.name_placeholder'),
+                    'data-counter' => 120,
+                ],
+            ])
+            ->add('description', 'textarea', [
+                'label' => trans('core/base::forms.description'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'rows' => 4,
+                    'placeholder' => trans('core/base::forms.description_placeholder'),
+                    'data-counter' => 400,
+                ],
+            ])
+            ->add('content', 'editor', [
+                'label' => trans('core/base::forms.content'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'placeholder' => trans('core/base::forms.description_placeholder'),
+                    'with-short-code' => true,
+                ],
+            ])
+            ->add('status', 'customSelect', [
+                'label' => trans('core/base::tables.status'),
+                'label_attr' => ['class' => 'control-label required'],
+                'choices' => BaseStatusEnum::labels(),
+            ])
+            ->add('template', 'customSelect', [
+                'label' => trans('core/base::forms.template'),
+                'label_attr' => ['class' => 'control-label required'],
+                'choices' => get_page_templates(),
+            ])
+            ->add('image', 'mediaImage', [
+                'label' => trans('core/base::forms.image'),
+                'label_attr' => ['class' => 'control-label'],
+            ])
             ->setBreakFieldPoint('status');
     }
 }

@@ -20,12 +20,16 @@ use Symfony\Component\DependencyInjection\ReverseContainer;
  */
 final class EarlyExpirationMessage
 {
+    private $item;
+    private string $pool;
+    private string|array $callback;
+
     public static function create(ReverseContainer $reverseContainer, callable $callback, CacheItem $item, AdapterInterface $pool): ?self
     {
         try {
             $item = clone $item;
             $item->set(null);
-        } catch (\Exception) {
+        } catch (\Exception $e) {
             return null;
         }
 
@@ -87,10 +91,10 @@ final class EarlyExpirationMessage
         return $callback;
     }
 
-    private function __construct(
-        private CacheItem $item,
-        private string $pool,
-        private string|array $callback,
-    ) {
+    private function __construct(CacheItem $item, string $pool, string|array $callback)
+    {
+        $this->item = $item;
+        $this->pool = $pool;
+        $this->callback = $callback;
     }
 }

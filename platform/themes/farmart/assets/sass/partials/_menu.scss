@@ -122,8 +122,7 @@
     .mega-menu__column {
         min-width: 180px;
         flex-shrink: 0;
-        width: calc(50% - 80px);
-        margin-bottom: 30px;
+        width: 50%;
     }
 
     .mega-menu__list {
@@ -157,7 +156,7 @@
             padding: 0.9rem 1.1rem;
             font-weight: 700;
             line-height: 20px;
-            color: var(--bottom-header-text-color);
+            color: $header-text-color;
 
             &:hover {
                 color: $color-primary;
@@ -263,7 +262,7 @@
 .menu--product-categories {
     position: relative;
     cursor: pointer;
-    background-color: var(--primary-button-background-color);
+    background-color: $color-primary;
     transition: .5s;
     padding: 13px 24px 13px 21px;
     margin: 0;
@@ -358,7 +357,7 @@
             white-space: nowrap;
 
             i {
-                margin-inline-end: 10px;
+                margin-right: 10px;
                 font-size: 18px;
             }
         }
@@ -423,7 +422,7 @@
 
     .menu-item-has-children {
         &.active {
-            > .sub-menu {
+            .sub-menu {
                 display: block;
             }
         }

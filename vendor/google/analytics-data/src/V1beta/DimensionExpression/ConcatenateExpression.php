@@ -32,7 +32,7 @@ class ConcatenateExpression extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>string delimiter = 2;</code>
      */
-    protected $delimiter = '';
+    private $delimiter = '';
 
     /**
      * Constructor.

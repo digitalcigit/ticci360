@@ -203,14 +203,6 @@ class Spreadsheet implements JsonSerializable
      */
     private $tabRatio = 600;
 
-    /** @var Theme */
-    private $theme;
-
-    public function getTheme(): Theme
-    {
-        return $this->theme;
-    }
-
     /**
      * The workbook has macros ?
      *
@@ -484,7 +476,6 @@ class Spreadsheet implements JsonSerializable
     {
         $this->uniqueID = uniqid('', true);
         $this->calculationEngine = new Calculation($this);
-        $this->theme = new Theme();
 
         // Initialise worksheet collection and add one worksheet
         $this->workSheetCollection = [];
@@ -599,7 +590,7 @@ class Spreadsheet implements JsonSerializable
     public function createSheet($sheetIndex = null)
     {
         $newSheet = new Worksheet($this);
-        $this->addSheet($newSheet, $sheetIndex, true);
+        $this->addSheet($newSheet, $sheetIndex);
 
         return $newSheet;
     }
@@ -621,24 +612,11 @@ class Spreadsheet implements JsonSerializable
      *
      * @param Worksheet $worksheet The worksheet to add
      * @param null|int $sheetIndex Index where sheet should go (0,1,..., or null for last)
-     * @param bool $retitleIfNeeded add suffix if title exists in spreadsheet
      *
      * @return Worksheet
      */
-    public function addSheet(Worksheet $worksheet, $sheetIndex = null, $retitleIfNeeded = false)
+    public function addSheet(Worksheet $worksheet, $sheetIndex = null)
     {
-        if ($retitleIfNeeded) {
-            $title = $worksheet->getTitle();
-            if ($this->sheetNameExists($title)) {
-                $i = 1;
-                $newTitle = "$title $i";
-                while ($this->sheetNameExists($newTitle)) {
-                    ++$i;
-                    $newTitle = "$title $i";
-                }
-                $worksheet->setTitle($newTitle);
-            }
-        }
         if ($this->sheetNameExists($worksheet->getTitle())) {
             throw new Exception(
                 "Workbook already contains a worksheet named '{$worksheet->getTitle()}'. Rename this worksheet first."
@@ -763,16 +741,12 @@ class Spreadsheet implements JsonSerializable
      *
      * @return int index
      */
-    public function getIndex(Worksheet $worksheet, bool $noThrow = false)
+    public function getIndex(Worksheet $worksheet)
     {
-        $wsHash = $worksheet->getHashInt();
         foreach ($this->workSheetCollection as $key => $value) {
-            if ($value->getHashInt() === $wsHash) {
+            if ($value->getHashCode() === $worksheet->getHashCode()) {
                 return $key;
             }
-        }
-        if ($noThrow) {
-            return -1;
         }
 
         throw new Exception('Sheet does not exist.');
@@ -1679,27 +1653,5 @@ class Spreadsheet implements JsonSerializable
     public function jsonSerialize(): mixed
     {
         throw new Exception('Spreadsheet objects cannot be json encoded');
-    }
-
-    public function resetThemeFonts(): void
-    {
-        $majorFontLatin = $this->theme->getMajorFontLatin();
-        $minorFontLatin = $this->theme->getMinorFontLatin();
-        foreach ($this->cellXfCollection as $cellStyleXf) {
-            $scheme = $cellStyleXf->getFont()->getScheme();
-            if ($scheme === 'major') {
-                $cellStyleXf->getFont()->setName($majorFontLatin)->setScheme($scheme);
-            } elseif ($scheme === 'minor') {
-                $cellStyleXf->getFont()->setName($minorFontLatin)->setScheme($scheme);
-            }
-        }
-        foreach ($this->cellStyleXfCollection as $cellStyleXf) {
-            $scheme = $cellStyleXf->getFont()->getScheme();
-            if ($scheme === 'major') {
-                $cellStyleXf->getFont()->setName($majorFontLatin)->setScheme($scheme);
-            } elseif ($scheme === 'minor') {
-                $cellStyleXf->getFont()->setName($minorFontLatin)->setScheme($scheme);
-            }
-        }
     }
 }

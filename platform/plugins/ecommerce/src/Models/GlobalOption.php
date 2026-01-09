@@ -16,22 +16,26 @@ class GlobalOption extends BaseModel
         'required',
     ];
 
-    protected static function booted(): void
-    {
-        self::deleted(function (GlobalOption $option): void {
-            $option->values()->delete();
-        });
-    }
-
     public function values(): HasMany
     {
         return $this
             ->hasMany(GlobalOptionValue::class, 'option_id')
-            ->orderBy('order');
+            ->orderBy('order', 'ASC');
     }
 
     protected function optionName(): Attribute
     {
-        return Attribute::get(fn () => $this->name);
+        return Attribute::make(
+            get: fn () => $this->name
+        );
+    }
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        self::deleting(function (GlobalOption $option) {
+            GlobalOptionValue::where('option_id', $option->id)->delete();
+        });
     }
 }

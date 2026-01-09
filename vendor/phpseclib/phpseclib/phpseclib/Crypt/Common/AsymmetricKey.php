@@ -30,14 +30,14 @@ abstract class AsymmetricKey
     /**
      * Precomputed Zero
      *
-     * @var BigInteger
+     * @var \phpseclib3\Math\BigInteger
      */
     protected static $zero;
 
     /**
      * Precomputed One
      *
-     * @var BigInteger
+     * @var \phpseclib3\Math\BigInteger
      */
     protected static $one;
 
@@ -51,14 +51,14 @@ abstract class AsymmetricKey
     /**
      * Hash function
      *
-     * @var Hash
+     * @var \phpseclib3\Crypt\Hash
      */
     protected $hash;
 
     /**
      * HMAC function
      *
-     * @var Hash
+     * @var \phpseclib3\Crypt\Hash
      */
     private $hmac;
 
@@ -94,7 +94,7 @@ abstract class AsymmetricKey
 
     /**
      * @param string $type
-     * @return array|string
+     * @return string
      */
     abstract public function toString($type, array $options = []);
 
@@ -130,7 +130,7 @@ abstract class AsymmetricKey
      *
      * @param string $key
      * @param string $password optional
-     * @return PublicKey|PrivateKey
+     * @return AsymmetricKey
      */
     public static function load($key, $password = false)
     {
@@ -382,7 +382,7 @@ abstract class AsymmetricKey
             $shortname = $meta->getShortName();
             self::$plugins[static::ALGORITHM]['Keys'][strtolower($shortname)] = $fullname;
             if ($meta->hasConstant('IS_INVISIBLE')) {
-                self::$invisiblePlugins[static::ALGORITHM][] = strtolower($shortname);
+                self::$invisiblePlugins[static::ALGORITHM] = strtolower($name);
             }
         }
     }
@@ -531,7 +531,7 @@ abstract class AsymmetricKey
     /**
      * Integer to Octet String
      *
-     * @param BigInteger $v
+     * @param \phpseclib3\Math\BigInteger $v
      * @return string
      */
     private function int2octets($v)
@@ -551,7 +551,7 @@ abstract class AsymmetricKey
      * Bit String to Integer
      *
      * @param string $in
-     * @return BigInteger
+     * @return \phpseclib3\Math\BigInteger
      */
     protected function bits2int($in)
     {

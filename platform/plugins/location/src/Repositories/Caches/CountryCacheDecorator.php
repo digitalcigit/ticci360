@@ -2,11 +2,9 @@
 
 namespace Botble\Location\Repositories\Caches;
 
-use Botble\Location\Repositories\Eloquent\CountryRepository;
+use Botble\Support\Repositories\Caches\CacheAbstractDecorator;
+use Botble\Location\Repositories\Interfaces\CountryInterface;
 
-/**
- * @deprecated
- */
-class CountryCacheDecorator extends CountryRepository
+class CountryCacheDecorator extends CacheAbstractDecorator implements CountryInterface
 {
 }

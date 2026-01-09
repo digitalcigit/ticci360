@@ -3,62 +3,63 @@
 namespace Botble\Ecommerce\Tables\Reports;
 
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Facades\Html;
-use Botble\Ecommerce\Facades\EcommerceHelper;
-use Botble\Ecommerce\Models\Product;
+use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
 use Botble\Payment\Enums\PaymentStatusEnum;
 use Botble\Table\Abstracts\TableAbstract;
-use Botble\Table\Columns\Column;
+use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Base\Facades\Html;
+use Illuminate\Contracts\Routing\UrlGenerator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\JsonResponse;
+use Botble\Table\DataTables;
 
 class TopSellingProductsTable extends TableAbstract
 {
-    public function setup(): void
-    {
-        $this->model(Product::class);
+    protected string $type = self::TABLE_TYPE_SIMPLE;
 
-        $this->type = self::TABLE_TYPE_SIMPLE;
-        $this->view = $this->simpleTableView();
+    protected $view = 'core/table::simple-table';
+
+    public function __construct(
+        DataTables $table,
+        UrlGenerator $urlGenerator,
+        ProductInterface $productRepository
+    ) {
+        parent::__construct($table, $urlGenerator);
+        $this->repository = $productRepository;
     }
 
     public function ajax(): JsonResponse
     {
         $data = $this->table
             ->eloquent($this->query())
-            ->editColumn('id', function (Product $item) {
+            ->editColumn('id', function ($item) {
                 if (! $item->is_variation) {
-                    return $item->getKey();
+                    return $item->id;
                 }
 
                 return $item->original_product->id;
             })
-            ->editColumn('name', function (Product $item) {
+            ->editColumn('name', function ($item) {
                 if (! $item->is_variation) {
                     return Html::link($item->url, BaseHelper::clean($item->name), ['target' => '_blank']);
                 }
 
                 $attributeText = $item->variation_attributes;
 
-                return Html::link(
-                    $item->original_product->url,
-                    BaseHelper::clean($item->original_product->name),
-                    ['target' => '_blank']
-                )
+                return Html::link($item->original_product->url, BaseHelper::clean($item->original_product->name), ['target' => '_blank'])
                         ->toHtml() . ' ' . Html::tag('small', $attributeText);
             });
 
-        return $this->toJson($data);
+        return $data->escapeColumns([])->make();
     }
 
     public function query(): Relation|Builder|QueryBuilder
     {
         [$startDate, $endDate] = EcommerceHelper::getDateRangeInReport(request());
 
-        $query = $this->getModel()
-            ->query()
+        $query = $this->repository->getModel()
             ->join('ec_order_product', 'ec_products.id', '=', 'ec_order_product.product_id')
             ->join('ec_orders', 'ec_orders.id', '=', 'ec_order_product.order_id');
 
@@ -71,14 +72,13 @@ class TopSellingProductsTable extends TableAbstract
         $query = $query
             ->whereDate('ec_orders.created_at', '>=', $startDate)
             ->whereDate('ec_orders.created_at', '<=', $endDate)
-            ->where('ec_orders.is_finished', true)
             ->select([
                 'ec_products.id as id',
                 'ec_products.is_variation as is_variation',
                 'ec_products.name as name',
                 'ec_order_product.qty as qty',
             ])
-            ->latest('ec_order_product.qty')
+            ->orderBy('ec_order_product.qty', 'DESC')
             ->limit(10);
 
         return $this->applyScopes($query);
@@ -92,22 +92,23 @@ class TopSellingProductsTable extends TableAbstract
     public function columns(): array
     {
         return [
-            Column::make('id')
-                ->title(trans('plugins/ecommerce::order.product_id'))
-                ->width(80)
-                ->orderable(false)
-                ->searchable(false),
-            Column::make('name')
-                ->title(trans('plugins/ecommerce::reports.product_name'))
-                ->alignStart()
-                ->orderable(false)
-                ->searchable(false),
-            Column::make('qty')
-                ->title(trans('plugins/ecommerce::reports.quantity'))
-                ->width(60)
-                ->alignEnd()
-                ->orderable(false)
-                ->searchable(false),
+            'id' => [
+                'title' => trans('plugins/ecommerce::order.product_id'),
+                'width' => '80px',
+                'orderable' => false,
+                'class' => 'no-sort text-center',
+            ],
+            'name' => [
+                'title' => trans('plugins/ecommerce::reports.product_name'),
+                'orderable' => false,
+                'class' => 'text-start no-sort',
+            ],
+            'qty' => [
+                'title' => trans('plugins/ecommerce::reports.quantity'),
+                'orderable' => false,
+                'class' => 'text-center no-sort',
+                'width' => '60px',
+            ],
         ];
     }
 }

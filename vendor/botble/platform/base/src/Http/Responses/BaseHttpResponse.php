@@ -6,29 +6,21 @@ use Botble\Base\Facades\BaseHelper;
 use Illuminate\Contracts\Support\Responsable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\URL;
-use Illuminate\Support\Str;
-use Illuminate\Support\Traits\Conditionable;
-use Illuminate\Support\Traits\Tappable;
 use Symfony\Component\HttpFoundation\Response;
 
 class BaseHttpResponse extends Response implements Responsable
 {
-    use Conditionable;
-    use Tappable;
-
     protected bool $error = false;
 
     protected mixed $data = null;
 
-    protected ?string $message = null;
+    protected string|null $message = null;
 
-    protected ?string $previousUrl = '';
+    protected string|null $previousUrl = '';
 
-    protected ?string $nextUrl = '';
+    protected string|null $nextUrl = '';
 
     protected bool $withInput = false;
 
@@ -38,75 +30,35 @@ class BaseHttpResponse extends Response implements Responsable
 
     public string $saveAction = 'save';
 
-    protected array $with = [];
-
-    public static function make(): static
-    {
-        return app(static::class);
-    }
-
-    public function setData(mixed $data): static
+    public function setData(mixed $data): self
     {
         $this->data = $data;
 
         return $this;
     }
 
-    public function with(array $with): static
-    {
-        $this->with = $with;
-
-        return $this;
-    }
-
-    public function setPreviousUrl(string $previousUrl): static
+    public function setPreviousUrl(string $previousUrl): self
     {
         $this->previousUrl = $previousUrl;
 
         return $this;
     }
 
-    public function setPreviousRoute(string $name, mixed $parameters = [], bool $absolute = true): static
-    {
-        return $this->setPreviousUrl(route($name, $parameters, $absolute));
-    }
-
-    public function setNextUrl(string $nextUrl): static
+    public function setNextUrl(string $nextUrl): self
     {
         $this->nextUrl = $nextUrl;
 
         return $this;
     }
 
-    public function setNextRoute(string $name, mixed $parameters = [], bool $absolute = true): static
-    {
-        return $this->setNextUrl(route($name, $parameters, $absolute));
-    }
-
-    public function usePreviousRouteName(): static
-    {
-        $this
-            ->when(URL::previous(), function (self $httpReponse, string $previousUrl): void {
-                $previousRouteName = optional(Route::getRoutes()->match(Request::create($previousUrl)))->getName();
-                if ($previousRouteName && Str::endsWith($previousRouteName, '.edit')) {
-                    $indexRouteName = Str::replaceLast('.edit', '.index', $previousRouteName);
-                    if (Route::has($indexRouteName)) {
-                        $httpReponse->setPreviousRoute($indexRouteName);
-                    }
-                }
-            });
-
-        return $this;
-    }
-
-    public function withInput(bool $withInput = true): static
+    public function withInput(bool $withInput = true): self
     {
         $this->withInput = $withInput;
 
         return $this;
     }
 
-    public function setCode(int $code): static
+    public function setCode(int $code): self
     {
         if ($code < 100 || $code >= 600) {
             return $this;
@@ -122,36 +74,11 @@ class BaseHttpResponse extends Response implements Responsable
         return $this->message;
     }
 
-    public function setMessage(?string $message, bool $cleanHtmlTags = true): static
+    public function setMessage(string|null $message): self
     {
-        if ($cleanHtmlTags) {
-            $message = BaseHelper::clean($message);
-        }
-
-        $this->message = $message;
+        $this->message = BaseHelper::clean($message);
 
         return $this;
-    }
-
-    public function withCreatedSuccessMessage(): static
-    {
-        return $this->setMessage(
-            trans('core/base::notices.create_success_message')
-        );
-    }
-
-    public function withUpdatedSuccessMessage(): static
-    {
-        return $this->setMessage(
-            trans('core/base::notices.update_success_message')
-        );
-    }
-
-    public function withDeletedSuccessMessage(): static
-    {
-        return $this->setMessage(
-            trans('core/base::notices.delete_success_message')
-        );
     }
 
     public function isError(): bool
@@ -159,14 +86,14 @@ class BaseHttpResponse extends Response implements Responsable
         return $this->error;
     }
 
-    public function setError(bool $error = true): static
+    public function setError(bool $error = true): self
     {
         $this->error = $error;
 
         return $this;
     }
 
-    public function setAdditional(array $additional): static
+    public function setAdditional(array $additional): self
     {
         $this->additional = $additional;
 
@@ -202,7 +129,7 @@ class BaseHttpResponse extends Response implements Responsable
                 ->json($data, $this->code);
         }
 
-        if ($this->isSaving() && ! empty($this->previousUrl)) {
+        if ($request->input('submit') === $this->saveAction && ! empty($this->previousUrl)) {
             return $this->responseRedirect($this->previousUrl);
         } elseif (! empty($this->nextUrl)) {
             return $this->responseRedirect($this->nextUrl);
@@ -213,45 +140,15 @@ class BaseHttpResponse extends Response implements Responsable
 
     protected function responseRedirect(string $url): RedirectResponse
     {
-        $with = [
-            ...$this->with,
-            ...($this->error ? ['error_msg' => $this->message] : ['success_msg' => $this->message]),
-        ];
-
         if ($this->withInput) {
             return redirect()
                 ->to($url)
-                ->with($with)
+                ->with($this->error ? 'error_msg' : 'success_msg', $this->message)
                 ->withInput();
         }
 
         return redirect()
             ->to($url)
-            ->with($with);
-    }
-
-    public function isSaving(): bool
-    {
-        return $this->getSubmitterValue() === $this->saveAction;
-    }
-
-    protected function getSubmitterValue(): string
-    {
-        return (string) request()->input('submitter');
-    }
-
-    public function toArray(): array
-    {
-        $data = [
-            'error' => $this->error,
-            'data' => $this->data,
-            'message' => $this->message,
-        ];
-
-        if ($this->additional) {
-            $data = array_merge($data, ['additional' => $this->additional]);
-        }
-
-        return $data;
+            ->with($this->error ? 'error_msg' : 'success_msg', $this->message);
     }
 }

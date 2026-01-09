@@ -2,11 +2,9 @@
 
 namespace Botble\Ecommerce\Repositories\Caches;
 
-use Botble\Ecommerce\Repositories\Eloquent\ProductTagRepository;
+use Botble\Ecommerce\Repositories\Interfaces\ProductTagInterface;
+use Botble\Support\Repositories\Caches\CacheAbstractDecorator;
 
-/**
- * @deprecated
- */
-class ProductTagCacheDecorator extends ProductTagRepository
+class ProductTagCacheDecorator extends CacheAbstractDecorator implements ProductTagInterface
 {
 }

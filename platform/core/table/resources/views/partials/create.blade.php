@@ -1,1 +1,1 @@
-<x-core::icon name="ti ti-plus" />{{ trans('core/base::forms.create') }}
+<i class="fa fa-plus"></i> {{ trans('core/base::forms.create') }}

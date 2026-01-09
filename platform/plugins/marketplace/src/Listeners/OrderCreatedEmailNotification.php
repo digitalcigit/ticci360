@@ -6,10 +6,10 @@ use Botble\Ecommerce\Enums\ShippingCodStatusEnum;
 use Botble\Ecommerce\Enums\ShippingStatusEnum;
 use Botble\Ecommerce\Events\OrderCreated;
 use Botble\Ecommerce\Events\OrderPlacedEvent;
-use Botble\Ecommerce\Models\Shipment;
-use Botble\Marketplace\Facades\MarketplaceHelper;
+use Botble\Ecommerce\Repositories\Interfaces\ShipmentInterface;
 use Botble\Payment\Enums\PaymentStatusEnum;
 use Illuminate\Support\Arr;
+use Botble\Marketplace\Facades\MarketplaceHelper;
 
 class OrderCreatedEmailNotification
 {
@@ -26,7 +26,7 @@ class OrderCreatedEmailNotification
                 continue;
             }
 
-            if ($product->original_product->store_id && $product->original_product->store?->id) {
+            if ($product->original_product->store_id && $product->original_product->store->id) {
                 $storeIds[] = $product->original_product->store_id;
             }
         }
@@ -38,11 +38,11 @@ class OrderCreatedEmailNotification
         $order->store_id = Arr::first($storeIds);
         $order->save();
 
-        Shipment::query()->create([
-            'order_id' => $order->getKey(),
+        app(ShipmentInterface::class)->createOrUpdate([
+            'order_id' => $order->id,
             'user_id' => 0,
             'weight' => $order->products_weight,
-            'cod_amount' => is_plugin_active('payment') ? ($order->payment->status != PaymentStatusEnum::COMPLETED ? $order->amount : 0) : null,
+            'cod_amount' => $order->payment->status != PaymentStatusEnum::COMPLETED ? $order->amount : 0,
             'cod_status' => ShippingCodStatusEnum::PENDING,
             'type' => $order->shipping_method,
             'status' => ShippingStatusEnum::PENDING,

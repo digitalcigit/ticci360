@@ -2,30 +2,39 @@
 
 namespace Botble\Marketplace\Http\Controllers\Fronts;
 
-use Botble\Base\Events\DeletedContentEvent;
 use Botble\Base\Facades\Assets;
+use Botble\Base\Events\DeletedContentEvent;
+use Botble\Base\Facades\PageTitle;
 use Botble\Base\Http\Controllers\BaseController;
+use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Ecommerce\Enums\OrderReturnStatusEnum;
-use Botble\Ecommerce\Facades\EcommerceHelper;
-use Botble\Ecommerce\Facades\OrderReturnHelper;
 use Botble\Ecommerce\Http\Requests\UpdateOrderReturnRequest;
-use Botble\Ecommerce\Models\OrderReturn;
-use Botble\Marketplace\Facades\MarketplaceHelper;
+use Botble\Ecommerce\Repositories\Interfaces\OrderReturnInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
 use Botble\Marketplace\Tables\OrderReturnTable;
+use Botble\Ecommerce\Facades\EcommerceHelper;
 use Exception;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\Request;
+use Botble\Marketplace\Facades\MarketplaceHelper;
+use Botble\Ecommerce\Facades\OrderReturnHelper;
 
 class OrderReturnController extends BaseController
 {
+    public function __construct(
+        protected OrderReturnInterface $orderReturnRepository,
+        protected OrderReturnInterface $orderReturnItemRepository,
+        protected ProductInterface $productRepository
+    ) {
+        if (! EcommerceHelper::isOrderReturnEnabled()) {
+            abort(404);
+        }
+    }
+
     public function index(OrderReturnTable $orderReturnTable)
     {
-        abort_unless(EcommerceHelper::isOrderReturnEnabled(), 404);
+        PageTitle::setTitle(trans('plugins/ecommerce::order.order_return'));
 
-        $this->pageTitle(trans('plugins/ecommerce::order.order_return'));
-
-        return $orderReturnTable->renderTable();
+        return $orderReturnTable->render(MarketplaceHelper::viewPath('dashboard.table.base'));
     }
 
     protected function getStore()
@@ -35,53 +44,44 @@ class OrderReturnController extends BaseController
 
     public function edit(int|string $id)
     {
-        abort_unless(EcommerceHelper::isOrderReturnEnabled(), 404);
+        $returnRequest = $this->orderReturnRepository->findOrFail($id, ['items', 'customer', 'order']);
 
-        $returnRequest = $this->findOrFail($id);
-
-        $returnRequest->load(['items', 'customer', 'order']);
+        if ($returnRequest->store_id != $this->getStore()->id) {
+            abort(404);
+        }
 
         Assets::addStylesDirectly(['vendor/core/plugins/ecommerce/css/ecommerce.css'])
             ->addScriptsDirectly([
                 'vendor/core/plugins/ecommerce/libraries/jquery.textarea_autosize.js',
                 'vendor/core/plugins/ecommerce/js/order.js',
             ])
-            ->addScripts(['input-mask']);
+            ->addScripts(['blockui', 'input-mask']);
 
         if (EcommerceHelper::loadCountriesStatesCitiesFromPluginLocation()) {
             Assets::addScriptsDirectly('vendor/core/plugins/location/js/location.js');
         }
 
-        $this->pageTitle(trans('plugins/ecommerce::order.edit_order_return', ['code' => get_order_code($id)]));
+        PageTitle::setTitle(trans('plugins/ecommerce::order.edit_order_return', ['code' => get_order_code($id)]));
 
         $defaultStore = get_primary_store_locator();
 
-        $returnRequest->loadMissing(['histories' => fn (HasMany $query) => $query->latest()]);
-
-        return MarketplaceHelper::view(
-            'vendor-dashboard.order-returns.edit',
-            compact('returnRequest', 'defaultStore')
-        );
+        return MarketplaceHelper::view('dashboard.order-returns.edit', compact('returnRequest', 'defaultStore'));
     }
 
-    public function update(int|string $id, UpdateOrderReturnRequest $request)
+    public function update(int|string $id, UpdateOrderReturnRequest $request, BaseHttpResponse $response)
     {
-        abort_unless(EcommerceHelper::isOrderReturnEnabled(), 404);
+        $returnRequest = $this->orderReturnRepository->findOrFail($id, ['items', 'customer', 'order']);
 
-        /**
-         * @var OrderReturn $returnRequest
-         */
-        $returnRequest = $this->findOrFail($id);
-
-        $returnRequest->load(['items', 'customer', 'order']);
+        if ($returnRequest->store_id != $this->getStore()->id) {
+            abort(404);
+        }
 
         $data['return_status'] = $request->input('return_status');
 
         if ($returnRequest->return_status == $data['return_status'] ||
             $returnRequest->return_status == OrderReturnStatusEnum::CANCELED ||
             $returnRequest->return_status == OrderReturnStatusEnum::COMPLETED) {
-            return $this
-                ->httpResponse()
+            return $response
                 ->setError()
                 ->setMessage(trans('plugins/ecommerce::order.notices.update_return_order_status_error'));
         }
@@ -89,44 +89,56 @@ class OrderReturnController extends BaseController
         [$status, $returnRequest] = OrderReturnHelper::updateReturnOrder($returnRequest, $data);
 
         if (! $status) {
-            return $this
-                ->httpResponse()
+            return $response
                 ->setError()
                 ->setMessage(trans('plugins/ecommerce::order.notices.update_return_order_status_error'));
         }
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setNextUrl(route('order_returns.edit', $returnRequest->id))
-            ->withUpdatedSuccessMessage();
+            ->setMessage(trans('core/base::notices.update_success_message'));
     }
 
-    public function destroy(int|string $id, Request $request)
+    public function destroy(int|string $id, Request $request, BaseHttpResponse $response)
     {
-        abort_unless(EcommerceHelper::isOrderReturnEnabled(), 404);
+        $orderReturn = $this->orderReturnRepository->findOrFail($id);
 
-        $orderReturn = $this->findOrFail($id);
+        if ($orderReturn->store_id != $this->getStore()->id) {
+            abort(404);
+        }
 
         try {
-            $orderReturn->delete();
+            $this->orderReturnRepository->deleteBy(['id' => $id]);
             event(new DeletedContentEvent(ORDER_RETURN_MODULE_SCREEN_NAME, $request, $orderReturn));
 
-            return $this
-                ->httpResponse()
-                ->setMessage(trans('core/base::notices.delete_success_message'));
+            return $response->setMessage(trans('core/base::notices.delete_success_message'));
         } catch (Exception $exception) {
-            return $this
-                ->httpResponse()
+            return $response
                 ->setError()
                 ->setMessage($exception->getMessage());
         }
     }
 
-    protected function findOrFail(int|string $id): OrderReturn|Model|null
+    public function deletes(Request $request, BaseHttpResponse $response)
     {
-        return OrderReturn::query()
-            ->where('id', $id)
-            ->where('store_id', $this->getStore()->id)
-            ->firstOrFail();
+        $ids = $request->input('ids');
+        if (empty($ids)) {
+            return $response
+                ->setError()
+                ->setMessage(trans('core/base::notices.no_select'));
+        }
+
+        foreach ($ids as $id) {
+            $orderReturn = $this->orderReturnRepository->findOrFail($id);
+
+            if ($orderReturn->store_id != $this->getStore()->id) {
+                continue;
+            }
+
+            $this->orderReturnRepository->delete($orderReturn);
+            event(new DeletedContentEvent(ORDER_RETURN_MODULE_SCREEN_NAME, $request, $orderReturn));
+        }
+
+        return $response->setMessage(trans('core/base::notices.delete_success_message'));
     }
 }

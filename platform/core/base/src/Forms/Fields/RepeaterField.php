@@ -2,9 +2,7 @@
 
 namespace Botble\Base\Forms\Fields;
 
-use Botble\Base\Forms\FormField;
-
-class RepeaterField extends FormField
+class RepeaterField extends SelectType
 {
     protected function getTemplate(): string
     {

@@ -2,22 +2,25 @@
 
 namespace Botble\Ecommerce\Services;
 
-use Botble\Ecommerce\Enums\DiscountTargetEnum;
-use Botble\Ecommerce\Enums\DiscountTypeEnum;
-use Botble\Ecommerce\Enums\DiscountTypeOptionEnum;
-use Botble\Ecommerce\Facades\Cart;
-use Botble\Ecommerce\Facades\OrderHelper;
 use Botble\Ecommerce\Models\Discount;
-use Botble\Ecommerce\Models\Product;
+use Botble\Ecommerce\Repositories\Interfaces\DiscountInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
 use Carbon\Carbon;
+use Botble\Ecommerce\Facades\Cart;
+use Eloquent;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Botble\Ecommerce\Facades\OrderHelper;
 
 class HandleApplyCouponService
 {
+    public function __construct(protected DiscountInterface $discountRepository, protected ProductInterface $productRepository)
+    {
+    }
+
     public function execute(string $coupon, array $sessionData = [], array $cartData = [], ?string $prefix = ''): array
     {
         $token = OrderHelper::getOrderSessionToken();
@@ -29,7 +32,6 @@ class HandleApplyCouponService
         if (! $sessionData) {
             $sessionData = OrderHelper::getOrderSessionData($token);
         }
-
         $rawTotal = Arr::get($cartData, 'rawTotal', Cart::instance('cart')->rawTotal());
 
         $sessionData['raw_total'] = $rawTotal;
@@ -57,12 +59,11 @@ class HandleApplyCouponService
         $discountTypeOption = null;
         $validCartItemIds = [];
 
-        if ($discount->type_option == DiscountTypeOptionEnum::SHIPPING) {
+        if ($discount->type_option == 'shipping') {
             $isFreeShipping = true;
         } else {
             $discountTypeOption = $discount->type_option;
-            $couponData = $this->getCouponDiscountAmount($discount, $cartData, $sessionData);
-
+            $couponData = $this->getCouponDiscountAmount($discount, $cartData);
             $couponDiscountAmount = Arr::get($couponData, 'discount_amount', 0);
             $validCartItemIds = Arr::get($couponData, 'valid_cart_item_ids', 0);
         }
@@ -81,8 +82,8 @@ class HandleApplyCouponService
 
         if ($prefix) {
             switch ($discountTypeOption) {
-                case DiscountTypeOptionEnum::PERCENTAGE:
-                case DiscountTypeOptionEnum::SAME_PRICE:
+                case 'percentage':
+                case 'same-price':
                     Arr::set($sessionData, $prefix . 'coupon_discount_amount', $couponDiscountAmount);
 
                     break;
@@ -98,7 +99,6 @@ class HandleApplyCouponService
         OrderHelper::setOrderSessionData($token, $sessionData);
 
         session()->put('applied_coupon_code', $couponCode);
-        session()->forget('auto_apply_coupon_code');
 
         return [
             'error' => false,
@@ -112,20 +112,20 @@ class HandleApplyCouponService
         ];
     }
 
-    public function getCouponData(string $couponCode, array $sessionData = []): Discount|Model|null
+    public function getCouponData(string $couponCode, array $sessionData = []): Model|Eloquent|Builder|null
     {
         $couponCode = trim($couponCode);
 
-        // @phpstan-ignore-next-line
-        return Discount::query()
+        return $this->discountRepository
+            ->getModel()
             ->where('code', $couponCode)
-            ->where('type', DiscountTypeEnum::COUPON)
+            ->where('type', 'coupon')
             ->where('start_date', '<=', Carbon::now())
-            ->where(function (Builder $query) use ($sessionData): void {
+            ->where(function (Builder $query) use ($sessionData) {
                 $query
                     ->where(function (Builder $sub) {
                         return $sub
-                            ->whereIn('type_option', [DiscountTypeOptionEnum::AMOUNT, DiscountTypeOptionEnum::PERCENTAGE])
+                            ->whereIn('type_option', ['amount', 'percentage'])
                             ->where(function (Builder $subSub) {
                                 return $subSub
                                     ->whereNull('end_date')
@@ -134,21 +134,25 @@ class HandleApplyCouponService
                     })
                     ->orWhere(function (Builder $sub) use ($sessionData) {
                         return $sub
-                            ->where('type_option', DiscountTypeOptionEnum::SHIPPING)
-                            ->where('value', '>=', (float) Arr::get($sessionData, 'shipping_amount', 0))
+                            ->where('type_option', 'shipping')
+                            ->where('value', '<=', Arr::get($sessionData, 'raw_total', 0))
                             ->where(function (Builder $subSub) {
                                 return $subSub
                                     ->whereNull('target')
-                                    ->orWhere('target', DiscountTargetEnum::ALL_ORDERS);
+                                    ->orWhere('target', 'all-orders');
                             });
                     })
                     ->orWhere(function (Builder $sub) {
                         return $sub
-                            ->where('type_option', DiscountTypeOptionEnum::SAME_PRICE)
-                            ->whereIn('target', [DiscountTargetEnum::PRODUCT_COLLECTIONS, DiscountTargetEnum::PRODUCT_CATEGORIES, DiscountTargetEnum::SPECIFIC_PRODUCT, DiscountTargetEnum::PRODUCT_VARIANT]);
+                            ->where('type_option', 'same-price')
+                            ->whereIn('target', ['group-products', 'specific-product', 'product-variant']);
                     });
             })
-            ->available()
+            ->where(function (Builder $query) {
+                return $query
+                    ->whereNull('quantity')
+                    ->orWhereColumn('quantity', '>', 'total_used');
+            })
             ->first();
     }
 
@@ -182,7 +186,7 @@ class HandleApplyCouponService
         $couponDiscountAmount = 0;
         $isFreeShipping = false;
 
-        if ($discount->type_option == DiscountTypeOptionEnum::SHIPPING) {
+        if ($discount->type_option == 'shipping') {
             $isFreeShipping = true;
         } else {
             $couponData = $this->getCouponDiscountAmount($discount, $cartData);
@@ -205,34 +209,10 @@ class HandleApplyCouponService
 
     public function checkConditionDiscount(Discount|Model $discount, array $sessionData = [], ?int $customerId = 0): array
     {
-        if (! $discount->can_use_with_flash_sale) {
-            /** @var Collection<Product> $products */
-            $products = Cart::instance('cart')->products();
-            $productsInFlashSales = [];
-
-            /** @var Product $product */
-            foreach ($products as $product) {
-                if ($product->getFlashSalePrice() >= $product->price) {
-                    continue;
-                }
-
-                $productsInFlashSales[] = $product->original_product->name;
-            }
-
-            if (! empty($productsInFlashSales)) {
-                return [
-                    'error' => true,
-                    'message' => trans('plugins/ecommerce::discount.cannot_use_same_time_with_flash_sale', [
-                        'product_name' => '<strong>' . implode(', ', $productsInFlashSales) . '</strong>',
-                    ]),
-                ];
-            }
-        }
-
         /**
          * @var Discount $discount
          */
-        if ($discount->target == DiscountTargetEnum::CUSTOMER) {
+        if ($discount->target === 'customer') {
             $discountCustomers = $discount->customers->pluck('id')->all();
             if (! $customerId || ! in_array($customerId, $discountCustomers)) {
                 return [
@@ -242,13 +222,13 @@ class HandleApplyCouponService
             }
         }
 
-        if ($discount->target == DiscountTargetEnum::ONCE_PER_CUSTOMER) {
+        if ($discount->target === 'once-per-customer') {
             if (! $customerId) {
                 return [
                     'error' => true,
                     'message' => trans('plugins/ecommerce::discount.you_need_login_to_use_coupon_code'),
                 ];
-            } elseif ($discount->usedByCustomers()->where('customer_id', auth('customer')->id())->exists()) {
+            } elseif ($discount->usedByCustomers()->where('customer_id', auth('customer')->id())->count()) {
                 return [
                     'error' => true,
                     'message' => trans('plugins/ecommerce::discount.you_used_coupon_code'),
@@ -256,19 +236,16 @@ class HandleApplyCouponService
             }
         }
 
-        if (! $discount->can_use_with_promotion && (float) Arr::get($sessionData, 'promotion_discount_amount')) {
+        if (! $discount->can_use_with_promotion && (float)Arr::get($sessionData, 'promotion_discount_amount')) {
             return [
                 'error' => true,
                 'message' => trans('plugins/ecommerce::discount.cannot_use_same_time_with_other_discount_program'),
             ];
         }
 
-        $rawTotal = (float) Arr::get($sessionData, 'raw_total');
+        $rawTotal = (float)Arr::get($sessionData, 'raw_total');
 
-        if (
-            in_array($discount->type_option, [DiscountTypeOptionEnum::AMOUNT, DiscountTypeOptionEnum::PERCENTAGE])
-            && $discount->target == DiscountTargetEnum::MINIMUM_ORDER_AMOUNT && $discount->min_order_price > $rawTotal
-        ) {
+        if (in_array($discount->type_option, ['amount', 'percentage']) && $discount->target == 'amount-minimum-order' && $discount->min_order_price > $rawTotal) {
             return [
                 'error' => true,
                 'message' => trans('plugins/ecommerce::discount.minimum_order_amount_error', [
@@ -283,7 +260,7 @@ class HandleApplyCouponService
         ];
     }
 
-    protected function getCouponDiscountAmount(Discount|Model $discount, array $cartData = [], array $sessionData = []): array
+    protected function getCouponDiscountAmount(Discount|Model $discount, array $cartData = []): array
     {
         /**
          * @var Discount $discount
@@ -297,38 +274,20 @@ class HandleApplyCouponService
         $products = Arr::get($cartData, 'productItems', Cart::instance('cart')->products());
 
         if (! $products instanceof Collection) {
-            /**
-             * @var Collection<Product> $products
-             */
             $products = new Collection($products);
         }
 
         $validCartItems = collect();
 
-        if ($storeId = $discount->store_id) {
-            $products = $products->filter(function ($product) use ($storeId) {
-                return $product->store_id == $storeId;
-            });
-
-            $cartItems = $cartItems->filter(function ($cartItem) use ($products) {
-                return $products->contains('id', $cartItem->id);
-            });
-
-            $countCart = $cartItems->count();
-
-            $rawTotal = Cart::instance('cart')->rawTotalByItems($cartItems);
-        }
-
         switch ($discount->type_option) {
-            case DiscountTypeOptionEnum::AMOUNT:
+            case 'amount':
                 switch ($discount->target) {
-                    case DiscountTargetEnum::MINIMUM_ORDER_AMOUNT:
-                    case DiscountTargetEnum::ONCE_PER_CUSTOMER:
-                    case DiscountTargetEnum::ALL_ORDERS:
+                    case 'amount-minimum-order':
+                    case 'all-orders':
                         $couponDiscountAmount += min($discountValue, $rawTotal);
 
                         break;
-                    case DiscountTargetEnum::SPECIFIC_PRODUCT:
+                    case 'specific-product':
                         $discountProductIds = $discount->products->pluck('id')->all();
 
                         $products->loadMissing(['variationInfo', 'variationInfo.configurableProduct']);
@@ -356,7 +315,7 @@ class HandleApplyCouponService
                         }
 
                         break;
-                    case DiscountTargetEnum::PRODUCT_VARIANT:
+                    case 'product-variant':
                         $discountProductIds = $discount->products->pluck('id')->all();
 
                         $validCartItems = $cartItems->filter(function ($cartItem) use ($discountProductIds) {
@@ -377,7 +336,7 @@ class HandleApplyCouponService
                         }
 
                         break;
-                    case DiscountTargetEnum::PRODUCT_COLLECTIONS:
+                    case 'group-products':
                         $products->loadMissing([
                             'variationInfo',
                             'productCollections',
@@ -417,50 +376,6 @@ class HandleApplyCouponService
                         }
 
                         break;
-                    case DiscountTargetEnum::PRODUCT_CATEGORIES:
-                        $products->loadMissing([
-                            'variationInfo',
-                            'categories',
-                            'variationInfo.configurableProduct',
-                            'variationInfo.configurableProduct.categories',
-                        ]);
-
-                        $discountProductCategories = $discount
-                            ->productCategories()
-                            ->pluck('ec_product_categories.id')
-                            ->all();
-
-                        $validCartItems = $cartItems->filter(function ($cartItem) use ($products, $discountProductCategories) {
-                            /**
-                             * @var Product $product
-                             */
-                            $product = $products->filter(function ($item) use ($cartItem) {
-                                return $item->id == $cartItem->id || $item->original_product->id == $cartItem->id;
-                            })->first();
-                            if (! $product) {
-                                return false;
-                            }
-
-                            $productCategories = $product->original_product->categories->pluck('id')->all();
-
-                            if (! empty(array_intersect($productCategories, $discountProductCategories))) {
-                                return true;
-                            }
-
-                            return false;
-                        });
-
-                        if ($discount->discount_on === 'per-order') {
-                            $validRawTotal = Cart::instance('cart')->rawTotalByItems($validCartItems);
-                            $couponDiscountAmount += min($discountValue, $validRawTotal);
-                        } elseif ($discount->discount_on === 'per-every-item') {
-                            foreach ($validCartItems as $cartItem) {
-                                $couponDiscountAmount += min($discountValue * $cartItem->qty, $cartItem->total);
-                            }
-                        }
-
-                        break;
-
                     default:
                         if ($countCart >= $discount->product_quantity) {
                             $couponDiscountAmount += min($discountValue, $rawTotal);
@@ -470,18 +385,14 @@ class HandleApplyCouponService
                 }
 
                 break;
-            case DiscountTypeOptionEnum::PERCENTAGE:
+            case 'percentage':
                 switch ($discount->target) {
-                    case DiscountTargetEnum::MINIMUM_ORDER_AMOUNT:
-                        $couponDiscountAmount = ($rawTotal - (float) Arr::get($sessionData, 'shipping_amount', 0)) * $discountValue / 100;
-
-                        break;
-                    case DiscountTargetEnum::ONCE_PER_CUSTOMER:
-                    case DiscountTargetEnum::ALL_ORDERS:
+                    case 'amount-minimum-order':
+                    case 'all-orders':
                         $couponDiscountAmount = $rawTotal * $discountValue / 100;
 
                         break;
-                    case DiscountTargetEnum::SPECIFIC_PRODUCT:
+                    case 'specific-product':
                         $discountProductIds = $discount->products->pluck('id')->all();
                         $products->loadMissing(['variationInfo', 'variationInfo.configurableProduct']);
 
@@ -506,7 +417,7 @@ class HandleApplyCouponService
                         }
 
                         break;
-                    case DiscountTargetEnum::PRODUCT_VARIANT:
+                    case 'product-variant':
                         $discountProductIds = $discount->products->pluck('id')->all();
 
                         $validCartItems = $cartItems->filter(function ($cartItem) use ($discountProductIds) {
@@ -521,14 +432,13 @@ class HandleApplyCouponService
                         }
 
                         break;
-                    case DiscountTargetEnum::PRODUCT_COLLECTIONS:
+                    case 'group-products':
                         $products->loadMissing([
                             'variationInfo',
                             'productCollections',
                             'variationInfo.configurableProduct',
                             'variationInfo.configurableProduct.productCollections',
                         ]);
-
                         $discountProductCollections = $discount
                             ->productCollections()
                             ->pluck('ec_product_collections.id')
@@ -555,69 +465,29 @@ class HandleApplyCouponService
                         }
 
                         break;
-                    case DiscountTargetEnum::PRODUCT_CATEGORIES:
-                        $products->loadMissing([
-                            'variationInfo',
-                            'categories',
-                            'variationInfo.configurableProduct',
-                            'variationInfo.configurableProduct.categories',
-                        ]);
-
-                        $discountProductCategories = $discount
-                            ->productCategories()
-                            ->pluck('ec_product_categories.id')
-                            ->all();
-
-                        $validCartItems = $cartItems->filter(function ($cartItem) use ($products, $discountProductCategories) {
-                            /**
-                             * @var Product $product
-                             */
-                            $product = $products->filter(function ($item) use ($cartItem) {
-                                return $item->id == $cartItem->id || $item->original_product->id == $cartItem->id;
-                            })->first();
-                            if (! $product) {
-                                return false;
-                            }
-
-                            $productCategories = $product->original_product->categories->pluck('id')->all();
-
-                            if (! empty(array_intersect($productCategories, $discountProductCategories))) {
-                                return true;
-                            }
-
-                            return false;
-                        });
-
-                        foreach ($validCartItems as $cartItem) {
-                            $couponDiscountAmount += $cartItem->total * $discountValue / 100;
-                        }
-
-                        break;
-
                     default:
                         if ($countCart >= $discount->product_quantity) {
-                            $couponDiscountAmount = $rawTotal * $discountValue / 100;
+                            $couponDiscountAmount += $rawTotal * $discountValue / 100;
                         }
 
                         break;
                 }
 
                 break;
-            case DiscountTypeOptionEnum::SAME_PRICE:
-                if (in_array($discount->target, [DiscountTargetEnum::SPECIFIC_PRODUCT, DiscountTargetEnum::PRODUCT_VARIANT])) {
+            case 'same-price':
+                if (in_array($discount->target, ['specific-product', 'product-variant'])) {
                     foreach ($cartItems as $cartItem) {
                         if (in_array($cartItem->id, $discount->products->pluck('id')->all())) {
-                            $couponDiscountAmount = max($cartItem->priceTax - $discountValue, 0) * $cartItem->qty;
+                            $couponDiscountAmount = max($cartItem->priceTax - $discountValue, $cartItem->priceTax) * $cartItem->qty;
                         }
                     }
-                } elseif ($discount->target == DiscountTargetEnum::PRODUCT_COLLECTIONS) {
+                } elseif ($discount->target == 'group-products') {
                     $products->loadMissing([
                         'variationInfo',
                         'productCollections',
                         'variationInfo.configurableProduct',
                         'variationInfo.configurableProduct.productCollections',
                     ]);
-
                     $discountProductCollections = $discount
                         ->productCollections()
                         ->pluck('ec_product_collections.id')
@@ -627,7 +497,6 @@ class HandleApplyCouponService
                         $product = $products->filter(function ($item) use ($cartItem) {
                             return $item->id == $cartItem->id || $item->original_product->id == $cartItem->id;
                         })->first();
-
                         if (! $product) {
                             return false;
                         }
@@ -640,45 +509,8 @@ class HandleApplyCouponService
 
                         return false;
                     });
-
                     foreach ($validCartItems as $cartItem) {
-                        $couponDiscountAmount += max($cartItem->total - $discountValue, 0) * $cartItem->qty;
-                    }
-                } elseif ($discount->target == DiscountTargetEnum::PRODUCT_CATEGORIES) {
-                    $products->loadMissing([
-                        'variationInfo',
-                        'categories',
-                        'variationInfo.configurableProduct',
-                        'variationInfo.configurableProduct.categories',
-                    ]);
-
-                    $discountProductCategories = $discount
-                        ->productCategories()
-                        ->pluck('ec_product_categories.id')
-                        ->all();
-
-                    $validCartItems = $cartItems->filter(function ($cartItem) use ($products, $discountProductCategories) {
-                        /**
-                         * @var Product $product
-                         */
-                        $product = $products->filter(function ($item) use ($cartItem) {
-                            return $item->id == $cartItem->id || $item->original_product->id == $cartItem->id;
-                        })->first();
-                        if (! $product) {
-                            return false;
-                        }
-
-                        $productCategories = $product->original_product->categories->pluck('id')->all();
-
-                        if (! empty(array_intersect($productCategories, $discountProductCategories))) {
-                            return true;
-                        }
-
-                        return false;
-                    });
-
-                    foreach ($validCartItems as $cartItem) {
-                        $couponDiscountAmount += max($cartItem->total - $discountValue, 0) * $cartItem->qty;
+                        $couponDiscountAmount += max($cartItem->total - $discountValue, $cartItem->total) * $cartItem->qty;
                     }
                 }
 

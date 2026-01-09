@@ -9,7 +9,7 @@ class AbstractProvider
 {
     protected string $apiUrl;
 
-    public function __construct(protected ?string $apiKey, protected ?string $listId)
+    public function __construct(protected string $apiKey, protected string $listId)
     {
     }
 

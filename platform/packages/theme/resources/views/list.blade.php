@@ -1,99 +1,58 @@
 @extends(BaseHelper::getAdminMasterLayoutTemplate())
-
 @section('content')
-    <div class="row row-cards mb-5">
-        @foreach ($themes as $key => $theme)
-            <div class="col-12 col-sm-6 col-lg-4">
-                <x-core::card>
-                    @if ($inherit = Arr::get($theme, 'inherit'))
-                        <div class="ribbon bg-red">
-                            {{ trans('packages/theme::theme.child_of', ['theme' => Arr::get($themes, $inherit . '.name', $inherit)]) }}
-                        </div>
-                    @endif
-
-                    <div class="img-responsive img-responsive-4x3 card-img-top border-bottom" style="background-image: url('{{ Theme::getThemeScreenshot($key) }}')"></div>
-
-                    <x-core::card.body>
-                        <h4 class="card-title text-truncate mb-2" title="{{ $theme['name'] }}">
-                            {{ $theme['name'] }}
-                        </h4>
-                        @if (! empty($theme['description']))
-                            <p class="text-secondary text-truncate" title="{{ $theme['description'] }}">
-                                {{ $theme['description'] }}
-                            </p>
-                        @endif
-
-                        <div class="row g-1 g-lg-0">
-                            @if (! empty($theme['author']))
-                                <div class="col-12 col-lg">
-                                    {{ trans('packages/theme::theme.author') }}:
-                                    @if (! empty($theme['url']))
-                                        <a href="{{ $theme['url'] }}" target="_blank" class="fw-bold" rel="nofollow,noindex">{{ $theme['author'] }}</a>
-                                    @else
-                                        <strong>{{ $theme['author'] }}</strong>
-                                    @endif
+    <div class="row">
+        <div class="col-12">
+            <div class="widget meta-boxes">
+                <div class="widget-title">
+                    <h4><i class="icon-magic-wand"></i> {{ trans('packages/theme::theme.theme') }}</h4>
+                </div>
+                <div class="widget-body">
+                    <div class="row pad">
+                        @foreach(ThemeManager::getThemes() as $key => $theme)
+                            <div class="col-sm-6 col-md-4 col-lg-3">
+                                <div class="thumbnail">
+                                    <div class="img-thumbnail-wrap">
+                                        <img src="{{ Theme::getThemeScreenshot($key) }}" alt="screenshot">
+                                    </div>
+                                    <div class="caption">
+                                        <div class="col-12" style="background: #eee; padding: 15px;">
+                                            <div style="word-break: break-all">
+                                                <h4>{{ $theme['name'] }}</h4>
+                                                <p>{{ trans('packages/theme::theme.author') }}: {{ Arr::get($theme, 'author') }}</p>
+                                                <p>{{ trans('packages/theme::theme.version') }}: {{ Arr::get($theme, 'version', get_cms_version()) }}</p>
+                                                <p>{{ trans('packages/theme::theme.description') }}: {{ Arr::get($theme, 'description') }}</p>
+                                            </div>
+                                            <div class="clearfix"></div>
+                                            <div>
+                                                @if (setting('theme') && Theme::getThemeName() == $key)
+                                                    <a href="#" class="btn btn-info" disabled="disabled"><i class="fa fa-check"></i> {{ trans('packages/theme::theme.activated') }}</a>
+                                                @else
+                                                    @if (Auth::user()->hasPermission('theme.activate'))
+                                                        <a href="#" class="btn btn-primary btn-trigger-active-theme" data-theme="{{ $key }}">{{ trans('packages/theme::theme.active') }}</a>
+                                                    @endif
+                                                    @if (Auth::user()->hasPermission('theme.remove'))
+                                                        <a href="#" class="btn btn-danger btn-trigger-remove-theme" data-theme="{{ $key }}">{{ trans('packages/theme::theme.remove') }}</a>
+                                                    @endif
+                                                @endif
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            @endif
-                            @if (! empty($theme['version']))
-                                <div class="col-12 col-lg-auto">
-                                    {{ trans('packages/theme::theme.version') }}:
-                                    <strong>{{ $theme['version'] }}</strong>
-                                </div>
-                            @endif
-                        </div>
-                    </x-core::card.body>
-
-                    <x-core::card.footer>
-                        <div class="btn-list">
-                            @if (setting('theme') && Theme::getThemeName() == $key)
-                                <x-core::button
-                                    type="button"
-                                    color="info"
-                                    :disabled="true"
-                                    icon="ti ti-check"
-                                >
-                                    {{ trans('packages/theme::theme.activated') }}
-                                </x-core::button>
-                            @else
-                                @if (Auth::guard()->user()->hasPermission('theme.activate'))
-                                    <x-core::button
-                                        type="button"
-                                        color="primary"
-                                        icon="ti ti-check"
-                                        class="btn-trigger-active-theme"
-                                        :data-url="route('theme.active', ['theme' => $key])"
-                                        data-theme="{{ $key }}"
-                                    >
-                                        {{ trans('packages/theme::theme.active') }}
-                                    </x-core::button>
-                                @endif
-                                @if (Auth::guard()->user()->hasPermission('theme.remove'))
-                                    <x-core::button
-                                        type="button"
-                                        icon="ti ti-trash"
-                                        class="btn-trigger-remove-theme"
-                                        :data-url="route('theme.remove', ['theme' => $key])"
-                                        data-theme="{{ $key }}"
-                                    >
-                                        {{ trans('packages/theme::theme.remove') }}
-                                    </x-core::button>
-                                @endif
-                            @endif
-                        </div>
-                    </x-core::card.footer>
-                </x-core::card>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
             </div>
-        @endforeach
+        </div>
     </div>
-@stop
 
-@push('footer')
-    <x-core::modal.action
+    <x-core-base::modal
         id="remove-theme-modal"
-        type="danger"
         :title="trans('packages/theme::theme.remove_theme')"
-        :description="trans('packages/theme::theme.remove_theme_confirm_message')"
-        :submit-button-attrs="['id' => 'confirm-remove-theme-button']"
-        :submit-button-label="trans('packages/theme::theme.remove_theme_confirm_yes')"
-    />
-@endpush
+        type="danger"
+        button-id="confirm-remove-theme-button"
+        :button-label="trans('packages/theme::theme.remove_theme_confirm_yes')"
+    >
+        {!! trans('packages/theme::theme.remove_theme_confirm_message') !!}
+    </x-core-base::modal>
+@stop

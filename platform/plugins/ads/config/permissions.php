@@ -20,9 +20,4 @@ return [
         'flag' => 'ads.destroy',
         'parent_flag' => 'ads.index',
     ],
-    [
-        'name' => 'Ads',
-        'flag' => 'ads.settings',
-        'parent_flag' => 'settings.others',
-    ],
 ];

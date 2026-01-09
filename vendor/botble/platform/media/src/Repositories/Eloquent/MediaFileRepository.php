@@ -2,41 +2,66 @@
 
 namespace Botble\Media\Repositories\Eloquent;
 
-use Botble\Base\Facades\BaseHelper;
 use Botble\Base\Models\BaseModel;
-use Botble\Media\Facades\RvMedia;
 use Botble\Media\Models\MediaFile;
-use Botble\Media\Models\MediaFolder;
 use Botble\Media\Repositories\Interfaces\MediaFileInterface;
+use Botble\Media\Repositories\Interfaces\MediaFolderInterface;
 use Botble\Support\Repositories\Eloquent\RepositoriesAbstract;
 use Exception;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\File;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Botble\Media\Facades\RvMedia;
 
 /**
  * @since 19/08/2015 07:45 AM
  */
 class MediaFileRepository extends RepositoriesAbstract implements MediaFileInterface
 {
-    public function createName(string $name, int|string|null $folder): string
+    public function createName(string $name, int|string|null $folder)
     {
-        return MediaFile::createName($name, $folder);
+        $index = 1;
+        $baseName = $name;
+        while ($this->checkIfExistsName($name, $folder)) {
+            $name = $baseName . '-' . $index++;
+        }
+
+        return $name;
     }
 
-    public function createSlug(string $name, string $extension, ?string $folderPath): string
+    protected function checkIfExistsName(string|null $name, int|string|null $folder): bool
     {
-        return MediaFile::createSlug($name, $extension, $folderPath);
+        $count = $this->model
+            ->where('name', $name)
+            ->where('folder_id', $folder)
+            ->withTrashed()
+            ->count();
+
+        return $count > 0;
     }
 
-    public function getFilesByFolderId(
-        int|string|null $folderId,
-        array $params = [],
-        bool $withFolders = true,
-        array $folderParams = []
-    ) {
+    public function createSlug(string $name, string $extension, string|null $folderPath): string
+    {
+        $slug = Str::slug($name, '-', ! RvMedia::turnOffAutomaticUrlTranslationIntoLatin() ? 'en' : false);
+        $index = 1;
+        $baseSlug = $slug;
+        while (File::exists(RvMedia::getRealPath(rtrim($folderPath, '/') . '/' . $slug . '.' . $extension))) {
+            $slug = $baseSlug . '-' . $index++;
+        }
+
+        if (empty($slug)) {
+            $slug = $slug . '-' . time();
+        }
+
+        return $slug . '.' . $extension;
+    }
+
+    public function getFilesByFolderId(int|string $folderId, array $params = [], bool $withFolders = true, array $folderParams = [])
+    {
         $params = array_merge([
             'order_by' => [
                 'name' => 'ASC',
@@ -52,11 +77,9 @@ class MediaFileRepository extends RepositoriesAbstract implements MediaFileInter
                 'media_files.updated_at as updated_at',
                 'media_files.options as options',
                 'media_files.folder_id as folder_id',
-                'media_files.visibility as visibility',
                 DB::raw('0 as is_folder'),
                 DB::raw('NULL as slug'),
                 DB::raw('NULL as parent_id'),
-                DB::raw('NULL as color'),
             ],
             'condition' => [],
             'recent_items' => null,
@@ -85,15 +108,13 @@ class MediaFileRepository extends RepositoriesAbstract implements MediaFileInter
                     'media_folders.updated_at as updated_at',
                     DB::raw('NULL as options'),
                     DB::raw('NULL as folder_id'),
-                    DB::raw('NULL as visibility'),
                     DB::raw('1 as is_folder'),
                     'media_folders.slug as slug',
                     'media_folders.parent_id as parent_id',
-                    'media_folders.color as color',
                 ],
             ], $folderParams);
 
-            $folder = new MediaFolder();
+            $folder = app(MediaFolderInterface::class)->getModel();
 
             $folder = $folder
                 ->where('parent_id', $folderId)
@@ -108,12 +129,12 @@ class MediaFileRepository extends RepositoriesAbstract implements MediaFileInter
         if (empty($folderId)) {
             $this->model = $this->model
                 ->leftJoin('media_folders', 'media_folders.id', '=', 'media_files.folder_id')
-                ->where(function ($query) use ($folderId): void {
+                ->where(function ($query) use ($folderId) {
                     /**
                      * @var Builder $query
                      */
                     $query
-                        ->where(function ($sub) use ($folderId): void {
+                        ->where(function ($sub) use ($folderId) {
                             /**
                              * @var Builder $sub
                              */
@@ -121,7 +142,7 @@ class MediaFileRepository extends RepositoriesAbstract implements MediaFileInter
                                 ->where('media_files.folder_id', $folderId)
                                 ->whereNull('media_files.deleted_at');
                         })
-                        ->orWhere(function ($sub): void {
+                        ->orWhere(function ($sub) {
                             /**
                              * @var Builder $sub
                              */
@@ -129,7 +150,7 @@ class MediaFileRepository extends RepositoriesAbstract implements MediaFileInter
                                 ->whereNull('media_files.deleted_at')
                                 ->whereNotNull('media_folders.deleted_at');
                         })
-                        ->orWhere(function ($sub): void {
+                        ->orWhere(function ($sub) {
                             /**
                              * @var Builder $sub
                              */
@@ -169,7 +190,7 @@ class MediaFileRepository extends RepositoriesAbstract implements MediaFileInter
             try {
                 $result->prepend($currentFile);
             } catch (Exception $exception) {
-                BaseHelper::logError($exception);
+                info($exception->getMessage());
             }
         }
 
@@ -202,10 +223,6 @@ class MediaFileRepository extends RepositoriesAbstract implements MediaFileInter
         }
 
         foreach ($params['order_by'] as $column => $direction) {
-            if (! in_array($direction, ['asc', 'desc'])) {
-                $direction = 'asc';
-            }
-
             $this->model = $this->model->orderBy($column, $direction);
         }
 
@@ -243,7 +260,7 @@ class MediaFileRepository extends RepositoriesAbstract implements MediaFileInter
                 /** @var BaseModel $currentFile */
                 $result->prepend($currentFile);
             } catch (Exception $exception) {
-                BaseHelper::logError($exception);
+                info($exception->getMessage());
             }
         }
 
@@ -252,12 +269,8 @@ class MediaFileRepository extends RepositoriesAbstract implements MediaFileInter
         return $result;
     }
 
-    public function getTrashed(
-        int|string $folderId,
-        array $params = [],
-        bool $withFolders = true,
-        array $folderParams = []
-    ): Collection {
+    public function getTrashed(int|string $folderId, array $params = [], bool $withFolders = true, array $folderParams = [])
+    {
         $params = array_merge([
             'order_by' => [
                 'name' => 'ASC',
@@ -272,7 +285,6 @@ class MediaFileRepository extends RepositoriesAbstract implements MediaFileInter
                 'media_files.updated_at as updated_at',
                 'media_files.options as options',
                 'media_files.folder_id as folder_id',
-                'media_files.visibility as visibility',
                 DB::raw('0 as is_folder'),
                 DB::raw('NULL as slug'),
                 DB::raw('NULL as parent_id'),
@@ -302,14 +314,13 @@ class MediaFileRepository extends RepositoriesAbstract implements MediaFileInter
                     'media_folders.updated_at as updated_at',
                     DB::raw('NULL as options'),
                     DB::raw('NULL as folder_id'),
-                    DB::raw('NULL as visibility'),
                     DB::raw('1 as is_folder'),
                     'media_folders.slug as slug',
                     'media_folders.parent_id as parent_id',
                 ],
             ], $folderParams);
 
-            $folder = new MediaFolder();
+            $folder = app(MediaFolderInterface::class)->getModel();
 
             $folder = $folder
                 ->withTrashed()
@@ -326,7 +337,7 @@ class MediaFileRepository extends RepositoriesAbstract implements MediaFileInter
                     '=',
                     'media_folders.parent_id'
                 )
-                    ->where(function ($query): void {
+                    ->where(function ($query) {
                         /**
                          * @var Builder $query
                          */
@@ -348,7 +359,7 @@ class MediaFileRepository extends RepositoriesAbstract implements MediaFileInter
         if (empty($folderId)) {
             $this->model = $this->model
                 ->leftJoin('media_folders', 'media_folders.id', '=', 'media_files.folder_id')
-                ->where(function ($query): void {
+                ->where(function ($query) {
                     $query
                         ->where('media_files.folder_id', 0)
                         ->orWhereNull('media_folders.deleted_at');
@@ -362,7 +373,22 @@ class MediaFileRepository extends RepositoriesAbstract implements MediaFileInter
 
     public function emptyTrash(): bool
     {
-        $this->model->onlyTrashed()->each(fn (MediaFile $file) => $file->forceDelete());
+        $files = $this->model->onlyTrashed();
+
+        /**
+         * @var MediaFile $files
+         */
+        $files = $files->get();
+
+        /**
+         * @var Collection $files
+         */
+        foreach ($files as $file) {
+            /**
+             * @var MediaFile $file
+             */
+            $file->forceDelete();
+        }
 
         return true;
     }

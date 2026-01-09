@@ -4,8 +4,6 @@ namespace Illuminate\Redis\Connections;
 
 use Closure;
 use Illuminate\Contracts\Redis\Connection as ConnectionContract;
-use Illuminate\Support\Collection;
-use Predis\Command\Argument\ArrayableArgument;
 
 /**
  * @mixin \Predis\Client
@@ -23,6 +21,7 @@ class PredisConnection extends Connection implements ConnectionContract
      * Create a new Predis connection.
      *
      * @param  \Predis\Client  $client
+     * @return void
      */
     public function __construct($client)
     {
@@ -50,21 +49,5 @@ class PredisConnection extends Connection implements ConnectionContract
         }
 
         unset($loop);
-    }
-
-    /**
-     * Parse the command's parameters for event dispatching.
-     *
-     * @param  array  $parameters
-     * @return array
-     */
-    protected function parseParametersForEvent(array $parameters)
-    {
-        return (new Collection($parameters))
-            ->transform(function ($parameter) {
-                return $parameter instanceof ArrayableArgument
-                    ? $parameter->toArray()
-                    : $parameter;
-            })->all();
     }
 }

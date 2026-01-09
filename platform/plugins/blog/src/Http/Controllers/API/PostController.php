@@ -3,17 +3,17 @@
 namespace Botble\Blog\Http\Controllers\API;
 
 use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Http\Controllers\BaseController;
+use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Blog\Http\Resources\ListPostResource;
 use Botble\Blog\Http\Resources\PostResource;
 use Botble\Blog\Models\Post;
 use Botble\Blog\Repositories\Interfaces\PostInterface;
 use Botble\Blog\Supports\FilterPost;
-use Botble\Slug\Facades\SlugHelper;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
+use Botble\Slug\Facades\SlugHelper;
 
-class PostController extends BaseController
+class PostController extends Controller
 {
     public function __construct(protected PostInterface $postRepository)
     {
@@ -24,7 +24,7 @@ class PostController extends BaseController
      *
      * @group Blog
      */
-    public function index(Request $request)
+    public function index(Request $request, BaseHttpResponse $response)
     {
         $data = $this->postRepository
             ->advancedGet([
@@ -36,8 +36,7 @@ class PostController extends BaseController
                 ],
             ]);
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setData(ListPostResource::collection($data))
             ->toApiResponse();
     }
@@ -49,9 +48,9 @@ class PostController extends BaseController
      *
      * @group Blog
      */
-    public function getSearch(Request $request, PostInterface $postRepository)
+    public function getSearch(Request $request, PostInterface $postRepository, BaseHttpResponse $response)
     {
-        $query = BaseHelper::stringify($request->input('q'));
+        $query = $request->input('q');
         $posts = $postRepository->getSearch($query);
 
         $data = [
@@ -61,13 +60,10 @@ class PostController extends BaseController
         ];
 
         if ($data['count'] > 0) {
-            return $this
-                ->httpResponse()
-                ->setData(apply_filters(BASE_FILTER_SET_DATA_SEARCH, $data));
+            return $response->setData(apply_filters(BASE_FILTER_SET_DATA_SEARCH, $data));
         }
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setError()
             ->setMessage(trans('core/base::layouts.no_search_result'));
     }
@@ -93,14 +89,13 @@ class PostController extends BaseController
      * @queryParam tags_exclude         Limit result set to all items except those that have the specified term assigned in the tags taxonomy.
      * @queryParam featured             Limit result set to items that are sticky.
      */
-    public function getFilters(Request $request)
+    public function getFilters(Request $request, BaseHttpResponse $response)
     {
         $filters = FilterPost::setFilters($request->input());
 
         $data = $this->postRepository->getFilters($filters);
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setData(ListPostResource::collection($data))
             ->toApiResponse();
     }
@@ -111,35 +106,24 @@ class PostController extends BaseController
      * @group Blog
      * @queryParam slug Find by slug of post.
      */
-    public function findBySlug(string $slug)
+    public function findBySlug(string $slug, BaseHttpResponse $response)
     {
         $slug = SlugHelper::getSlug($slug, SlugHelper::getPrefix(Post::class));
 
         if (! $slug) {
-            return $this
-                ->httpResponse()
-                ->setError()
-                ->setCode(404)
-                ->setMessage('Not found');
+            return $response->setError()->setCode(404)->setMessage('Not found');
         }
 
-        $post = Post::query()
-            ->where([
-                'id' => $slug->reference_id,
-                'status' => BaseStatusEnum::PUBLISHED,
-            ])
-            ->first();
+        $post = $this->postRepository->getFirstBy([
+            'id' => $slug->reference_id,
+            'status' => BaseStatusEnum::PUBLISHED,
+        ]);
 
         if (! $post) {
-            return $this
-                ->httpResponse()
-                ->setError()
-                ->setCode(404)
-                ->setMessage('Not found');
+            return $response->setError()->setCode(404)->setMessage('Not found');
         }
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setData(new PostResource($post))
             ->toApiResponse();
     }

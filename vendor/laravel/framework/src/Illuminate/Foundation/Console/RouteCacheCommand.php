@@ -19,6 +19,17 @@ class RouteCacheCommand extends Command
     protected $name = 'route:cache';
 
     /**
+     * The name of the console command.
+     *
+     * This name is used to identify the command during lazy loading.
+     *
+     * @var string|null
+     *
+     * @deprecated
+     */
+    protected static $defaultName = 'route:cache';
+
+    /**
      * The console command description.
      *
      * @var string
@@ -36,6 +47,7 @@ class RouteCacheCommand extends Command
      * Create a new route command instance.
      *
      * @param  \Illuminate\Filesystem\Filesystem  $files
+     * @return void
      */
     public function __construct(Filesystem $files)
     {
@@ -90,7 +102,7 @@ class RouteCacheCommand extends Command
      */
     protected function getFreshApplication()
     {
-        return tap(require $this->laravel->bootstrapPath('app.php'), function ($app) {
+        return tap(require $this->laravel->bootstrapPath().'/app.php', function ($app) {
             $app->make(ConsoleKernelContract::class)->bootstrap();
         });
     }

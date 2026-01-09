@@ -19,6 +19,7 @@ class ResourceResponse implements Responsable
      * Create a new resource response.
      *
      * @param  mixed  $resource
+     * @return void
      */
     public function __construct($resource)
     {
@@ -52,7 +53,7 @@ class ResourceResponse implements Responsable
     /**
      * Wrap the given data if necessary.
      *
-     * @param  \Illuminate\Support\Collection|array  $data
+     * @param  array  $data
      * @param  array  $with
      * @param  array  $additional
      * @return array

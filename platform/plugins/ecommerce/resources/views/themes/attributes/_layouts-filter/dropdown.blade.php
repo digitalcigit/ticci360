@@ -1,22 +1,15 @@
-@if (($attributes = $attributes->where('attribute_set_id', $set->id)) && $attributes->isNotEmpty())
-    <div class="bb-product-filter-attribute-item">
-        <h4 class="bb-product-filter-title">{{ $set->title }}</h4>
-
-        <div class="bb-product-filter-content">
-            <ul class="bb-product-filter-items filter-checkbox">
-                @foreach ($attributes as $attribute)
-                    <li class="bb-product-filter-item">
-                        <input
-                            id="attribute-{{ $attribute->id }}"
-                            name="attributes[{{ $set->slug }}][]"
-                            type="checkbox"
-                            value="{{ $attribute->id }}"
-                            @checked(in_array($attribute->id, $selected))
-                        >
-                        <label for="attribute-{{ $attribute->id }}">{{ $attribute->title }}</label>
-                    </li>
-                @endforeach
-            </ul>
+<li class="dropdown-swatches-wrapper" data-type="dropdown">
+    <div class="attribute-name" data-title="{{ $set->title }}">{{ $set->title }}</div>
+    <div class="attribute-values">
+        <div class="dropdown-swatch">
+            <label>
+                <select class="form-select product-filter-item" name="attributes[]" multiple>
+                    <option value="">{{ __('-- Select --') }}</option>
+                    @foreach($attributes->where('attribute_set_id', $set->id) as $attribute)
+                        <option value="{{ $attribute->id }}" @selected(in_array($attribute->id, $selected))>{{ $attribute->title }}</option>
+                    @endforeach
+                </select>
+            </label>
         </div>
     </div>
-@endif
+</li>

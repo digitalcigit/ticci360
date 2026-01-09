@@ -18,13 +18,17 @@ class DashboardWidget extends BaseModel
         'name' => SafeContent::class,
     ];
 
-    protected static function booted(): void
-    {
-        static::deleted(fn (DashboardWidget $widget) => $widget->settings()->delete());
-    }
-
     public function settings(): HasMany
     {
         return $this->hasMany(DashboardWidgetSetting::class, 'widget_id', 'id');
+    }
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::deleting(function (DashboardWidget $widget) {
+            DashboardWidgetSetting::where('widget_id', $widget->id)->delete();
+        });
     }
 }

@@ -3,13 +3,7 @@
 namespace Botble\Ecommerce\Forms;
 
 use Botble\Base\Facades\Assets;
-use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Forms\FieldOptions\DatePickerFieldOption;
-use Botble\Base\Forms\FieldOptions\NameFieldOption;
-use Botble\Base\Forms\FieldOptions\StatusFieldOption;
-use Botble\Base\Forms\Fields\DatePickerField;
-use Botble\Base\Forms\Fields\SelectField;
-use Botble\Base\Forms\Fields\TextField;
+use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Base\Forms\FormAbstract;
 use Botble\Ecommerce\Http\Requests\FlashSaleRequest;
 use Botble\Ecommerce\Models\FlashSale;
@@ -17,31 +11,46 @@ use Carbon\Carbon;
 
 class FlashSaleForm extends FormAbstract
 {
-    public function setup(): void
+    public function buildForm(): void
     {
         Assets::addScriptsDirectly('vendor/core/plugins/ecommerce/js/flash-sale.js')
             ->addStylesDirectly(['vendor/core/plugins/ecommerce/css/ecommerce.css'])
-            ->addScripts(['input-mask']);
+            ->addScripts([
+                'blockui',
+                'input-mask',
+            ]);
 
         $this
-            ->model(FlashSale::class)
+            ->setupModel(new FlashSale())
             ->setValidatorClass(FlashSaleRequest::class)
-            ->add('name', TextField::class, NameFieldOption::make())
-            ->add('status', SelectField::class, StatusFieldOption::make())
-            ->add(
-                'end_date',
-                DatePickerField::class,
-                DatePickerFieldOption::make()
-                    ->label(__('End date'))
-                    ->required()
-                    ->defaultValue(BaseHelper::formatDate(Carbon::now()->addMonth()))
-            )
+            ->withCustomFields()
+            ->add('name', 'text', [
+                'label' => trans('core/base::forms.name'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'placeholder' => trans('core/base::forms.name_placeholder'),
+                    'data-counter' => 120,
+                ],
+            ])
+            ->add('status', 'customSelect', [
+                'label' => trans('core/base::tables.status'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'class' => 'form-control address',
+                ],
+                'choices' => BaseStatusEnum::labels(),
+            ])
+            ->add('end_date', 'datePicker', [
+                'label' => __('End date'),
+                'label_attr' => ['class' => 'control-label required'],
+                'default_value' => Carbon::now()->addDay()->format('Y/m/d'),
+            ])
             ->addMetaBoxes([
                 'products' => [
                     'title' => trans('plugins/ecommerce::flash-sale.products'),
                     'content' => view('plugins/ecommerce::flash-sales.products', [
                         'flashSale' => $this->getModel(),
-                        'products' => $this->getModel()->getKey() ? $this->getModel()->products : collect(),
+                        'products' => $this->getModel()->id ? $this->getModel()->products : collect(),
                     ]),
                     'priority' => 0,
                 ],

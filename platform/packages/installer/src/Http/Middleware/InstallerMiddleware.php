@@ -13,10 +13,10 @@ abstract class InstallerMiddleware
             return true;
         }
 
-        if (File::exists(storage_path('installed'))) {
+        if (! File::exists(storage_path('installing')) && Helper::isConnectedDatabase()) {
             return true;
         }
 
-        return ! File::exists(storage_path('installing')) && Helper::isConnectedDatabase();
+        return File::exists(storage_path('installed'));
     }
 }

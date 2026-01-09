@@ -2,67 +2,73 @@
 
 namespace Botble\Page\Services;
 
-use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Supports\RepositoryHelper;
-use Botble\Media\Facades\RvMedia;
+use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Page\Models\Page;
-use Botble\SeoHelper\Facades\SeoHelper;
+use Botble\Page\Repositories\Interfaces\PageInterface;
+use Botble\SeoHelper\SeoOpenGraph;
 use Botble\Slug\Models\Slug;
-use Botble\Theme\Facades\Theme;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
+use Botble\Media\Facades\RvMedia;
+use Botble\SeoHelper\Facades\SeoHelper;
+use Botble\Theme\Facades\Theme;
 
 class PageService
 {
-    public function handleFrontRoutes(Slug|array|null $slug): Slug|array
+    public function handleFrontRoutes(Slug|array $slug): Slug|array|Builder
     {
-        if ($slug && (! $slug instanceof Slug || $slug->reference_type !== Page::class)) {
+        if (! $slug instanceof Slug) {
             return $slug;
         }
 
         $condition = [
-            'id' => $slug ? $slug->reference_id : BaseHelper::getHomepageId(),
+            'id' => $slug->reference_id,
             'status' => BaseStatusEnum::PUBLISHED,
         ];
 
-        if (Auth::guard()->check() && request()->input('preview')) {
+        if (Auth::check() && request()->input('preview')) {
             Arr::forget($condition, 'status');
         }
 
-        $page = Page::query()
-            ->where($condition)
-            ->with('slugable');
+        if ($slug->reference_type !== Page::class) {
+            return $slug;
+        }
 
-        $page = RepositoryHelper::applyBeforeExecuteQuery($page, new Page(), true)->first();
+        $page = app(PageInterface::class)->getFirstBy($condition, ['*'], ['slugable']);
 
         if (empty($page)) {
-            if (! $slug || $slug->reference_id == BaseHelper::getHomepageId()) {
-                return [];
-            }
-
             abort(404);
         }
 
-        if (! BaseHelper::isHomepage($page->getKey())) {
+        $meta = new SeoOpenGraph();
+
+        if ($page->image) {
+            $meta->setImage(RvMedia::getImageUrl($page->image));
+        }
+
+        if (! BaseHelper::isHomepage($page->id)) {
             SeoHelper::setTitle($page->name)
                 ->setDescription($page->description);
 
-            Theme::breadcrumb()->add($page->name, $page->url);
+            $meta->setTitle($page->name);
+            $meta->setDescription($page->description);
         } else {
-            $siteTitle = theme_option('seo_title') ?: Theme::getSiteTitle();
+            $siteTitle = theme_option('seo_title') ? theme_option('seo_title') : theme_option('site_title');
             $seoDescription = theme_option('seo_description');
 
             SeoHelper::setTitle($siteTitle)
                 ->setDescription($seoDescription);
+
+            $meta->setTitle($siteTitle);
+            $meta->setDescription($seoDescription);
         }
 
-        if ($page->image) {
-            SeoHelper::openGraph()->setImage(RvMedia::getImageUrl($page->image));
-        }
+        $meta->setUrl($page->url);
+        $meta->setType('article');
 
-        SeoHelper::openGraph()->setUrl($page->url);
-        SeoHelper::openGraph()->setType('article');
+        SeoHelper::setSeoOpenGraph($meta);
 
         SeoHelper::meta()->setUrl($page->url);
 
@@ -73,19 +79,18 @@ class PageService
 
         if (function_exists('admin_bar')) {
             admin_bar()
-                ->registerLink(
-                    trans('packages/page::pages.edit_this_page'),
-                    route('pages.edit', $page->getKey()),
-                    null,
-                    'pages.edit'
-                );
+                ->registerLink(trans('packages/page::pages.edit_this_page'), route('pages.edit', $page->id), null, 'pages.edit');
         }
 
         if (function_exists('shortcode')) {
-            shortcode()->getCompiler()->setEditLink(route('pages.edit', $page->getKey()), 'pages.edit');
+            shortcode()->getCompiler()->setEditLink(route('pages.edit', $page->id), 'pages.edit');
         }
 
         do_action(BASE_ACTION_PUBLIC_RENDER_SINGLE, PAGE_MODULE_SCREEN_NAME, $page);
+
+        Theme::breadcrumb()
+            ->add(__('Home'), route('public.index'))
+            ->add($page->name, $page->url);
 
         return [
             'view' => 'page',

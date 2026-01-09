@@ -3,61 +3,86 @@
 namespace Botble\Ecommerce\Tables;
 
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Facades\Html;
 use Botble\Ecommerce\Enums\CustomerStatusEnum;
-use Botble\Ecommerce\Facades\EcommerceHelper;
-use Botble\Ecommerce\Models\Customer;
+use Botble\Ecommerce\Repositories\Interfaces\CustomerInterface;
 use Botble\Table\Abstracts\TableAbstract;
-use Botble\Table\Actions\DeleteAction;
-use Botble\Table\Actions\EditAction;
-use Botble\Table\BulkActions\DeleteBulkAction;
-use Botble\Table\BulkChanges\CreatedAtBulkChange;
-use Botble\Table\BulkChanges\EmailBulkChange;
-use Botble\Table\BulkChanges\NameBulkChange;
-use Botble\Table\BulkChanges\StatusBulkChange;
-use Botble\Table\Columns\Column;
-use Botble\Table\Columns\CreatedAtColumn;
-use Botble\Table\Columns\EmailColumn;
-use Botble\Table\Columns\IdColumn;
-use Botble\Table\Columns\NameColumn;
-use Botble\Table\Columns\PhoneColumn;
-use Botble\Table\Columns\StatusColumn;
-use Botble\Table\Columns\YesNoColumn;
+use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Base\Facades\Html;
+use Illuminate\Contracts\Routing\UrlGenerator;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
+use Botble\Table\DataTables;
 
 class CustomerTable extends TableAbstract
 {
-    public function setup(): void
+    protected $hasActions = true;
+
+    protected $hasFilter = true;
+
+    public function __construct(DataTables $table, UrlGenerator $urlGenerator, CustomerInterface $customerRepository)
     {
-        $this
-            ->model(Customer::class)
-            ->addActions([
-                EditAction::make()->route('customers.edit'),
-                DeleteAction::make()->route('customers.destroy'),
-            ]);
+        parent::__construct($table, $urlGenerator);
+
+        $this->repository = $customerRepository;
+
+        if (! Auth::user()->hasAnyPermission(['customers.edit', 'customers.destroy'])) {
+            $this->hasOperations = false;
+            $this->hasActions = false;
+        }
     }
 
     public function ajax(): JsonResponse
     {
         $data = $this->table
             ->eloquent($this->query())
-            ->editColumn('avatar', function (Customer $item) {
-                if ($this->isExportingToCSV() || $this->isExportingToExcel()) {
+            ->editColumn('avatar', function ($item) {
+                if ($this->request()->input('action') == 'excel' ||
+                    $this->request()->input('action') == 'csv') {
                     return $item->avatar_url;
                 }
 
-                return Html::tag(
-                    'img',
-                    '',
-                    ['src' => $item->avatar_url, 'alt' => BaseHelper::clean($item->name), 'width' => 50]
-                );
+                return Html::tag('img', '', ['src' => $item->avatar_url, 'alt' => BaseHelper::clean($item->name), 'width' => 50]);
+            })
+            ->editColumn('name', function ($item) {
+                if (! Auth::user()->hasPermission('customers.edit')) {
+                    return BaseHelper::clean($item->name);
+                }
+
+                return Html::link(route('customers.edit', $item->id), BaseHelper::clean($item->name));
+            })
+            ->editColumn('email', function ($item) {
+                return BaseHelper::clean($item->email);
+            })
+            ->editColumn('checkbox', function ($item) {
+                return $this->getCheckbox($item->id);
+            })
+            ->editColumn('created_at', function ($item) {
+                return BaseHelper::formatDate($item->created_at);
+            })
+            ->editColumn('status', function ($item) {
+                return BaseHelper::clean($item->status->toHtml());
+            });
+
+        if (EcommerceHelper::isEnableEmailVerification()) {
+            $data = $data
+                ->addColumn('confirmed_at', function ($item) {
+                    return $item->confirmed_at ? Html::tag(
+                        'span',
+                        trans('core/base::base.yes'),
+                        ['class' => 'text-success']
+                    ) : trans('core/base::base.no');
+                });
+        }
+
+        $data = $data
+            ->addColumn('operations', function ($item) {
+                return $this->getOperations('customers.edit', 'customers.destroy', $item);
             });
 
         return $this->toJson($data);
@@ -65,19 +90,15 @@ class CustomerTable extends TableAbstract
 
     public function query(): Relation|Builder|QueryBuilder
     {
-        $query = $this
-            ->getModel()
-            ->query()
-            ->select([
-                'id',
-                'name',
-                'email',
-                'phone',
-                'avatar',
-                'created_at',
-                'status',
-                'confirmed_at',
-            ]);
+        $query = $this->repository->getModel()->select([
+            'id',
+            'name',
+            'email',
+            'avatar',
+            'created_at',
+            'status',
+            'confirmed_at',
+        ]);
 
         return $this->applyScopes($query);
     }
@@ -85,29 +106,44 @@ class CustomerTable extends TableAbstract
     public function columns(): array
     {
         $columns = [
-            IdColumn::make(),
-            Column::make('avatar')
-                ->title(trans('plugins/ecommerce::customer.avatar')),
-            NameColumn::make()->route('customers.edit'),
+            'id' => [
+                'title' => trans('core/base::tables.id'),
+                'width' => '20px',
+                'class' => 'text-start',
+            ],
+            'avatar' => [
+                'title' => trans('plugins/ecommerce::customer.avatar'),
+                'class' => 'text-center',
+            ],
+            'name' => [
+                'title' => trans('core/base::forms.name'),
+                'class' => 'text-start',
+            ],
+            'email' => [
+                'title' => trans('plugins/ecommerce::customer.email'),
+                'class' => 'text-start',
+            ],
+            'created_at' => [
+                'title' => trans('core/base::tables.created_at'),
+                'width' => '100px',
+                'class' => 'text-start',
+            ],
+            'status' => [
+                'title' => trans('core/base::tables.status'),
+                'width' => '100px',
+            ],
         ];
 
-        if (EcommerceHelper::isLoginUsingPhone()) {
-            $columns[] = PhoneColumn::make();
-        } else {
-            $columns[] = EmailColumn::make();
-
-            if (EcommerceHelper::isEnableEmailVerification()) {
-                $columns = array_merge($columns, [
-                    YesNoColumn::make('confirmed_at')
-                        ->title(trans('plugins/ecommerce::customer.email_verified')),
-                ]);
-            }
+        if (EcommerceHelper::isEnableEmailVerification()) {
+            $columns += [
+                'confirmed_at' => [
+                    'title' => trans('plugins/ecommerce::customer.email_verified'),
+                    'width' => '100px',
+                ],
+            ];
         }
 
-        return array_merge($columns, [
-            CreatedAtColumn::make(),
-            StatusColumn::make(),
-        ]);
+        return $columns;
     }
 
     public function buttons(): array
@@ -117,42 +153,40 @@ class CustomerTable extends TableAbstract
 
     public function bulkActions(): array
     {
-        return [
-            DeleteBulkAction::make()->permission('customers.destroy'),
-        ];
+        return $this->addDeleteAction(route('customers.deletes'), 'customers.destroy', parent::bulkActions());
     }
 
     public function getBulkChanges(): array
     {
         return [
-            NameBulkChange::make(),
-            EmailBulkChange::make(),
-            StatusBulkChange::make()
-                ->choices(CustomerStatusEnum::labels())
-                ->validate(['required', Rule::in(CustomerStatusEnum::values())]),
-            CreatedAtBulkChange::make(),
-        ];
-    }
-
-    public function getFilters(): array
-    {
-        $filters = parent::getFilters();
-
-        if (EcommerceHelper::isEnableEmailVerification()) {
-            $filters['confirmed_at'] = [
-                'title' => trans('plugins/ecommerce::customer.email_verified'),
+            'name' => [
+                'title' => trans('core/base::tables.name'),
+                'type' => 'text',
+                'validate' => 'required|max:120',
+            ],
+            'email' => [
+                'title' => trans('core/base::tables.email'),
+                'type' => 'text',
+                'validate' => 'required|max:120',
+            ],
+            'status' => [
+                'title' => trans('core/base::tables.status'),
                 'type' => 'select',
-                'choices' => [1 => trans('core/base::base.yes'), 0 => trans('core/base::base.no')],
-                'validate' => 'required|in:1,0',
-            ];
-        }
-
-        return $filters;
+                'choices' => CustomerStatusEnum::labels(),
+                'validate' => 'required|in:' . implode(',', CustomerStatusEnum::values()),
+            ],
+            'created_at' => [
+                'title' => trans('core/base::tables.created_at'),
+                'type' => 'datePicker',
+            ],
+        ];
     }
 
     public function renderTable($data = [], $mergeData = []): View|Factory|Response
     {
-        if ($this->isEmpty()) {
+        if ($this->query()->count() === 0 &&
+            $this->request()->input('filter_table_id') !== $this->getOption('id') && ! $this->request()->ajax()
+        ) {
             return view('plugins/ecommerce::customers.intro');
         }
 
@@ -161,19 +195,9 @@ class CustomerTable extends TableAbstract
 
     public function getDefaultButtons(): array
     {
-        return array_merge(['export'], parent::getDefaultButtons());
-    }
-
-    public function applyFilterCondition(
-        Relation|Builder|QueryBuilder $query,
-        string $key,
-        string $operator,
-        ?string $value
-    ) {
-        if (EcommerceHelper::isEnableEmailVerification() && $key === 'confirmed_at') {
-            return $value ? $query->whereNotNull($key) : $query->whereNull($key);
-        }
-
-        return parent::applyFilterCondition($query, $key, $operator, $value);
+        return [
+            'export',
+            'reload',
+        ];
     }
 }

@@ -52,7 +52,7 @@ class Client implements ClientInterface, \Psr\Http\Client\ClientInterface
      *
      * @param array $config Client configuration settings.
      *
-     * @see RequestOptions for a list of available request options.
+     * @see \GuzzleHttp\RequestOptions for a list of available request options.
      */
     public function __construct(array $config = [])
     {

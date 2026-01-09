@@ -3,16 +3,14 @@
 namespace Botble\Theme;
 
 use Botble\Base\Facades\BaseHelper;
-use Botble\Theme\Facades\Theme as ThemeFacade;
-use Botble\Theme\Services\ThemeService;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
+use Botble\Theme\Facades\Theme as ThemeFacade;
 
 class Manager
 {
     protected array $themes = [];
 
-    public function __construct(protected ThemeService $themeService)
+    public function __construct()
     {
         $this->registerTheme(self::getAllThemes());
     }
@@ -29,8 +27,9 @@ class Manager
     public function getAllThemes(): array
     {
         $themes = [];
-        foreach (BaseHelper::scanFolder(theme_path()) as $folder) {
-            $jsonFile = $this->getThemeJsonPath($folder);
+        $themePath = theme_path();
+        foreach (BaseHelper::scanFolder($themePath) as $folder) {
+            $jsonFile = $themePath . '/' . $folder . '/theme.json';
 
             $publicJsonFile = public_path('themes/' . ThemeFacade::getPublicThemeName() . '/theme.json');
 
@@ -43,36 +42,16 @@ class Manager
             }
 
             $theme = BaseHelper::getFileData($jsonFile);
-
             if (! empty($theme)) {
-                $themeConfig = $this->themeService->getThemeConfig($folder);
-
                 $themes[$folder] = $theme;
-                $themes[$folder]['inherit'] = Arr::get($themeConfig, 'inherit');
             }
         }
 
         return $themes;
     }
 
-    public function getThemePresets(string $theme): array
-    {
-        if (! $theme || ! File::exists($jsonFile = $this->getThemeJsonPath($theme))) {
-            return [];
-        }
-
-        $theme = BaseHelper::getFileData($jsonFile);
-
-        return $theme['presets'] ?? [];
-    }
-
     public function getThemes(): array
     {
         return $this->themes;
-    }
-
-    protected function getThemeJsonPath(string $theme): string
-    {
-        return  theme_path() . '/' . $theme . '/theme.json';
     }
 }

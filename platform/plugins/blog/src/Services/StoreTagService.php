@@ -3,10 +3,8 @@
 namespace Botble\Blog\Services;
 
 use Botble\ACL\Models\User;
-use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Blog\Forms\TagForm;
+use Botble\Base\Events\CreatedContentEvent;
 use Botble\Blog\Models\Post;
-use Botble\Blog\Models\Tag;
 use Botble\Blog\Services\Abstracts\StoreTagServiceAbstract;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -15,19 +13,9 @@ class StoreTagService extends StoreTagServiceAbstract
 {
     public function execute(Request $request, Post $post): void
     {
-        $tagsInput = $request->input('tag');
+        $tags = $post->tags->pluck('name')->all();
 
-        if (! $tagsInput) {
-            $tagsInput = [];
-        } else {
-            $tagsInput = is_array($tagsInput) ? $tagsInput : collect(json_decode($tagsInput, true))->pluck('value')->all();
-        }
-
-        $tags = [];
-
-        if ($post->tags) {
-            $tags = $post->tags->pluck('name')->all();
-        }
+        $tagsInput = collect(json_decode($request->input('tag'), true))->pluck('value')->all();
 
         if (count($tags) != count($tagsInput) || count(array_diff($tags, $tagsInput)) > 0) {
             $post->tags()->detach();
@@ -36,27 +24,18 @@ class StoreTagService extends StoreTagServiceAbstract
                     continue;
                 }
 
-                $tag = Tag::query()->where('name', $tagName)->first();
+                $tag = $this->tagRepository->getFirstBy(['name' => $tagName]);
 
                 if ($tag === null && ! empty($tagName)) {
-                    $form = TagForm::create();
+                    $tag = $this->tagRepository->createOrUpdate([
+                        'name' => $tagName,
+                        'author_id' => Auth::check() ? Auth::id() : 0,
+                        'author_type' => User::class,
+                    ]);
 
-                    $form
-                        ->saving(function (TagForm $form) use ($tagName): void {
-                            $form
-                                ->getModel()
-                                ->fill([
-                                    'name' => $tagName,
-                                    'author_id' => Auth::guard()->check() ? Auth::guard()->id() : 0,
-                                    'author_type' => User::class,
-                                    'status' => BaseStatusEnum::PUBLISHED,
-                                ])
-                                ->save();
+                    $request->merge(['slug' => $tagName]);
 
-                            $form->setRequest($form->getRequest()->merge(['slug' => $tagName]));
-                        });
-
-                    $tag = $form->getModel();
+                    event(new CreatedContentEvent(TAG_MODULE_SCREEN_NAME, $request, $tag));
                 }
 
                 if (! empty($tag)) {

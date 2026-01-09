@@ -57,8 +57,6 @@ class SendWebhookWhenOrderPlaced
                 'is_confirmed' => $order->is_confirmed,
             ];
 
-            $data = apply_filters('ecommerce_order_placed_webhook_data', $data, $order);
-
             $client = new Client(['verify' => false]);
 
             $client->post($webhookURL, [

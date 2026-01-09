@@ -52,13 +52,9 @@ if (! function_exists('get_product_price')) {
 }
 
 if (! function_exists('get_sale_percentage')) {
-    function get_sale_percentage(?float $price, ?float $salePrice, bool $abs = false, bool $appendSymbol = true): string
+    function get_sale_percentage(float|null $price, float|null $salePrice, bool $abs = false, bool $appendSymbol = true): string|int
     {
         $symbol = $appendSymbol ? '%' : '';
-
-        if ($salePrice == 0 && $price !== 0) {
-            return 100 . $symbol;
-        }
 
         if (! $salePrice) {
             return 0 . $symbol;
@@ -68,7 +64,7 @@ if (! function_exists('get_sale_percentage')) {
         $result = $price > 0 ? ceil(-($down / $price) * 100) : 0;
 
         if (! $result) {
-            return 0 . $symbol;
+            return 0;
         }
 
         if ($abs === true) {
@@ -80,7 +76,7 @@ if (! function_exists('get_sale_percentage')) {
 }
 
 if (! function_exists('is_product_on_sale')) {
-    function is_product_on_sale(string $saleStatus, ?string $startDate = null, ?string $endDate = null): bool
+    function is_product_on_sale(string $saleStatus, string|null $startDate = null, string|null $endDate = null): bool
     {
         if ($saleStatus == 'none' || ! $endDate) {
             return false;

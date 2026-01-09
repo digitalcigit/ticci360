@@ -2,38 +2,28 @@
 
 namespace Botble\SeoHelper\Providers;
 
-use Botble\Base\Contracts\BaseModel;
 use Botble\Base\Facades\Assets;
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Facades\MetaBox;
-use Botble\Base\Supports\ServiceProvider;
-use Botble\Media\Facades\RvMedia;
+use Botble\Base\Models\BaseModel;
 use Botble\Page\Models\Page;
+use Illuminate\Support\ServiceProvider;
+use Botble\Base\Facades\MetaBox;
 use Botble\SeoHelper\Facades\SeoHelper;
-use Botble\SeoHelper\Forms\SeoForm;
-use Botble\Theme\Facades\ThemeOption;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Routing\Events\RouteMatched;
 
 class HookServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
-        add_action(BASE_ACTION_META_BOXES, [$this, 'addMetaBox'], 12, 2);
-
-        $this->app['events']->listen(RouteMatched::class, function (): void {
+        $this->app->booted(function () {
+            add_action(BASE_ACTION_META_BOXES, [$this, 'addMetaBox'], 12, 2);
             add_action(BASE_ACTION_PUBLIC_RENDER_SINGLE, [$this, 'setSeoMeta'], 56, 2);
         });
     }
 
-    public function addMetaBox(string $priority, array|string|BaseModel|null $data = null): void
+    public function addMetaBox(string $priority, BaseModel|null $data): void
     {
-        if (
-            $priority == 'advanced'
-            && ! empty($data)
-            && $data instanceof BaseModel
-            && in_array($data::class, config('packages.seo-helper.general.supported', []))) {
-            if ($data instanceof Page && BaseHelper::isHomepage($data->getKey())) {
+        if ($priority == 'advanced' && ! empty($data) && in_array(get_class($data), config('packages.seo-helper.general.supported', []))) {
+            if (get_class($data) == Page::class && BaseHelper::isHomepage($data->id)) {
                 return;
             }
 
@@ -44,7 +34,7 @@ class HookServiceProvider extends ServiceProvider
                 'seo_wrap',
                 trans('packages/seo-helper::seo-helper.meta_box_header'),
                 [$this, 'seoMetaBox'],
-                $data::class,
+                get_class($data),
                 'advanced',
                 'low'
             );
@@ -56,8 +46,6 @@ class HookServiceProvider extends ServiceProvider
         $meta = [
             'seo_title' => null,
             'seo_description' => null,
-            'seo_image' => null,
-            'index' => 'index',
         ];
 
         $args = func_get_args();
@@ -71,16 +59,12 @@ class HookServiceProvider extends ServiceProvider
 
         $object = $args[0];
 
-        $form = SeoForm::createFromArray($meta)->renderForm(showStart: false, showEnd: false);
-
-        return view('packages/seo-helper::meta-box', compact('meta', 'object', 'form'))->render();
+        return view('packages/seo-helper::meta-box', compact('meta', 'object'));
     }
 
-    public function setSeoMeta(string $screen, BaseModel|Model|null $object): bool
+    public function setSeoMeta(string $screen, BaseModel|null $object): bool
     {
-        SeoHelper::meta()->addMeta('robots', ThemeOption::getOption('seo_index', true) ? 'index, follow' : 'noindex, nofollow');
-
-        if ($object instanceof Page && BaseHelper::isHomepage($object->getKey())) {
+        if (get_class($object) == Page::class && BaseHelper::isHomepage($object->id)) {
             return false;
         }
 
@@ -95,23 +79,6 @@ class HookServiceProvider extends ServiceProvider
             if (! empty($meta['seo_description'])) {
                 SeoHelper::setDescription($meta['seo_description']);
             }
-
-            if (! empty($meta['seo_image'])) {
-                SeoHelper::setImage(RvMedia::getImageUrl($meta['seo_image']));
-            }
-
-            if (! empty($meta['index'])) {
-                SeoHelper::meta()->addMeta('robots', $meta['index'] === 'index' ? 'index, follow' : 'noindex, nofollow');
-            }
-        }
-
-        $currentDescription = SeoHelper::getDescription();
-
-        if (
-            (! $currentDescription || $currentDescription === theme_option('seo_description'))
-            && ($object->description || $object->content)
-        ) {
-            SeoHelper::setDescription($object->description ?: $object->content);
         }
 
         return true;

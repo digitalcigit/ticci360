@@ -15,7 +15,9 @@ class TableBuilder
     public function create(string $tableClass): TableAbstract
     {
         if (! class_exists($tableClass)) {
-            throw new InvalidArgumentException(sprintf('Table class with name %s does not exist.', $tableClass));
+            throw new InvalidArgumentException(
+                'Table class with name ' . $tableClass . ' does not exist.'
+            );
         }
 
         return $this->container->make($tableClass);

@@ -5,13 +5,12 @@ namespace Botble\SeoHelper\Entities;
 use Botble\Base\Facades\BaseHelper;
 use Botble\SeoHelper\Contracts\Entities\TitleContract;
 use Botble\SeoHelper\Exceptions\InvalidArgumentException;
-use Botble\Theme\Facades\Theme;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
 class Title implements TitleContract
 {
-    protected ?string $title = '';
+    protected string|null $title = '';
 
     protected string $siteName = '';
 
@@ -26,56 +25,72 @@ class Title implements TitleContract
         $this->init();
     }
 
-    protected function init(): void
+    protected function init()
     {
         $this->set(null);
-        $this->title = Theme::getSiteTitle();
-
+        $this->title = theme_option('site_title');
         if (theme_option('show_site_name', false)) {
-            $this->setSiteName($this->title);
+            $this->setSiteName(theme_option('site_title'));
         }
-
-        $separator = theme_option('site_title_separator', '-');
-
-        if (! $separator) {
-            $separator = config('packages.seo-helper.general.title.separator', '-');
-        }
-
-        $this->setSeparator($separator);
+        $this->setSeparator(config('packages.seo-helper.general.title.separator', '-'));
         $this->switchPosition(config('packages.seo-helper.general.title.first', true));
         $this->setMax(config('packages.seo-helper.general.title.max', 55));
     }
 
-    public function getTitleOnly(): ?string
+    public function getTitleOnly(): string|null
     {
         return $this->title;
     }
 
-    public function set(?string $title): static
+    public function set(string|null $title): static
     {
         $this->title = $title;
 
         return $this;
     }
 
-    public function getSiteName(): string
+    /**
+     * Get site name.
+     *
+     * @return string
+     */
+    public function getSiteName()
     {
         return $this->siteName;
     }
 
-    public function setSiteName($siteName): static
+    /**
+     * Set site name.
+     *
+     * @param string $siteName
+     *
+     * @return Title
+     */
+    public function setSiteName($siteName)
     {
         $this->siteName = $siteName;
 
         return $this;
     }
 
-    public function getSeparator(): string
+    /**
+     * Get title separator.
+     *
+     * @return string
+     */
+    public function getSeparator()
     {
         return $this->separator;
     }
 
-    public function setSeparator($separator): static
+    /**
+     * Set title separator.
+     *
+     * @param string $separator
+     *
+     * @return Title
+     */
+    public function setSeparator($separator)
     {
         $this->separator = trim($separator);
 
@@ -92,12 +107,24 @@ class Title implements TitleContract
         return $this->switchPosition(true);
     }
 
-    public function setLast(): Title
+    /**
+     * Set title last.
+     *
+     * @return Title
+     */
+    public function setLast()
     {
         return $this->switchPosition(false);
     }
 
-    protected function switchPosition($first): Title
+    /**
+     * Switch title position.
+     *
+     * @param bool $first
+     *
+     * @return Title
+     */
+    protected function switchPosition($first)
     {
         $this->titleFirst = boolval($first);
 
@@ -165,7 +192,7 @@ class Title implements TitleContract
             ? $this->renderTitleFirst($separator)
             : $this->renderTitleLast($separator);
 
-        $output = Str::limit(strip_tags((string) $output), $this->getMax());
+        $output = Str::limit(strip_tags((string)$output), $this->getMax());
 
         return BaseHelper::html($output);
     }
@@ -186,20 +213,31 @@ class Title implements TitleContract
     }
 
     /**
+     * Check title max length.
+     *
+     * @param int $max
+     *
      * @throws InvalidArgumentException
      */
-    protected function checkMax(string|int $max): void
+    protected function checkMax($max)
     {
         if (! is_int($max)) {
-            throw new InvalidArgumentException('The title maximum length must be integer.');
+            throw new InvalidArgumentException('The title maximum lenght must be integer.');
         }
 
         if ($max <= 0) {
-            throw new InvalidArgumentException('The title maximum length must be greater 0.');
+            throw new InvalidArgumentException('The title maximum lenght must be greater 0.');
         }
     }
 
-    protected function renderTitleFirst(?string $separator): ?string
+    /**
+     * Render title first.
+     *
+     * @param string $separator
+     *
+     * @return string
+     */
+    protected function renderTitleFirst($separator)
     {
         $output = [];
         $output[] = $this->getTitleOnly();
@@ -218,7 +256,14 @@ class Title implements TitleContract
         return Arr::first($output);
     }
 
-    protected function renderTitleLast(string $separator): string
+    /**
+     * Render title last.
+     *
+     * @param string $separator
+     *
+     * @return string
+     */
+    protected function renderTitleLast($separator)
     {
         $output = [];
 

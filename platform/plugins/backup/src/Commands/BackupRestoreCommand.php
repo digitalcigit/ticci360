@@ -2,13 +2,12 @@
 
 namespace Botble\Backup\Commands;
 
-use Botble\Backup\Supports\Backup;
 use Botble\Base\Facades\BaseHelper;
+use Botble\Backup\Supports\Backup;
 use Exception;
+use Illuminate\Support\Facades\File;
 use Illuminate\Console\Command;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputOption;
@@ -18,14 +17,6 @@ class BackupRestoreCommand extends Command
 {
     public function handle(Backup $backupService): int
     {
-        $driver = DB::getConfig('driver');
-
-        if (! in_array($driver, ['mysql', 'pgsql'], true)) {
-            $this->components->error(sprintf('Driver [%s] is not supported to restore the backup!', $driver));
-
-            return self::FAILURE;
-        }
-
         try {
             if ($this->option('backup')) {
                 $backup = $this->option('backup');
@@ -50,7 +41,6 @@ class BackupRestoreCommand extends Command
             $this->components->info('Restoring backup...');
 
             $path = $backupService->getBackupPath($backup);
-
             foreach (BaseHelper::scanFolder($path) as $file) {
                 if (Str::contains(basename($file), 'database')) {
                     $this->components->info('Restoring database...');

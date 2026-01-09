@@ -32,7 +32,6 @@ class Shipment extends BaseModel
         'tracking_link',
         'estimate_date_shipped',
         'date_shipped',
-        'customer_delivered_confirmed_at',
     ];
 
     protected $casts = [
@@ -41,13 +40,14 @@ class Shipment extends BaseModel
         'metadata' => 'json',
         'estimate_date_shipped' => 'datetime',
         'date_shipped' => 'datetime',
-        'customer_delivered_confirmed_at' => 'datetime',
     ];
 
-    protected static function booted(): void
+    protected static function boot(): void
     {
-        static::deleted(function (Shipment $shipment): void {
-            $shipment->histories()->delete();
+        parent::boot();
+
+        self::deleting(function (Shipment $shipment) {
+            ShipmentHistory::where('shipment_id', $shipment->id)->delete();
         });
     }
 
@@ -68,28 +68,8 @@ class Shipment extends BaseModel
 
     protected function isCanceled(): Attribute
     {
-        return Attribute::get(fn () => $this->status == ShippingStatusEnum::CANCELED);
-    }
-
-    protected function canConfirmDelivery(): Attribute
-    {
-        return Attribute::get(
-            function () {
-                if ($this->customer_delivered_confirmed_at) {
-                    return false;
-                }
-
-                return $this->status == ShippingStatusEnum::DELIVERING;
-            }
-        );
-    }
-
-    public function canPrintLabel(): bool
-    {
-        return apply_filters(
-            'ecommerce_shipment_can_print_shipping_label',
-            $this->order->shipping_method == 'default',
-            $this
+        return Attribute::make(
+            get: fn () => $this->status == ShippingStatusEnum::CANCELED,
         );
     }
 }

@@ -4,14 +4,11 @@
 </div>
 
 <div>
-    @if ($posts->isNotEmpty())
+    @if ($posts->count() > 0)
         @foreach ($posts as $post)
             <article>
                 <div>
-                    <a href="{{ $post->url }}"><img
-                            src="{{ RvMedia::getImageUrl($post->image, null, false, RvMedia::getDefaultImage()) }}"
-                            alt="{{ $post->name }}"
-                        ></a>
+                    <a href="{{ $post->url }}"><img src="{{ RvMedia::getImageUrl($post->image, null, false, RvMedia::getDefaultImage()) }}" alt="{{ $post->name }}"></a>
                 </div>
                 <div>
                     <header>
@@ -19,8 +16,7 @@
                         <div>
                             {{ $post->created_at->format('M d, Y') }} - <span>{{ $post->author->name }}</span>>
                             @if ($post->categories->first())
-                                <a
-                                    href="{{ $post->categories->first()->url }}">{{ $post->categories->first()->name }}</a>
+                                <a href="{{ $post->categories->first()->url }}">{{ $post->categories->first()->name }}</a>
                             @endif
                         </div>
                     </header>

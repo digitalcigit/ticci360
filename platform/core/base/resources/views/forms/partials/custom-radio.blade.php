@@ -1,27 +1,19 @@
 @php
-    $values = Arr::wrap($values ?? []);
-
-    $attributes = (array) $attributes;
-
-    $multiple = count($values) > 1;
+$values = (array)$values;
 @endphp
-
-<div class="position-relative form-check-group">
-    @foreach ($values as $key => $option)
+@if (count($values) > 1) <div class="mt-radio-list"> @endif
+    @foreach($values as $line)
         @php
-            if ($multiple && isset($attributes['id'])) {
-                $attributes['id'] = $attributes['id'] . '_' . $key;
-            }
+            $value = $line[0] ?? '';
+            $label = $line[1] ?? '';
+            $disabled = $line[2] ?? '';
         @endphp
-
-        <x-core::form.radio
-            :name="$name"
-            :value="$key"
-            :checked="$key == $selected"
-            :attributes="new Illuminate\View\ComponentAttributeBag($attributes)"
-        >
-            {{ $option }}
-        </x-core::form.radio>
+        <label class="me-2">
+            <input type="radio"
+                   value="{{ $value }}"
+                   {{ (string)$selected === (string)$value ? 'checked' : '' }}
+                   name="{{ $name }}" {{ $disabled ? 'disabled' : '' }}>
+            {{ $label }}
+        </label>
     @endforeach
-</div>
-
+@if (count($values) > 1) </div> @endif

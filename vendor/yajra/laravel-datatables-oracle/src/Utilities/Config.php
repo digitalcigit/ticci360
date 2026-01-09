@@ -7,12 +7,24 @@ use Illuminate\Contracts\Config\Repository;
 class Config
 {
     /**
-     * Config constructor.
+     * @var \Illuminate\Contracts\Config\Repository
      */
-    public function __construct(private readonly Repository $repository) {}
+    private Repository $repository;
+
+    /**
+     * Config constructor.
+     *
+     * @param  \Illuminate\Contracts\Config\Repository  $repository
+     */
+    public function __construct(Repository $repository)
+    {
+        $this->repository = $repository;
+    }
 
     /**
      * Check if config uses wild card search.
+     *
+     * @return bool
      */
     public function isWildcard(): bool
     {
@@ -21,6 +33,8 @@ class Config
 
     /**
      * Check if config uses smart search.
+     *
+     * @return bool
      */
     public function isSmartSearch(): bool
     {
@@ -29,6 +43,8 @@ class Config
 
     /**
      * Check if config uses case-insensitive search.
+     *
+     * @return bool
      */
     public function isCaseInsensitive(): bool
     {
@@ -37,6 +53,8 @@ class Config
 
     /**
      * Check if app is in debug mode.
+     *
+     * @return bool
      */
     public function isDebugging(): bool
     {
@@ -47,9 +65,10 @@ class Config
      * Get the specified configuration value.
      *
      * @param  string  $key
+     * @param  mixed  $default
      * @return mixed
      */
-    public function get($key, mixed $default = null)
+    public function get($key, $default = null)
     {
         return $this->repository->get($key, $default);
     }
@@ -58,15 +77,18 @@ class Config
      * Set a given configuration value.
      *
      * @param  array|string  $key
+     * @param  mixed  $value
      * @return void
      */
-    public function set($key, mixed $value = null)
+    public function set($key, $value = null)
     {
         $this->repository->set($key, $value);
     }
 
     /**
      * Check if dataTable config uses multi-term searching.
+     *
+     * @return bool
      */
     public function isMultiTerm(): bool
     {
@@ -75,6 +97,8 @@ class Config
 
     /**
      * Check if dataTable config uses starts_with searching.
+     *
+     * @return bool
      */
     public function isStartsWithSearch(): bool
     {

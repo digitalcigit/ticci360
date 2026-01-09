@@ -2,5 +2,7 @@
     "name": "botble/payment",
     "description": "Payment plugin",
     "type": "package",
-    "require": {}
+    "require": {
+        "doctrine/dbal": "^3.1"
+    }
 }

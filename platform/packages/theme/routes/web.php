@@ -1,34 +1,31 @@
 <?php
 
-use Botble\Base\Facades\AdminHelper;
+use Botble\Base\Facades\BaseHelper;
 use Illuminate\Support\Facades\Route;
 
-Route::group(['namespace' => 'Botble\Theme\Http\Controllers'], function (): void {
-    AdminHelper::registerRoutes(function (): void {
-        if (config('packages.theme.general.display_theme_manager_in_admin_panel', true)) {
-            Route::group(['prefix' => 'theme'], function (): void {
-                Route::get('all', [
-                    'as' => 'theme.index',
-                    'uses' => 'ThemeController@index',
-                ]);
+Route::group(['namespace' => 'Botble\Theme\Http\Controllers', 'middleware' => ['web', 'core']], function () {
+    Route::group(['prefix' => BaseHelper::getAdminPrefix(), 'middleware' => 'auth'], function () {
+        Route::group(['prefix' => 'theme'], function () {
+            Route::get('all', [
+                'as' => 'theme.index',
+                'uses' => 'ThemeController@index',
+            ]);
 
-                Route::post('active', [
-                    'as' => 'theme.active',
-                    'uses' => 'ThemeController@postActivateTheme',
-                    'middleware' => 'preventDemo',
-                    'permission' => 'theme.index',
-                ]);
+            Route::post('active', [
+                'as' => 'theme.active',
+                'uses' => 'ThemeController@postActivateTheme',
+                'permission' => 'theme.index',
+            ]);
 
-                Route::post('remove', [
-                    'as' => 'theme.remove',
-                    'uses' => 'ThemeController@postRemoveTheme',
-                    'middleware' => 'preventDemo',
-                    'permission' => 'theme.index',
-                ]);
-            });
-        }
+            Route::post('remove', [
+                'as' => 'theme.remove',
+                'uses' => 'ThemeController@postRemoveTheme',
+                'middleware' => 'preventDemo',
+                'permission' => 'theme.index',
+            ]);
+        });
 
-        Route::group(['prefix' => 'theme/options/{id?}'], function (): void {
+        Route::group(['prefix' => 'theme/options'], function () {
             Route::get('', [
                 'as' => 'theme.options',
                 'uses' => 'ThemeController@getOptions',
@@ -41,7 +38,7 @@ Route::group(['namespace' => 'Botble\Theme\Http\Controllers'], function (): void
             ]);
         });
 
-        Route::group(['prefix' => 'theme/custom-css'], function (): void {
+        Route::group(['prefix' => 'theme/custom-css'], function () {
             Route::get('', [
                 'as' => 'theme.custom-css',
                 'uses' => 'ThemeController@getCustomCss',
@@ -55,7 +52,7 @@ Route::group(['namespace' => 'Botble\Theme\Http\Controllers'], function (): void
             ]);
         });
 
-        Route::group(['prefix' => 'theme/custom-js'], function (): void {
+        Route::group(['prefix' => 'theme/custom-js'], function () {
             Route::get('', [
                 'as' => 'theme.custom-js',
                 'uses' => 'ThemeController@getCustomJs',
@@ -69,7 +66,7 @@ Route::group(['namespace' => 'Botble\Theme\Http\Controllers'], function (): void
             ]);
         });
 
-        Route::group(['prefix' => 'theme/custom-html'], function (): void {
+        Route::group(['prefix' => 'theme/custom-html'], function () {
             Route::get('', [
                 'as' => 'theme.custom-html',
                 'uses' => 'ThemeController@getCustomHtml',
@@ -81,35 +78,6 @@ Route::group(['namespace' => 'Botble\Theme\Http\Controllers'], function (): void
                 'permission' => 'theme.custom-html',
                 'middleware' => 'preventDemo',
             ]);
-        });
-
-        Route::group(['prefix' => 'theme/robots-txt'], function (): void {
-            Route::get('', [
-                'as' => 'theme.robots-txt',
-                'uses' => 'ThemeController@getRobotsTxt',
-            ]);
-
-            Route::post('', [
-                'as' => 'theme.robots-txt.post',
-                'uses' => 'ThemeController@postRobotsTxt',
-                'permission' => 'theme.robots-txt',
-                'middleware' => 'preventDemo',
-            ]);
-        });
-
-        Route::prefix('settings')->name('settings.')->group(function (): void {
-            Route::prefix('website-tracking')->group(function (): void {
-                Route::get('/', [
-                    'as' => 'website-tracking',
-                    'uses' => 'WebsiteTrackingSettingController@edit',
-                ]);
-
-                Route::put('/', [
-                    'as' => 'website-tracking.update',
-                    'uses' => 'WebsiteTrackingSettingController@update',
-                    'permission' => 'settings.website-tracking',
-                ]);
-            });
         });
     });
 });

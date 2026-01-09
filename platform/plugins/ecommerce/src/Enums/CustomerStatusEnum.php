@@ -2,8 +2,8 @@
 
 namespace Botble\Ecommerce\Enums;
 
-use Botble\Base\Facades\BaseHelper;
 use Botble\Base\Supports\Enum;
+use Botble\Base\Facades\Html;
 use Illuminate\Support\HtmlString;
 
 /**
@@ -13,19 +13,18 @@ use Illuminate\Support\HtmlString;
 class CustomerStatusEnum extends Enum
 {
     public const ACTIVATED = 'activated';
-
     public const LOCKED = 'locked';
 
     public static $langPath = 'plugins/ecommerce::customer.statuses';
 
     public function toHtml(): HtmlString|string
     {
-        $color = match ($this->value) {
-            self::ACTIVATED => 'info',
-            self::LOCKED => 'warning',
-            default => 'primary',
+        return match ($this->value) {
+            self::ACTIVATED => Html::tag('span', self::ACTIVATED()->label(), ['class' => 'label-info status-label'])
+                ->toHtml(),
+            self::LOCKED => Html::tag('span', self::LOCKED()->label(), ['class' => 'label-warning status-label'])
+                ->toHtml(),
+            default => parent::toHtml(),
         };
-
-        return BaseHelper::renderBadge($this->label(), $color);
     }
 }

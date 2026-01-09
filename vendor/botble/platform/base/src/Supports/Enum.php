@@ -3,7 +3,6 @@
 namespace Botble\Base\Supports;
 
 use BadMethodCallException;
-use Botble\Base\Facades\BaseHelper;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Support\Facades\Lang;
 use Illuminate\Support\Facades\Log;
@@ -20,10 +19,6 @@ abstract class Enum implements CastsAttributes, JsonSerializable
 
     protected mixed $value = null;
 
-    final public function __construct()
-    {
-    }
-
     public function make($value): static
     {
         if ($value instanceof static) {
@@ -33,7 +28,7 @@ abstract class Enum implements CastsAttributes, JsonSerializable
         }
 
         if ($value !== null && ! $this->isValid($value)) {
-            Log::error(sprintf('Value %s is not part of the enum %s', json_encode($value), static::class));
+            Log::error('Value ' . json_encode($value) . ' is not part of the enum ' . get_called_class());
         } else {
             $this->value = $value;
         }
@@ -56,13 +51,13 @@ abstract class Enum implements CastsAttributes, JsonSerializable
 
     public static function toArray(bool $includeDefault = false): array
     {
-        $class = static::class;
+        $class = get_called_class();
         if (! isset(static::$cache[$class])) {
             try {
                 $reflection = new ReflectionClass($class);
                 static::$cache[$class] = $reflection->getConstants();
-            } catch (ReflectionException $exception) {
-                BaseHelper::logError($exception);
+            } catch (ReflectionException $error) {
+                info($error->getMessage());
             }
         }
 
@@ -72,7 +67,7 @@ abstract class Enum implements CastsAttributes, JsonSerializable
             unset($result['__default']);
         }
 
-        return apply_filters(BASE_FILTER_ENUM_ARRAY, $result, static::class);
+        return apply_filters(BASE_FILTER_ENUM_ARRAY, $result, get_called_class());
     }
 
     /**
@@ -102,20 +97,20 @@ abstract class Enum implements CastsAttributes, JsonSerializable
     /**
      * Returns a value when called statically like so: MyEnum::SOME_VALUE() given SOME_VALUE is a class constant
      *
+     * @param string $name
+     * @param array $arguments
      *
      * @return static
-     *
      * @throws BadMethodCallException
      */
     public static function __callStatic(string $name, array $arguments)
     {
         $array = static::toArray();
-
         if (isset($array[$name]) || array_key_exists($name, $array)) {
             return (new static())->make($array[$name]);
         }
 
-        throw new BadMethodCallException('No static method or enum constant ' . $name . ' in class ' . static::class);
+        throw new BadMethodCallException('No static method or enum constant ' . $name . ' in class ' . get_called_class());
     }
 
     public static function labels(): array
@@ -129,7 +124,7 @@ abstract class Enum implements CastsAttributes, JsonSerializable
         return $result;
     }
 
-    public static function getLabel(?string $value): ?string
+    public static function getLabel(string|null $value): string|null
     {
         $key = sprintf(
             '%s.%s',
@@ -139,7 +134,7 @@ abstract class Enum implements CastsAttributes, JsonSerializable
 
         $label = Lang::has($key) ? trans($key) : $value;
 
-        return apply_filters(BASE_FILTER_ENUM_LABEL, $label, static::class);
+        return apply_filters(BASE_FILTER_ENUM_LABEL, $label, get_called_class());
     }
 
     /**
@@ -155,7 +150,8 @@ abstract class Enum implements CastsAttributes, JsonSerializable
     /**
      * Return key for value
      *
-     * @param  string|int  $value
+     * @param string|int $value
+     *
      * @return false|int|string
      */
     public static function search($value): bool|int|string
@@ -165,23 +161,25 @@ abstract class Enum implements CastsAttributes, JsonSerializable
 
     public function __toString()
     {
-        return (string) $this->value;
+        return (string)$this->value;
     }
 
     /**
      * Compares one Enum with another.
      *
+     * @param Enum|null $enum
      * @return bool True if Enums are equal, false if not equal
      */
-    final public function equals(?Enum $enum = null): bool
+    final public function equals(Enum $enum = null): bool
     {
-        return $enum !== null && $this->getValue() === $enum->getValue() && static::class === $enum::class;
+        return $enum !== null && $this->getValue() === $enum->getValue() && get_called_class() === get_class($enum);
     }
 
     /**
      * Specify data which should be serialized to JSON. This method returns data that can be serialized by json_encode()
      * natively.
      *
+     * @return mixed
      * @link http://php.net/manual/en/jsonserializable.jsonserialize.php
      */
     public function jsonSerialize(): array
@@ -192,7 +190,7 @@ abstract class Enum implements CastsAttributes, JsonSerializable
         ];
     }
 
-    public function label(): ?string
+    public function label(): string|null
     {
         return self::getLabel($this->getValue());
     }

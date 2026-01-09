@@ -2,118 +2,97 @@
 
 namespace Botble\Base\Supports;
 
-use Botble\Base\Events\FinishedSeederEvent;
-use Botble\Base\Events\SeederPrepared;
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Facades\MetaBox as MetaBoxFacade;
-use Botble\Base\Models\BaseModel;
-use Botble\Base\Models\MetaBox as MetaBoxModel;
-use Botble\Media\Facades\RvMedia;
+use Botble\Base\Events\FinishedSeederEvent;
 use Botble\Media\Models\MediaFile;
 use Botble\Media\Models\MediaFolder;
-use Botble\Setting\Facades\Setting;
-use Carbon\Carbon;
-use Faker\Factory;
-use Faker\Generator;
-use Illuminate\Contracts\Filesystem\FileNotFoundException;
-use Illuminate\Contracts\Filesystem\Filesystem;
+use Botble\PluginManagement\Services\PluginService;
+use Botble\Theme\Facades\ThemeOption;
+use Exception;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Composer;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Traits\Conditionable;
+use Mimey\MimeTypes;
+use Botble\Media\Facades\RvMedia;
+use Botble\Setting\Facades\Setting;
 use Symfony\Component\Process\Process;
 use Throwable;
 
 class BaseSeeder extends Seeder
 {
-    use Conditionable;
-
-    protected Generator $faker;
-
-    protected Carbon $now;
-
-    protected string $basePath;
-
-    public function uploadFiles(string $folder, ?string $basePath = null): array
+    public function uploadFiles(string $folder, string|null $basePath = null): array
     {
-        $folderPath = $basePath ?: $this->getBasePath() . '/' . $folder;
-
-        $folder = ltrim(str_replace(database_path('seeders/files'), '', $folderPath), '/');
-
-        if (! File::isDirectory($folderPath)) {
-            throw new FileNotFoundException('Folder not found: ' . $folderPath);
-        }
-
-        $storage = $this->getMediaStorage();
+        $storage = Storage::disk('public');
 
         if ($storage->exists($folder)) {
             $storage->deleteDirectory($folder);
         }
 
-        MediaFile::query()->where('url', 'LIKE', $folder . '/%')->forceDelete();
-        MediaFolder::query()->where('name', $folder)->forceDelete();
+        MediaFile::where('url', 'LIKE', $folder . '/%')->forceDelete();
+        MediaFolder::where('name', $folder)->forceDelete();
+
+        $mimeType = new MimeTypes();
 
         $files = [];
 
+        $folderPath = ($basePath ?: database_path('seeders/files/' . $folder));
+
+        if (! File::isDirectory($folderPath)) {
+            return [];
+        }
+
         foreach (File::allFiles($folderPath) as $file) {
-            try {
-                $files[] = RvMedia::uploadFromPath($file, 0, $folder);
-            } catch (Throwable $exception) {
-                $this->command->warn('Error when uploading file: ' . $file->getRealPath());
-                $this->command->warn($exception->getMessage());
-            }
+            $type = $mimeType->getMimeType(File::extension($file));
+            $files[] = RvMedia::uploadFromPath($file, 0, $folder, $type);
         }
 
         return $files;
     }
 
-    protected function filePath(string $path, ?string $basePath = null): string
+    public function activateAllPlugins(): array
     {
-        $filePath = ($basePath ? sprintf('%s/%s', $basePath, $path) : $this->getBasePath() . '/' . $path);
-        $path = str_replace(database_path('seeders/files/'), '', $filePath);
+        try {
+            $plugins = array_values(BaseHelper::scanFolder(plugin_path()));
 
-        if ($this->getMediaStorage()->exists($path)) {
-            return $path;
+            $pluginService = app(PluginService::class);
+
+            foreach ($plugins as $plugin) {
+                $pluginService->activate($plugin);
+            }
+
+            return $plugins;
+        } catch (Exception) {
+            return [];
         }
-
-        throw new FileNotFoundException('File not found: ' . $filePath);
     }
 
-    protected function fileUrl(string $path, ?string $basePath = null, ?string $size = null)
+    public function prepareRun(): array
     {
-        $path = $this->filePath($path, $basePath);
+        if (! class_exists(\Faker\Factory::class)) {
+            $this->command->warn('It requires <info>fakerphp/faker</info> to run seeder. Need to run <info>composer install</info> to install it first.');
 
-        if ($size) {
-            $path = RvMedia::getImageUrl($path, $size);
+            try {
+                $composer = new Composer($this->command->getLaravel()['files']);
 
-            $path = str_replace(url('/'), '', $path);
+                $process = new Process(array_merge($composer->findComposer(), ['install']));
+
+                $process->start();
+
+                $process->wait(function ($type, $buffer) {
+                    $this->command->line($buffer);
+                });
+
+                $this->command->warn('Please re-run <info>php artisan db:seed</info> command.');
+            } catch (Throwable) {
+            }
+
+            exit(1);
         }
-
-        return $path;
-    }
-
-    public function prepareRun(): void
-    {
-        MediaFile::query()->truncate();
-        MediaFolder::query()->truncate();
-
-        $this->faker = $this->fake();
-
-        Setting::newQuery()->truncate();
 
         Setting::forgetAll();
 
-        Setting::forceSet('media_random_hash', md5((string) time()));
-
-        Setting::set('api_enabled', 0);
-
-        Setting::save();
-
-        MetaBoxModel::query()->truncate();
-
-        SeederPrepared::dispatch();
+        return $this->activateAllPlugins();
     }
 
     protected function random(int $from, int $to, array $exceptions = []): int
@@ -134,104 +113,15 @@ class BaseSeeder extends Seeder
 
     protected function finished(): void
     {
-        FinishedSeederEvent::dispatch();
+        event(new FinishedSeederEvent());
     }
 
-    protected function fake(): Generator
+    protected function prepareThemeOptions(array $options, string $locale = null, string $defaultLocale = null): array
     {
-        if (isset($this->faker)) {
-            return $this->faker;
-        }
-
-        if (! class_exists(Factory::class)) {
-            $this->command->warn('It requires <info>fakerphp/faker</info> to run seeder. Need to run <info>composer install</info> to install it first.');
-
-            try {
-                $composer = new Composer($this->command->getLaravel()['files']);
-
-                $process = new Process(array_merge($composer->findComposer(), ['install']));
-
-                $process->start();
-
-                $process->wait(function ($type, $buffer): void {
-                    $this->command->line($buffer);
-                });
-
-                $this->command->warn('Please re-run <info>php artisan db:seed</info> command.');
-            } catch (Throwable) {
-            }
-
-            exit(1);
-        }
-
-        $this->faker = fake();
-
-        return $this->faker;
-    }
-
-    protected function now(): Carbon
-    {
-        if (isset($this->now)) {
-            return $this->now;
-        }
-
-        $this->now = Carbon::now();
-
-        return $this->now;
-    }
-
-    protected function removeBaseUrlFromString(string $value): ?string
-    {
-        return str_replace(url(''), '', $value);
-    }
-
-    protected function getFilesFromPath(string $path): Collection
-    {
-        $directoryPath = $this->getBasePath() . '/' . $path;
-
-        $files = [];
-
-        if (File::isDirectory($directoryPath)) {
-            $files = array_map(fn ($item) => $path . '/' . $item, BaseHelper::scanFolder($directoryPath));
-        }
-
-        return collect($files);
-    }
-
-    protected function saveSettings(array $settings): void
-    {
-        Setting::delete(array_keys($settings));
-
-        Setting::forceSet($settings)->save();
-    }
-
-    protected function getBasePath(): ?string
-    {
-        return $this->basePath ?? database_path('seeders/files');
-    }
-
-    protected function setBasePath(string $path): static
-    {
-        $this->basePath = $path;
-
-        return $this;
-    }
-
-    protected function createMetadata(BaseModel $model, array $data): void
-    {
-        if (! isset($data['metadata']) || ! is_array($data['metadata'])) {
-            return;
-        }
-
-        foreach ($data['metadata'] as $key => $value) {
-            MetaBoxFacade::saveMetaBoxData($model, $key, $value);
-        }
-    }
-
-    protected function getMediaStorage(): Filesystem
-    {
-        RvMedia::setUploadPathAndURLToPublic();
-
-        return Storage::disk('public');
+        return collect($options)
+            ->mapWithKeys(function (string $value, string $key) use ($locale, $defaultLocale) {
+                return [ThemeOption::getOptionKey($key, $locale != $defaultLocale ? $locale : null) => $value];
+            })
+            ->all();
     }
 }

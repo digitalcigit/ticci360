@@ -3,9 +3,8 @@
 namespace Botble\SeoHelper\Listeners;
 
 use Botble\Base\Events\UpdatedContentEvent;
-use Botble\Base\Facades\BaseHelper;
-use Botble\SeoHelper\Facades\SeoHelper;
 use Exception;
+use Botble\SeoHelper\Facades\SeoHelper;
 
 class UpdatedContentListener
 {
@@ -14,7 +13,7 @@ class UpdatedContentListener
         try {
             SeoHelper::saveMetaData($event->screen, $event->request, $event->data);
         } catch (Exception $exception) {
-            BaseHelper::logError($exception);
+            info($exception->getMessage());
         }
     }
 }

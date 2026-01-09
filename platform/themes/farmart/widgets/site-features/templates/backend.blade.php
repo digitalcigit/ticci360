@@ -1,36 +1,18 @@
-<div class="mb-3">
-    <label class="form-label" for="widget-name">{{ __('Name') }}</label>
-    <input
-        class="form-control"
-        id="widget-name"
-        name="name"
-        type="text"
-        value="{{ $config['name'] }}"
-    >
+<div class="form-group">
+    <label for="widget-name">{{ __('Name') }}</label>
+    <input type="text" id="widget-name" class="form-control" name="name" value="{{ $config['name'] }}">
 </div>
 
-<div
-    class="border mb-2"
-    style="max-height: 400px; overflow: auto"
->
+<div style="max-height: 400px; overflow: auto" class="border mb-2">
     @for ($i = 1; $i <= 5; $i++)
         <div class="bg-light p-1">
             <div class="form-group mb-3">
                 <label>{{ __('Title :number', ['number' => $i]) }}</label>
-                <input
-                    class="form-control"
-                    name="data[{{ $i }}][title]"
-                    type="text"
-                    value="{{ Arr::get(Arr::get($config['data'], $i), 'title') }}"
-                >
+                <input type="text" class="form-control" name="data[{{ $i }}][title]" value="{{ Arr::get(Arr::get($config['data'], $i), 'title') }}">
             </div>
             <div class="form-group mb-3">
                 <label>{{ __('Subtitle :number', ['number' => $i]) }}</label>
-                <textarea
-                    class="form-control"
-                    name="data[{{ $i }}][subtitle]"
-                    rows="3"
-                >{{ Arr::get(Arr::get($config['data'], $i), 'subtitle') }}</textarea>
+                <input type="text" class="form-control" name="data[{{ $i }}][subtitle]" value="{{ Arr::get(Arr::get($config['data'], $i), 'subtitle') }}">
             </div>
             <div class="form-group mb-3">
                 <label>{{ __('Icon :number', ['number' => $i]) }}</label>
@@ -39,3 +21,4 @@
         </div>
     @endfor
 </div>
+

@@ -2,43 +2,75 @@
 
 namespace Botble\Ecommerce\Tables;
 
+use Botble\Base\Facades\BaseHelper;
 use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Ecommerce\Models\ProductLabel;
+use Botble\Ecommerce\Repositories\Interfaces\ProductLabelInterface;
 use Botble\Table\Abstracts\TableAbstract;
-use Botble\Table\Actions\DeleteAction;
-use Botble\Table\Actions\EditAction;
-use Botble\Table\BulkActions\DeleteBulkAction;
-use Botble\Table\Columns\CreatedAtColumn;
-use Botble\Table\Columns\IdColumn;
-use Botble\Table\Columns\NameColumn;
-use Botble\Table\Columns\StatusColumn;
+use Botble\Base\Facades\Html;
+use Illuminate\Contracts\Routing\UrlGenerator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
+use Botble\Table\DataTables;
 
 class ProductLabelTable extends TableAbstract
 {
-    public function setup(): void
+    protected $hasActions = true;
+
+    protected $hasFilter = true;
+
+    public function __construct(
+        DataTables $table,
+        UrlGenerator $urlGenerator,
+        ProductLabelInterface $productLabelRepository
+    ) {
+        parent::__construct($table, $urlGenerator);
+
+        $this->repository = $productLabelRepository;
+
+        if (! Auth::user()->hasAnyPermission(['product-label.edit', 'product-label.destroy'])) {
+            $this->hasOperations = false;
+            $this->hasActions = false;
+        }
+    }
+
+    public function ajax(): JsonResponse
     {
-        $this
-            ->model(ProductLabel::class)
-            ->addActions([
-                EditAction::make()->route('product-label.edit'),
-                DeleteAction::make()->route('product-label.destroy'),
-            ]);
+        $data = $this->table
+            ->eloquent($this->query())
+            ->editColumn('name', function ($item) {
+                if (! Auth::user()->hasPermission('product-label.edit')) {
+                    return BaseHelper::clean($item->name);
+                }
+
+                return Html::link(route('product-label.edit', $item->id), BaseHelper::clean($item->name));
+            })
+            ->editColumn('checkbox', function ($item) {
+                return $this->getCheckbox($item->id);
+            })
+            ->editColumn('created_at', function ($item) {
+                return BaseHelper::formatDate($item->created_at);
+            })
+            ->editColumn('status', function ($item) {
+                return BaseHelper::clean($item->status->toHtml());
+            })
+            ->addColumn('operations', function ($item) {
+                return $this->getOperations('product-label.edit', 'product-label.destroy', $item);
+            });
+
+        return $this->toJson($data);
     }
 
     public function query(): Relation|Builder|QueryBuilder
     {
-        $query = $this
-            ->getModel()
-            ->query()
-            ->select([
-                'id',
-                'name',
-                'created_at',
-                'status',
-            ]);
+        $query = $this->repository->getModel()->select([
+            'id',
+            'name',
+            'created_at',
+            'status',
+        ]);
 
         return $this->applyScopes($query);
     }
@@ -46,10 +78,22 @@ class ProductLabelTable extends TableAbstract
     public function columns(): array
     {
         return [
-            IdColumn::make(),
-            NameColumn::make()->route('product-label.edit'),
-            CreatedAtColumn::make(),
-            StatusColumn::make(),
+            'id' => [
+                'title' => trans('core/base::tables.id'),
+                'width' => '20px',
+            ],
+            'name' => [
+                'title' => trans('core/base::tables.name'),
+                'class' => 'text-start',
+            ],
+            'created_at' => [
+                'title' => trans('core/base::tables.created_at'),
+                'width' => '100px',
+            ],
+            'status' => [
+                'title' => trans('core/base::tables.status'),
+                'width' => '100px',
+            ],
         ];
     }
 
@@ -60,9 +104,7 @@ class ProductLabelTable extends TableAbstract
 
     public function bulkActions(): array
     {
-        return [
-            DeleteBulkAction::make()->permission('product-label.destroy'),
-        ];
+        return $this->addDeleteAction(route('product-label.deletes'), 'product-label.destroy', parent::bulkActions());
     }
 
     public function getBulkChanges(): array
@@ -84,5 +126,10 @@ class ProductLabelTable extends TableAbstract
                 'type' => 'datePicker',
             ],
         ];
+    }
+
+    public function getFilters(): array
+    {
+        return $this->getBulkChanges();
     }
 }

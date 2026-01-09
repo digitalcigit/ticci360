@@ -2,40 +2,47 @@
 
 namespace Botble\Marketplace\Tables;
 
+use Illuminate\Support\Facades\Auth;
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Facades\Html;
-use Botble\Ecommerce\Models\Customer;
+use Botble\Ecommerce\Repositories\Interfaces\CustomerInterface;
 use Botble\Table\Abstracts\TableAbstract;
-use Botble\Table\Actions\Action;
-use Botble\Table\Columns\Column;
-use Botble\Table\Columns\CreatedAtColumn;
-use Botble\Table\Columns\IdColumn;
-use Botble\Table\Columns\NameColumn;
+use Botble\Base\Facades\Html;
+use Illuminate\Contracts\Routing\UrlGenerator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\JsonResponse;
+use Botble\Table\DataTables;
 
 class UnverifiedVendorTable extends TableAbstract
 {
-    public function setup(): void
+    protected $hasActions = true;
+
+    protected $hasFilter = true;
+
+    public function __construct(DataTables $table, UrlGenerator $urlGenerator, CustomerInterface $customerRepository)
     {
-        $this
-            ->model(Customer::class)
-            ->addActions([
-                Action::make('view')
-                    ->route('marketplace.unverified-vendors.view')
-                    ->permission('marketplace.unverified-vendors.index')
-                    ->label(__('View'))
-                    ->icon('ti ti-eye'),
-            ]);
+        $this->repository = $customerRepository;
+        parent::__construct($table, $urlGenerator);
+
+        if (! Auth::user()->hasAnyPermission(['marketplace.unverified-vendors.edit'])) {
+            $this->hasOperations = false;
+            $this->hasActions = false;
+        }
     }
 
     public function ajax(): JsonResponse
     {
         $data = $this->table
             ->eloquent($this->query())
-            ->editColumn('avatar', function (Customer $item) {
+            ->editColumn('name', function ($item) {
+                if (! Auth::user()->hasPermission('marketplace.unverified-vendors.edit')) {
+                    return BaseHelper::clean($item->name);
+                }
+
+                return Html::link(route('marketplace.unverified-vendors.view', $item->id), BaseHelper::clean($item->name));
+            })
+            ->editColumn('avatar', function ($item) {
                 if ($this->request()->input('action') == 'excel' ||
                     $this->request()->input('action') == 'csv') {
                     return $item->avatar_url;
@@ -43,11 +50,26 @@ class UnverifiedVendorTable extends TableAbstract
 
                 return Html::tag('img', '', ['src' => $item->avatar_url, 'alt' => BaseHelper::clean($item->name), 'width' => 50]);
             })
-            ->editColumn('store_name', function (Customer $item) {
-                return $item->store->name ? BaseHelper::clean($item->store->name) : '&mdash;';
+            ->editColumn('checkbox', function ($item) {
+                return $this->getCheckbox($item->id);
             })
-            ->editColumn('store_phone', function (Customer $item) {
-                return $item->store->phone ? BaseHelper::clean($item->store->phone) : '&mdash;';
+            ->editColumn('created_at', function ($item) {
+                return BaseHelper::formatDate($item->created_at);
+            })
+            ->editColumn('store_name', function ($item) {
+                return BaseHelper::clean($item->store->name);
+            })
+            ->editColumn('store_phone', function ($item) {
+                return BaseHelper::clean($item->store->phone);
+            })
+            ->addColumn('operations', function ($item) {
+                return Html::link(
+                    route('marketplace.unverified-vendors.view', $item->id),
+                    '<i class="fa fa-eye"></i>',
+                    ['class' => 'btn btn-icon btn-sm btn-primary'],
+                    null,
+                    false
+                );
             });
 
         return $this->toJson($data);
@@ -55,9 +77,7 @@ class UnverifiedVendorTable extends TableAbstract
 
     public function query(): Relation|Builder|QueryBuilder
     {
-        $query = $this
-            ->getModel()
-            ->query()
+        $query = $this->repository->getModel()
             ->select([
                 'id',
                 'name',
@@ -77,24 +97,34 @@ class UnverifiedVendorTable extends TableAbstract
     public function columns(): array
     {
         return [
-            IdColumn::make(),
-            Column::make('avatar')
-                ->title(trans('plugins/ecommerce::customer.avatar'))
-                ->width(70),
-            NameColumn::make()
-                ->route('marketplace.unverified-vendors.view')
-                ->permission('marketplace.unverified-vendors.edit'),
-            Column::make('store_name')
-                ->title(trans('plugins/marketplace::unverified-vendor.forms.store_name'))
-                ->alignStart()
-                ->orderable(false)
-                ->searchable(false),
-            Column::make('store_phone')
-                ->title(trans('plugins/marketplace::unverified-vendor.forms.store_phone'))
-                ->alignStart()
-                ->orderable(false)
-                ->searchable(false),
-            CreatedAtColumn::make(),
+            'id' => [
+                'title' => trans('core/base::tables.id'),
+                'width' => '20px',
+            ],
+            'avatar' => [
+                'title' => trans('plugins/ecommerce::customer.avatar'),
+                'class' => 'text-center',
+            ],
+            'name' => [
+                'title' => trans('core/base::tables.name'),
+                'class' => 'text-start',
+            ],
+            'store_name' => [
+                'title' => trans('plugins/marketplace::unverified-vendor.forms.store_name'),
+                'class' => 'text-start',
+                'searchable' => false,
+                'orderable' => false,
+            ],
+            'store_phone' => [
+                'title' => trans('plugins/marketplace::unverified-vendor.forms.store_phone'),
+                'class' => 'text-start',
+                'searchable' => false,
+                'orderable' => false,
+            ],
+            'created_at' => [
+                'title' => trans('core/base::tables.created_at'),
+                'width' => '100px',
+            ],
         ];
     }
 }

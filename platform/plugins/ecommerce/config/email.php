@@ -1,13 +1,13 @@
 <?php
 
 return [
-    'name' => 'plugins/ecommerce::email.name',
-    'description' => 'plugins/ecommerce::email.description',
-    'templates' => array_filter([
+    'name' => 'Ecommerce',
+    'description' => 'Config email templates for Ecommerce',
+    'templates' => [
         'welcome' => [
-            'title' => 'plugins/ecommerce::email.welcome_title',
-            'description' => 'plugins/ecommerce::email.welcome_description',
-            'subject' => 'plugins/ecommerce::email.welcome_subject',
+            'title' => 'Welcome',
+            'description' => 'Send email to user when they registered an account on our site',
+            'subject' => 'Welcome to {{ site_title }}!',
             'can_off' => true,
             'enabled' => false,
             'variables' => [
@@ -15,29 +15,27 @@ return [
             ],
         ],
         'confirm-email' => [
-            'title' => 'plugins/ecommerce::email.confirm_email_title',
-            'description' => 'plugins/ecommerce::email.confirm_email_description',
-            'subject' => 'plugins/ecommerce::email.confirm_email_subject',
+            'title' => 'Confirm email',
+            'description' => 'Send email to user when they register an account to verify their email',
+            'subject' => 'Confirm Email Notification',
             'can_off' => false,
             'variables' => [
-                'verify_link' => 'plugins/ecommerce::email.verify_link',
-                'customer_name' => 'plugins/ecommerce::ecommerce.customer_name',
+                'verify_link' => 'Verify email link',
             ],
         ],
         'password-reminder' => [
-            'title' => 'plugins/ecommerce::email.password_reminder_title',
-            'description' => 'plugins/ecommerce::email.password_reminder_description',
-            'subject' => 'plugins/ecommerce::email.password_reminder_subject',
+            'title' => 'Reset password',
+            'description' => 'Send email to user when requesting reset password',
+            'subject' => 'Reset Password',
             'can_off' => false,
             'variables' => [
-                'reset_link' => 'plugins/ecommerce::email.reset_link',
-                'customer_name' => 'plugins/ecommerce::ecommerce.customer_name',
+                'reset_link' => 'Reset password link',
             ],
         ],
         'customer_new_order' => [
             'title' => 'plugins/ecommerce::email.customer_new_order_title',
             'description' => 'plugins/ecommerce::email.customer_new_order_description',
-            'subject' => 'plugins/ecommerce::email.customer_new_order_subject',
+            'subject' => 'New order(s) at {{ site_title }}',
             'can_off' => true,
             'enabled' => false,
             'variables' => [
@@ -53,72 +51,29 @@ return [
         ],
         'customer_cancel_order' => [
             'title' => 'plugins/ecommerce::email.order_cancellation_title',
-            'description' => 'plugins/ecommerce::email.customer_order_cancellation_description',
-            'subject' => 'plugins/ecommerce::email.customer_order_cancellation_subject',
+            'description' => 'plugins/ecommerce::email.order_cancellation_description',
+            'subject' => 'Order cancelled {{ order_id }}',
             'can_off' => true,
             'variables' => [
                 'customer_name' => 'plugins/ecommerce::ecommerce.customer_name',
                 'order_id' => 'plugins/ecommerce::ecommerce.order_id',
-                'cancellation_reason' => 'plugins/ecommerce::order.order_cancellation_reason',
-                'product_list' => 'plugins/ecommerce::ecommerce.product_list',
             ],
         ],
-        'admin_cancel_order' => [
-            'title' => 'plugins/ecommerce::email.admin_order_cancellation_title',
-            'description' => 'plugins/ecommerce::email.admin_order_cancellation_description',
-            'subject' => 'plugins/ecommerce::email.admin_order_cancellation_subject',
+        'customer_delivery_order' => [
+            'title' => 'plugins/ecommerce::email.delivery_confirmation_title',
+            'description' => 'plugins/ecommerce::email.delivery_confirmation_description',
+            'subject' => 'Order delivering {{ order_id }}',
             'can_off' => true,
             'variables' => [
                 'customer_name' => 'plugins/ecommerce::ecommerce.customer_name',
                 'order_id' => 'plugins/ecommerce::ecommerce.order_id',
-                'cancellation_reason' => 'plugins/ecommerce::order.order_cancellation_reason',
-                'product_list' => 'plugins/ecommerce::ecommerce.product_list',
+                'order_delivery_notes' => 'Order delivery notes',
             ],
         ],
-        'order_cancellation_to_admin' => [
-            'title' => 'plugins/ecommerce::email.order_cancellation_to_admin_title',
-            'description' => 'plugins/ecommerce::email.order_cancellation_to_admin_description',
-            'subject' => 'plugins/ecommerce::email.order_cancellation_to_admin_subject',
-            'can_off' => true,
-            'enabled' => false,
-            'variables' => [
-                'customer_name' => 'plugins/ecommerce::ecommerce.customer_name',
-                'order_id' => 'plugins/ecommerce::ecommerce.order_id',
-                'cancellation_reason' => 'plugins/ecommerce::order.order_cancellation_reason',
-                'product_list' => 'plugins/ecommerce::ecommerce.product_list',
-            ],
-        ],
-        ...(! setting('ecommerce_disable_physical_product') ? [
-            'customer_delivery_order' => [
-                'title' => 'plugins/ecommerce::email.delivery_confirmation_title',
-                'description' => 'plugins/ecommerce::email.delivery_confirmation_description',
-                'subject' => 'plugins/ecommerce::email.delivery_confirmation_subject',
-                'can_off' => true,
-                'variables' => [
-                    'customer_name' => 'plugins/ecommerce::ecommerce.customer_name',
-                    'order_id' => 'plugins/ecommerce::ecommerce.order_id',
-                    'order_delivery_notes' => 'plugins/ecommerce::email.order_delivery_notes',
-                    'product_list' => 'plugins/ecommerce::ecommerce.product_list',
-                ],
-            ],
-            'customer_order_delivered' => [
-                'title' => 'plugins/ecommerce::email.order_delivered_title',
-                'description' => 'plugins/ecommerce::email.order_delivered_description',
-                'subject' => 'plugins/ecommerce::email.order_delivered_subject',
-                'can_off' => true,
-                'enabled' => false,
-                'variables' => [
-                    'customer_name' => 'plugins/ecommerce::ecommerce.customer_name',
-                    'order_id' => 'plugins/ecommerce::ecommerce.order_id',
-                    'order_delivery_notes' => 'plugins/ecommerce::email.order_delivery_notes',
-                    'product_list' => 'plugins/ecommerce::ecommerce.product_list',
-                ],
-            ],
-        ] : []),
         'admin_new_order' => [
             'title' => 'plugins/ecommerce::email.admin_new_order_title',
             'description' => 'plugins/ecommerce::email.admin_new_order_description',
-            'subject' => 'plugins/ecommerce::email.admin_new_order_subject',
+            'subject' => 'New order(s) at {{ site_title }}',
             'can_off' => true,
             'enabled' => false,
             'variables' => [
@@ -135,7 +90,7 @@ return [
         'order_confirm' => [
             'title' => 'plugins/ecommerce::email.order_confirmation_title',
             'description' => 'plugins/ecommerce::email.order_confirmation_description',
-            'subject' => 'plugins/ecommerce::email.order_confirmation_subject',
+            'subject' => 'Order confirmed {{ order_id }}',
             'can_off' => true,
             'variables' => [
                 'customer_name' => 'plugins/ecommerce::ecommerce.customer_name',
@@ -151,7 +106,7 @@ return [
         'order_confirm_payment' => [
             'title' => 'plugins/ecommerce::email.payment_confirmation_title',
             'description' => 'plugins/ecommerce::email.payment_confirmation_description',
-            'subject' => 'plugins/ecommerce::email.payment_confirmation_subject',
+            'subject' => 'Payment for order {{ order_id }} was confirmed',
             'can_off' => true,
             'variables' => [
                 'customer_name' => 'plugins/ecommerce::ecommerce.customer_name',
@@ -167,7 +122,7 @@ return [
         'order_recover' => [
             'title' => 'plugins/ecommerce::email.order_recover_title',
             'description' => 'plugins/ecommerce::email.order_recover_description',
-            'subject' => 'plugins/ecommerce::email.order_recover_subject',
+            'subject' => 'Incomplete order',
             'can_off' => true,
             'variables' => [
                 'customer_name' => 'plugins/ecommerce::ecommerce.customer_name',
@@ -184,35 +139,34 @@ return [
         'order-return-request' => [
             'title' => 'plugins/ecommerce::email.order_return_request_title',
             'description' => 'plugins/ecommerce::email.order_return_request_description',
-            'subject' => 'plugins/ecommerce::email.order_return_request_subject',
+            'subject' => 'Order return request',
             'can_off' => true,
             'variables' => [
                 'customer_name' => 'plugins/ecommerce::ecommerce.customer_name',
                 'customer_phone' => 'plugins/ecommerce::ecommerce.customer_phone',
                 'customer_address' => 'plugins/ecommerce::ecommerce.customer_address',
-                'list_order_products' => 'plugins/ecommerce::email.list_order_products',
+                'list_order_products' => 'List of order products',
                 'order_id' => 'plugins/ecommerce::ecommerce.order_id',
                 'order_note' => 'plugins/ecommerce::ecommerce.order_note',
                 'return_reason' => 'plugins/ecommerce::order.order_return_reason',
-                'product_list' => 'plugins/ecommerce::ecommerce.product_list',
             ],
         ],
         'invoice-payment-created' => [
-            'title' => 'plugins/ecommerce::email.invoice_payment_created_title',
-            'description' => 'plugins/ecommerce::email.invoice_payment_created_description',
-            'subject' => 'plugins/ecommerce::email.invoice_payment_created_subject',
+            'title' => 'Invoice Payment Detail',
+            'description' => 'Send a notification to the customer who makes order',
+            'subject' => 'Payment received from {{ customer_name }} on {{ site_title }}',
             'can_off' => true,
             'enabled' => false,
             'variables' => [
-                'customer_name' => 'plugins/ecommerce::ecommerce.customer_name',
-                'invoice_code' => 'plugins/ecommerce::email.invoice_code',
-                'invoice_link' => 'plugins/ecommerce::email.invoice_link',
+                'customer_name' => 'Customer name',
+                'invoice_code' => 'Invoice Code',
+                'invoice_link' => 'Invoice Link',
             ],
         ],
         'review_products' => [
-            'title' => 'plugins/ecommerce::email.review_products_title',
-            'description' => 'plugins/ecommerce::email.review_products_description',
-            'subject' => 'plugins/ecommerce::email.review_products_subject',
+            'title' => 'Review Products',
+            'description' => 'Send a notification to the customer to review the products when the order is completed',
+            'subject' => 'Order completed, you can review the product',
             'can_off' => true,
             'enabled' => false,
             'variables' => [
@@ -221,82 +175,14 @@ return [
             ],
         ],
         'download_digital_products' => [
-            'title' => 'plugins/ecommerce::email.download_digital_products_title',
-            'description' => 'plugins/ecommerce::email.download_digital_products_description',
-            'subject' => 'plugins/ecommerce::email.download_digital_products_subject',
+            'title' => 'Download digital products',
+            'description' => 'Send email digital product downloads when guest makes a purchase',
+            'subject' => 'Download digital products you have purchased',
             'can_off' => false,
             'variables' => [
                 'customer_name' => 'plugins/ecommerce::ecommerce.customer_name',
-                'customer_phone' => 'plugins/ecommerce::ecommerce.customer_phone',
-                'customer_address' => 'plugins/ecommerce::ecommerce.customer_address',
-                'payment_method' => 'plugins/ecommerce::ecommerce.payment_method',
-                'order_note' => 'plugins/ecommerce::ecommerce.order_note',
-                'order_id' => 'plugins/ecommerce::ecommerce.order_id',
-                'digital_product_list' => 'plugins/ecommerce::email.digital_product_list',
-                'digital_products' => 'plugins/ecommerce::email.digital_products',
+                'digital_product_list' => 'Digital product list',
             ],
         ],
-        'customer-deletion-request-confirmation' => [
-            'title' => 'plugins/ecommerce::email.customer_deletion_request_confirmation_title',
-            'description' => 'plugins/ecommerce::email.customer_deletion_request_confirmation_description',
-            'subject' => 'plugins/ecommerce::email.customer_deletion_request_confirmation_subject',
-            'can_off' => false,
-            'variables' => [
-                'customer_name' => 'plugins/ecommerce::ecommerce.customer_name',
-                'customer_email' => 'plugins/ecommerce::ecommerce.customer_email',
-                'confirm_url' => 'plugins/ecommerce::account-deletion.confirm_url',
-            ],
-        ],
-        'customer-deletion-request-completed' => [
-            'title' => 'plugins/ecommerce::email.customer_deletion_request_completed_title',
-            'description' => 'plugins/ecommerce::email.customer_deletion_request_completed_description',
-            'subject' => 'plugins/ecommerce::email.customer_deletion_request_completed_subject',
-            'can_off' => false,
-            'variables' => [
-                'customer_name' => 'plugins/ecommerce::ecommerce.customer_name',
-            ],
-        ],
-        'order-return-status-updated' => [
-            'title' => 'plugins/ecommerce::email.order_return_status_updated_title',
-            'description' => 'plugins/ecommerce::email.order_return_status_updated_description',
-            'subject' => 'plugins/ecommerce::email.order_return_status_updated_subject',
-            'can_off' => true,
-            'variables' => [
-                'customer_name' => 'plugins/ecommerce::ecommerce.customer_name',
-                'order_id' => 'plugins/ecommerce::ecommerce.order_id',
-                'description' => 'core/base::forms.description',
-                'status' => 'core/base::forms.status',
-                'product_list' => 'plugins/ecommerce::ecommerce.product_list',
-            ],
-        ],
-        'payment-proof-upload-notification' => [
-            'title' => 'plugins/ecommerce::email.payment_proof_upload_notification_title',
-            'description' => 'plugins/ecommerce::email.payment_proof_upload_notification_description',
-            'subject' => 'plugins/ecommerce::email.payment_proof_upload_notification_subject',
-            'can_off' => true,
-            'variables' => [
-                'customer_name' => 'plugins/ecommerce::ecommerce.customer_name',
-                'customer_email' => 'plugins/ecommerce::ecommerce.customer_email',
-                'order_id' => 'plugins/ecommerce::ecommerce.order_id',
-                'payment_link' => 'plugins/ecommerce::ecommerce.order_link',
-                'order_link' => 'plugins/ecommerce::ecommerce.payment_link',
-                'product_list' => 'plugins/ecommerce::ecommerce.product_list',
-            ],
-        ],
-        'product-file-updated' => [
-            'title' => 'plugins/ecommerce::email.product_file_updated_title',
-            'description' => 'plugins/ecommerce::email.product_file_updated_description',
-            'subject' => 'plugins/ecommerce::email.product_file_updated_subject',
-            'can_off' => true,
-            'enabled' => true,
-            'variables' => [
-                'customer_name' => 'plugins/ecommerce::ecommerce.customer_name',
-                'product_name' => 'plugins/ecommerce::products.product_name',
-                'product_link' => 'plugins/ecommerce::products.product_link',
-                'download_link' => 'plugins/ecommerce::ecommerce.download_link',
-                'update_time' => 'plugins/ecommerce::ecommerce.update_time',
-                'product_files' => 'plugins/ecommerce::ecommerce.product_files',
-            ],
-        ],
-    ]),
+    ],
 ];

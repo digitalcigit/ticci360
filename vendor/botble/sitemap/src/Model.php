@@ -2,9 +2,8 @@
 
 namespace Botble\Sitemap;
 
-use Botble\Base\Facades\BaseHelper;
 use Carbon\Carbon;
-use Datetime;
+use DateTime;
 
 class Model
 {
@@ -12,9 +11,9 @@ class Model
 
     protected array $sitemaps = [];
 
-    protected ?string $title = null;
+    protected string|null $title = null;
 
-    protected ?string $link = null;
+    protected string|null $link = null;
 
     protected mixed $useStyles = true;
 
@@ -60,12 +59,12 @@ class Model
         return $this->sitemaps;
     }
 
-    public function getTitle(): ?string
+    public function getTitle(): string|null
     {
         return $this->title;
     }
 
-    public function getLink(): ?string
+    public function getLink(): string|null
     {
         return $this->link;
     }
@@ -87,7 +86,7 @@ class Model
 
     public function getCacheKey(): string
     {
-        return $this->cacheKey . BaseHelper::getHomepageUrl();
+        return $this->cacheKey . route('public.index');
     }
 
     public function getCacheDuration(): int|string
@@ -105,128 +104,181 @@ class Model
         return $this->useLimitSize;
     }
 
-    public function getMaxSize(): bool|int|null
+    /**
+     * Returns $maxSize value.
+     *
+     * @return bool|mixed|null
+     */
+    public function getMaxSize()
     {
         return $this->maxSize;
     }
 
-    public function getUseGzip(): bool
+    /**
+     * Returns $useGzip value.
+     *
+     * @return bool|mixed
+     */
+    public function getUseGzip()
     {
         return $this->useGzip;
     }
 
-    public function setEscaping(bool $escaping): static
+    /**
+     * Sets $escaping value.
+     *
+     * @param bool $escaping
+     */
+    public function setEscaping($escaping)
     {
         $this->escaping = $escaping;
-
-        return $this;
     }
 
-    public function setItems(array $items): static
+    /**
+     * Adds item to $items array.
+     *
+     * @param array $items
+     */
+    public function setItems($items)
     {
         $this->items[] = $items;
-
-        return $this;
     }
 
-    public function setSitemaps(array $sitemap): static
+    /**
+     * Adds sitemap to $sitemaps array.
+     *
+     * @param array $sitemap
+     */
+    public function setSitemaps($sitemap)
     {
         $this->sitemaps[] = $sitemap;
-
-        return $this;
     }
 
-    public function setTitle(string $title): static
+    /**
+     * Sets $title value.
+     *
+     * @param string $title
+     */
+    public function setTitle($title)
     {
         $this->title = $title;
-
-        return $this;
     }
 
-    public function setLink(string $link): static
+    /**
+     * Sets $link value.
+     *
+     * @param string $link
+     */
+    public function setLink($link)
     {
         $this->link = $link;
-
-        return $this;
     }
 
-    public function setUseStyles(bool $useStyles): static
+    /**
+     * Sets $useStyles value.
+     *
+     * @param bool $useStyles
+     */
+    public function setUseStyles($useStyles)
     {
         $this->useStyles = $useStyles;
-
-        return $this;
     }
 
-    public function setSloc(string $sloc): static
+    /**
+     * Sets $sloc value.
+     *
+     * @param string $sloc
+     */
+    public function setSloc($sloc)
     {
         $this->sloc = $sloc;
-
-        return $this;
     }
 
-    public function setUseLimitSize(bool $useLimitSize): static
+    /**
+     * Sets $useLimitSize value.
+     *
+     * @param bool $useLimitSize
+     */
+    public function setUseLimitSize($useLimitSize)
     {
         $this->useLimitSize = $useLimitSize;
-
-        return $this;
     }
 
-    public function setMaxSize(int $maxSize): static
+    /**
+     * Sets $maxSize value.
+     *
+     * @param int $maxSize
+     */
+    public function setMaxSize($maxSize)
     {
         $this->maxSize = $maxSize;
-
-        return $this;
     }
 
-    public function setUseGzip(bool $useGzip = true): static
+    /**
+     * Sets $useGzip value.
+     *
+     * @param bool $useGzip
+     */
+    public function setUseGzip($useGzip = true)
     {
         $this->useGzip = $useGzip;
-
-        return $this;
     }
 
     /**
      * Limit size of $items array to 50000 elements (1000 for google-news).
      */
-    public function limitSize(int $max = 50000): static
+    public function limitSize($max = 50000)
     {
         $this->items = array_slice($this->items, 0, $max);
-
-        return $this;
     }
 
-    public function resetItems(array $items = []): static
+    /**
+     * Reset $items array.
+     *
+     * @param array $items
+     */
+    public function resetItems($items = [])
     {
         $this->items = $items;
-
-        return $this;
     }
 
-    public function resetSitemaps(array $sitemaps = []): static
+    /**
+     * Reset $sitemaps array.
+     *
+     * @param array $sitemaps
+     */
+    public function resetSitemaps($sitemaps = [])
     {
         $this->sitemaps = $sitemaps;
-
-        return $this;
     }
 
-    public function setUseCache(bool $useCache = true): static
+    /**
+     * Set use cache value.
+     *
+     * @param bool $useCache
+     */
+    public function setUseCache($useCache = true)
     {
         $this->useCache = $useCache;
-
-        return $this;
     }
 
-    public function setCacheKey(string $cacheKey): static
+    /**
+     * Set cache key value.
+     *
+     * @param string $cacheKey
+     */
+    public function setCacheKey($cacheKey)
     {
         $this->cacheKey = $cacheKey;
-
-        return $this;
     }
 
-    public function setCacheDuration(Carbon|Datetime|int $cacheDuration): static
+    /**
+     * Set cache duration value.
+     *
+     * @param Carbon|Datetime|int $cacheDuration
+     */
+    public function setCacheDuration($cacheDuration)
     {
         $this->cacheDuration = $cacheDuration;
-
-        return $this;
     }
 }

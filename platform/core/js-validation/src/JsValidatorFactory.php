@@ -8,7 +8,6 @@ use Botble\JsValidation\Javascript\RuleParser;
 use Botble\JsValidation\Javascript\ValidatorHandler;
 use Botble\JsValidation\Support\DelegatedValidator;
 use Botble\JsValidation\Support\ValidationRuleParserProxy;
-use Botble\Support\Http\Requests\Request;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Validation\Factory as ValidationFactory;
 use Illuminate\Foundation\Http\FormRequest;
@@ -17,8 +16,6 @@ use Illuminate\Validation\Validator;
 
 class JsValidatorFactory
 {
-    public const ASTERISK = '__asterisk__';
-
     protected array $options = [];
 
     public function __construct(protected Container $app, array $options = [])
@@ -38,12 +35,8 @@ class JsValidatorFactory
     /**
      * Creates JsValidator instance based on rules and message arrays.
      */
-    public function make(
-        array $rules,
-        array $messages = [],
-        array $customAttributes = [],
-        ?string $selector = null
-    ): JavascriptValidator {
+    public function make(array $rules, array $messages = [], array $customAttributes = [], string|null $selector = null): JavascriptValidator
+    {
         $validator = $this->getValidatorInstance($rules, $messages, $customAttributes);
 
         return $this->validator($validator, $selector);
@@ -75,9 +68,6 @@ class JsValidatorFactory
         $attributes = array_merge(array_keys($customAttributes), $attributes);
 
         return array_reduce($attributes, function ($data, $attribute) {
-            // Prevent wildcard rule being removed as an implicit attribute (not present in the data).
-            $attribute = str_replace('*', self::ASTERISK, $attribute);
-
             Arr::set($data, $attribute, true);
 
             return $data;
@@ -95,17 +85,11 @@ class JsValidatorFactory
 
         $rules = method_exists($formRequest, 'rules') ? $formRequest->rules() : [];
 
-        $messages = $formRequest->messages();
+        $rules = apply_filters('core_request_rules', $rules, $formRequest);
 
-        $attributes = $formRequest->attributes();
+        $messages = apply_filters('core_request_messages', $formRequest->messages(), $formRequest);
 
-        if ($formRequest instanceof Request) {
-            $rules = apply_filters('core_request_rules', $rules, $formRequest);
-
-            $messages = apply_filters('core_request_messages', $messages, $formRequest);
-
-            $attributes = apply_filters('core_request_attributes', $attributes, $formRequest);
-        }
+        $attributes = apply_filters('core_request_attributes', $formRequest->attributes(), $formRequest);
 
         $validator = $this->getValidatorInstance($rules, $messages, $attributes);
 
@@ -138,7 +122,7 @@ class JsValidatorFactory
         // @phpstan-ignore-next-line
         $formRequest = $this->app->build($class, $params);
 
-        if ($request->hasSession() && $session = $request->session()) {
+        if ($session = $request->getSession()) {
             $formRequest->setLaravelSession($session);
         }
         $formRequest->setUserResolver($request->getUserResolver());
@@ -152,7 +136,7 @@ class JsValidatorFactory
     /**
      * Creates JsValidator instance based on Validator.
      */
-    public function validator(Validator $validator, ?string $selector = null): JavascriptValidator
+    public function validator(Validator $validator, string|null $selector = null): JavascriptValidator
     {
         return $this->jsValidator($validator, $selector);
     }
@@ -160,12 +144,11 @@ class JsValidatorFactory
     /**
      * Creates JsValidator instance based on Validator.
      */
-    protected function jsValidator(Validator $validator, ?string $selector = null): JavascriptValidator
+    protected function jsValidator(Validator $validator, string|null $selector = null): JavascriptValidator
     {
         $remote = ! $this->options['disable_remote_validation'];
         $view = $this->options['view'];
         $selector = is_null($selector) ? $this->options['form_selector'] : $selector;
-        $ignore = Arr::get($this->options, 'ignore');
 
         $delegated = new DelegatedValidator($validator, new ValidationRuleParserProxy($validator->getData()));
         $rules = new RuleParser($delegated, $this->getSessionToken());
@@ -173,13 +156,13 @@ class JsValidatorFactory
 
         $jsValidator = new ValidatorHandler($rules, $messages);
 
-        return new JavascriptValidator($jsValidator, compact('view', 'selector', 'remote', 'ignore'));
+        return new JavascriptValidator($jsValidator, compact('view', 'selector', 'remote'));
     }
 
     /**
      * Get and encrypt token from session store.
      */
-    protected function getSessionToken(): ?string
+    protected function getSessionToken(): string|null
     {
         $token = null;
         if ($session = $this->app->__get('session')) {

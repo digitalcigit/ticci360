@@ -44,11 +44,4 @@ class Page extends BaseModel
     {
         return $this->belongsTo(User::class)->withDefault();
     }
-
-    protected static function booted(): void
-    {
-        static::creating(function (self $page): void {
-            $page->user_id = $page->user_id ?: auth()->id();
-        });
-    }
 }

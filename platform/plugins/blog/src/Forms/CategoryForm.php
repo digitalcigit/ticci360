@@ -2,85 +2,87 @@
 
 namespace Botble\Blog\Forms;
 
-use Botble\Base\Forms\FieldOptions\CoreIconFieldOption;
-use Botble\Base\Forms\FieldOptions\DescriptionFieldOption;
-use Botble\Base\Forms\FieldOptions\HiddenFieldOption;
-use Botble\Base\Forms\FieldOptions\IsDefaultFieldOption;
-use Botble\Base\Forms\FieldOptions\IsFeaturedFieldOption;
-use Botble\Base\Forms\FieldOptions\NameFieldOption;
-use Botble\Base\Forms\FieldOptions\SelectFieldOption;
-use Botble\Base\Forms\FieldOptions\StatusFieldOption;
-use Botble\Base\Forms\Fields\CoreIconField;
-use Botble\Base\Forms\Fields\HiddenField;
-use Botble\Base\Forms\Fields\OnOffField;
-use Botble\Base\Forms\Fields\SelectField;
-use Botble\Base\Forms\Fields\TextareaField;
-use Botble\Base\Forms\Fields\TextField;
+use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Base\Forms\FormAbstract;
 use Botble\Blog\Http\Requests\CategoryRequest;
 use Botble\Blog\Models\Category;
 
 class CategoryForm extends FormAbstract
 {
-    public function setup(): void
+    public function buildForm(): void
     {
+        $list = get_categories(['condition' => []]);
+
+        $categories = [];
+        foreach ($list as $row) {
+            if ($this->getModel() && ($this->model->id === $row->id || $this->model->id === $row->parent_id)) {
+                continue;
+            }
+
+            $categories[$row->id] = $row->indent_text . ' ' . $row->name;
+        }
+        $categories = [0 => trans('plugins/blog::categories.none')] + $categories;
+
         $this
-            ->model(Category::class)
+            ->setupModel(new Category())
             ->setValidatorClass(CategoryRequest::class)
-            ->add(
-                'order',
-                HiddenField::class,
-                HiddenFieldOption::make()
-                    ->value(function () {
-                        if ($this->getModel()->exists) {
-                            return $this->getModel()->order;
-                        }
-
-                        return Category::query()
-                                ->whereIn('parent_id', [0, null])
-                                ->latest('order')
-                                ->value('order') + 1;
-                    })
-            )
-            ->add('name', TextField::class, NameFieldOption::make()->required())
-            ->add(
-                'parent_id',
-                SelectField::class,
-                SelectFieldOption::make()
-                    ->label(trans('core/base::forms.parent'))
-                    ->choices(function () {
-                        $modelId = null;
-
-                        if ($this->getModel() && $this->getModel()->exists) {
-                            $modelId = $this->getModel()->getKey();
-                        }
-
-                        $categories = [];
-                        foreach (get_categories(['condition' => []]) as $row) {
-                            if ($modelId && ($modelId === $row->id || $modelId === $row->parent_id)) {
-                                continue;
-                            }
-
-                            $categories[$row->id] = $row->indent_text . ' ' . $row->name;
-                        }
-
-                        return [0 => trans('plugins/blog::categories.none')] + $categories;
-                    })
-                    ->searchable()
-            )
-            ->add('description', TextareaField::class, DescriptionFieldOption::make())
-            ->add('is_default', OnOffField::class, IsDefaultFieldOption::make())
-            ->add(
-                'icon',
-                CoreIconField::class,
-                CoreIconFieldOption::make()
-            )
-            ->add(
-                'is_featured',
-                OnOffField::class,
-                IsFeaturedFieldOption::make()
-            )
-            ->add('status', SelectField::class, StatusFieldOption::make())
+            ->withCustomFields()
+            ->add('name', 'text', [
+                'label' => trans('core/base::forms.name'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'placeholder' => trans('core/base::forms.name_placeholder'),
+                    'data-counter' => 120,
+                ],
+            ])
+            ->add('parent_id', 'customSelect', [
+                'label' => trans('core/base::forms.parent'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'class' => 'select-search-full',
+                ],
+                'choices' => $categories,
+            ])
+            ->add('description', 'textarea', [
+                'label' => trans('core/base::forms.description'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'rows' => 4,
+                    'placeholder' => trans('core/base::forms.description_placeholder'),
+                    'data-counter' => 400,
+                ],
+            ])
+            ->add('is_default', 'onOff', [
+                'label' => trans('core/base::forms.is_default'),
+                'label_attr' => ['class' => 'control-label'],
+                'default_value' => false,
+            ])
+            ->add('icon', 'text', [
+                'label' => trans('core/base::forms.icon'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'placeholder' => 'Ex: fa fa-home',
+                    'data-counter' => 60,
+                ],
+            ])
+            ->add('order', 'number', [
+                'label' => trans('core/base::forms.order'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'placeholder' => trans('core/base::forms.order_by_placeholder'),
+                ],
+                'default_value' => 0,
+            ])
+            ->add('is_featured', 'onOff', [
+                'label' => trans('core/base::forms.is_featured'),
+                'label_attr' => ['class' => 'control-label'],
+                'default_value' => false,
+            ])
+            ->add('status', 'customSelect', [
+                'label' => trans('core/base::tables.status'),
+                'label_attr' => ['class' => 'control-label required'],
+                'choices' => BaseStatusEnum::labels(),
+            ])
             ->setBreakFieldPoint('status');
     }
 }

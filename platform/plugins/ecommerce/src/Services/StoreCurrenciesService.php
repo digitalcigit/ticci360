@@ -2,14 +2,47 @@
 
 namespace Botble\Ecommerce\Services;
 
-use Botble\Ecommerce\Models\Currency;
+use Botble\Ecommerce\Repositories\Interfaces\CurrencyInterface;
+use CurrencyHelper;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class StoreCurrenciesService
 {
+    public function __construct(protected CurrencyInterface $currencyRepository)
+    {
+    }
+
     public function execute(array $currencies, array $deletedCurrencies): array
     {
+        $validated = Validator::make(
+            $currencies,
+            [
+                '*.title' => 'required|string|' . Rule::in(CurrencyHelper::currencyCodes()),
+                '*.symbol' => 'required|string',
+            ],
+            [
+                '*.title.in' => trans('plugins/ecommerce::currency.invalid_currency_name', [
+                    'currencies' => implode(', ', CurrencyHelper::currencyCodes()),
+                ]),
+            ],
+            [
+                '*.title' => trans('plugins/ecommerce::currency.invalid_currency_name'),
+                '*.symbol' => trans('plugins/ecommerce::currency.symbol'),
+            ]
+        );
+
+        if ($validated->fails()) {
+            return [
+                'error' => true,
+                'message' => $validated->getMessageBag()->first(),
+            ];
+        }
+
         if ($deletedCurrencies) {
-            Currency::query()->whereIn('id', $deletedCurrencies)->delete();
+            $this->currencyRepository->deleteBy([
+                ['id', 'IN', $deletedCurrencies],
+            ]);
         }
 
         foreach ($currencies as $item) {
@@ -17,21 +50,21 @@ class StoreCurrenciesService
                 continue;
             }
 
-            $item['title'] = mb_substr(strtoupper($item['title']), 0, 3);
-            $item['symbol'] = mb_substr($item['symbol'], 0, 10);
-            $item['decimals'] = $item['decimals'] < 10 && $item['decimals'] >= 0 ? $item['decimals'] : 2;
+            $item['title'] = substr(strtoupper($item['title']), 0, 3);
+            $item['decimals'] = (int)$item['decimals'];
+            $item['decimals'] = $item['decimals'] < 10 ? $item['decimals'] : 2;
 
             if (count($currencies) == 1) {
                 $item['is_default'] = 1;
             }
 
-            $currency = Currency::query()->find($item['id']);
+            $currency = $this->currencyRepository->findById($item['id']);
 
             if (! $currency) {
-                Currency::query()->create($item);
+                $this->currencyRepository->create($item);
             } else {
                 $currency->fill($item);
-                $currency->save();
+                $this->currencyRepository->createOrUpdate($currency);
             }
         }
 

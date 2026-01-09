@@ -3,13 +3,12 @@
 namespace Botble\Marketplace\Models;
 
 use Botble\ACL\Models\User;
-use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Facades\Html;
 use Botble\Base\Models\BaseModel;
 use Botble\Ecommerce\Models\Currency;
 use Botble\Ecommerce\Models\Customer;
 use Botble\Ecommerce\Models\Order;
 use Botble\Marketplace\Enums\RevenueTypeEnum;
+use Botble\Base\Facades\Html;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Revenue extends BaseModel
@@ -59,8 +58,8 @@ class Revenue extends BaseModel
             return '';
         }
 
-        return Html::tag('span', BaseHelper::renderIcon('ti ti-info-circle'), [
-            'class' => 'ms-1 text-info',
+        return Html::tag('span', '<i class="fa fa-info-circle text-info"></i>', [
+            'class' => 'ms-1',
             'data-bs-toggle' => 'tooltip',
             'data-bs-original-title' => $this->description,
             'title' => $this->description,

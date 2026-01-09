@@ -4,14 +4,13 @@ namespace Botble\Ecommerce\Repositories\Eloquent;
 
 use Botble\Ecommerce\Repositories\Interfaces\CurrencyInterface;
 use Botble\Support\Repositories\Eloquent\RepositoriesAbstract;
-use Illuminate\Database\Eloquent\Collection;
 
 class CurrencyRepository extends RepositoriesAbstract implements CurrencyInterface
 {
-    public function getAllCurrencies(): Collection
+    public function getAllCurrencies()
     {
         $data = $this->model
-            ->orderBy('order');
+            ->orderBy('order', 'ASC');
 
         return $this->applyBeforeExecuteQuery($data)->get();
     }

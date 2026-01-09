@@ -2,30 +2,25 @@
 
 namespace Botble\Backup\Supports;
 
-use Botble\Backup\Supports\MySql\MySqlDump;
-use Botble\Backup\Supports\PgSql\Backup as PgSqlBackup;
-use Botble\Backup\Supports\PgSql\Restore as PgSqlRestore;
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Supports\Database;
+use Botble\Backup\Supports\MySql\MySqlDump;
 use Botble\Base\Supports\Zipper;
 use Carbon\Carbon;
+use Exception;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-use RuntimeException;
 use Symfony\Component\Process\Process;
-use Throwable;
 
 class Backup
 {
-    protected ?string $folder = null;
+    protected string|null $folder = null;
 
     public function __construct(protected Filesystem $files, protected Zipper $zipper)
     {
     }
 
-    public function createBackupFolder(string $name, ?string $description = null): array
+    public function createBackupFolder(string $name, string|null $description = null): array
     {
         $backupFolder = $this->createFolder($this->getBackupPath());
         $now = Carbon::now()->format('Y-m-d-H-i-s');
@@ -34,7 +29,7 @@ class Backup
         $file = $this->getBackupPath('backup.json');
         $data = [];
 
-        if ($this->files->exists($file)) {
+        if (file_exists($file)) {
             $data = BaseHelper::getFileData($file);
         }
 
@@ -59,7 +54,7 @@ class Backup
         return $folder;
     }
 
-    public function getBackupPath(?string $path = null): string
+    public function getBackupPath(string|null $path = null): string
     {
         return storage_path('app/backup') . ($path ? '/' . $path : null);
     }
@@ -69,114 +64,66 @@ class Backup
         return $this->getBackupPath($key . '/database-' . $key . '.zip');
     }
 
-    public function getBackupStoragePath(string $key): string
-    {
-        return $this->getBackupPath($key . '/storage-' . $key . '.zip');
-    }
-
     public function isDatabaseBackupAvailable(string $key): bool
     {
         $file = $this->getBackupDatabasePath($key);
 
-        return $this->files->exists($file) && $this->files->size($file) > 1024;
-    }
-
-    public function isStorageBackupAvailable(string $key): bool
-    {
-        $filePath = $this->getBackupStoragePath($key);
-
-        if (! $this->files->exists($filePath)) {
-            $backupPath = $this->getBackupPath($key);
-
-            foreach (BaseHelper::scanFolder($backupPath) as $file) {
-                if (Str::contains(basename($file), 'storage')) {
-                    $filePath = $backupPath . DIRECTORY_SEPARATOR . $file;
-                }
-            }
-        }
-
-        return $this->files->exists($filePath) && $this->files->size($filePath) > 1024;
+        return file_exists($file) && filesize($file) > 1024;
     }
 
     public function getBackupList(): array
     {
         $file = $this->getBackupPath('backup.json');
-        if ($this->files->exists($file)) {
+        if (file_exists($file)) {
             return BaseHelper::getFileData($file);
         }
 
         return [];
     }
 
-    public function backupDb(string $key = null): bool
+    public function backupDb(): bool
     {
-        if (! $key) {
-            $key = Carbon::now()->format('Y-m-d-H-i-s');
-        }
-
-        $file = 'database-' . $key;
+        $file = 'database-' . Carbon::now()->format('Y-m-d-H-i-s');
         $path = $this->folder . DIRECTORY_SEPARATOR . $file;
 
-        $driver = DB::getConfig('driver');
+        $mysqlPath = rtrim(config('plugins.backup.general.backup_mysql_execute_path'), '/');
 
-        if (! $driver) {
+        if (! empty($mysqlPath)) {
+            $mysqlPath = $mysqlPath . '/';
+        }
+
+        $config = config('database.connections.mysql', []);
+
+        if (! $config) {
             return false;
         }
 
-        try {
-            return match ($driver) {
-                'mysql' => $this->backupDbMySql($path),
-                'pgsql' => $this->backupDbPgSql($path),
-                default => throw new RuntimeException(sprintf('Driver [%s] is not supported', $driver)),
-            };
-        } catch (Throwable $exception) {
-            report($exception);
+        $sql = $mysqlPath . 'mysqldump --user="' . $config['username'] . '" --password="' . $config['password'] . '"';
 
-            return false;
-        }
-    }
-
-    protected function backupDbMySql(string $path): bool
-    {
-        $config = DB::getConfig();
-        $mysqlPath = rtrim(config('plugins.backup.general.mysql.execute_path'), '/');
-        $command = $mysqlPath . 'mysqldump --user="%s" --password="%s" --host="%s" --port="%s" "%s" > "%s"';
-        $sql = sprintf(
-            $command,
-            $config['username'],
-            $config['password'],
-            $config['host'],
-            $config['port'],
-            $config['database'],
-            $filePath = $path . '.sql'
-        );
+        $sql .= ' --host=' . $config['host'] . ' --port=' . $config['port'] . ' ' . $config['database'] . ' > ' . $path . '.sql';
 
         try {
             Process::fromShellCommandline($sql)->mustRun();
-        } catch (Throwable $exception) {
-            BaseHelper::logError($exception);
-
+        } catch (Exception) {
             try {
                 if (function_exists('system')) {
                     system($sql);
                 } else {
                     $this->processMySqlDumpPHP($path, $config);
                 }
-            } catch (Throwable $exception) {
+            } catch (Exception) {
                 $this->processMySqlDumpPHP($path, $config);
-
-                BaseHelper::logError($exception);
             }
         }
 
-        if (! $this->files->exists($filePath) || $this->files->size($filePath) < 1024) {
+        if (! $this->files->exists($path . '.sql') || $this->files->size($path . '.sql') < 1024) {
             $this->processMySqlDumpPHP($path, $config);
         }
 
-        $this->compressFileToZip($filePath, $fileZip = $path . '.zip');
+        $this->compressFileToZip($path, $path . '.zip');
 
-        if ($this->files->exists($fileZip)) {
-            $this->files->chmod($fileZip, 0755);
+        if ($this->files->exists($path . '.zip')) {
+            chmod($path . '.zip', 0755);
         }
 
         return true;
@@ -185,30 +132,16 @@ class Backup
     protected function processMySqlDumpPHP(string $path, array $config): bool
     {
         $dump = new MySqlDump('mysql:host=' . $config['host'] . ';dbname=' . $config['database'], $config['username'], $config['password']);
-
         $dump->start($path . '.sql');
-
-        return true;
-    }
-
-    protected function backupDbPgSql(string $path): bool
-    {
-        $file = (new PgSqlBackup())->backup($path);
-
-        $this->compressFileToZip($file, $fileZip = $path . '.zip');
-
-        if ($this->files->exists($fileZip)) {
-            $this->files->chmod($fileZip, 0755);
-        }
 
         return true;
     }
 
     public function compressFileToZip(string $path, string $destination): void
     {
-        $this->zipper->compress($path, $destination);
+        $this->zipper->compress($path . '.sql', $destination);
 
-        $this->deleteFile($path);
+        $this->deleteFile($path . '.sql');
     }
 
     protected function deleteFile(string $file): void
@@ -218,13 +151,9 @@ class Backup
         }
     }
 
-    public function backupFolder(string $source, string $key = null): bool
+    public function backupFolder(string $source): bool
     {
-        if (! $key) {
-            $key = Carbon::now()->format('Y-m-d-H-i-s');
-        }
-
-        $file = $this->folder . DIRECTORY_SEPARATOR . 'storage-' . $key . '.zip';
+        $file = $this->folder . DIRECTORY_SEPARATOR . 'storage-' . Carbon::now()->format('Y-m-d-H-i-s') . '.zip';
 
         BaseHelper::maximumExecutionTimeAndMemoryLimit();
 
@@ -232,8 +161,8 @@ class Backup
             $this->deleteFolderBackup($this->folder);
         }
 
-        if ($this->files->exists($file)) {
-            $this->files->chmod($file, 0755);
+        if (file_exists($file)) {
+            chmod($file, 0755);
         }
 
         return true;
@@ -242,7 +171,6 @@ class Backup
     public function deleteFolderBackup(string $path): void
     {
         $backupFolder = $this->getBackupPath();
-
         if ($this->files->isDirectory($backupFolder) && $this->files->isDirectory($path)) {
             foreach (BaseHelper::scanFolder($path) as $item) {
                 $this->files->delete($path . DIRECTORY_SEPARATOR . $item);
@@ -257,7 +185,7 @@ class Backup
         $file = $this->getBackupPath('backup.json');
         $data = [];
 
-        if ($this->files->exists($file)) {
+        if (file_exists($file)) {
             $data = BaseHelper::getFileData($file);
         }
 
@@ -269,47 +197,19 @@ class Backup
 
     public function restoreDatabase(string $file, string $path): bool
     {
-        $driver = DB::getConfig('driver');
-
-        if (! $driver) {
-            return false;
-        }
-
         $this->extractFileTo($file, $path);
+        $file = $path . DIRECTORY_SEPARATOR . $this->files->name($file) . '.sql';
 
-        $file = $path . DIRECTORY_SEPARATOR . $this->files->name($file) . (
-            $driver === 'mysql' ? '.sql' : '.dump'
-        );
-
-        if (! $this->files->exists($file) || $this->files->size($file) < 1024) {
+        if (! file_exists($file)) {
             return false;
         }
 
-        try {
-            return match ($driver) {
-                'mysql' => $this->restoreDbMySql($file),
-                'pgsql' => $this->restoreDbPgSql($file),
-                default => throw new RuntimeException(sprintf('Driver [%s] is not supported', $driver)),
-            };
-        } catch (Throwable $exception) {
-            report($exception);
-
-            return false;
-        }
-    }
-
-    protected function restoreDbMySql(string $file): bool
-    {
-        Database::restoreFromPath($file);
-
-        $this->deleteFile($file);
-
-        return true;
-    }
-
-    protected function restoreDbPgSql(string $file): bool
-    {
-        (new PgSqlRestore())->restore($file);
+        // Force the new login to be used
+        DB::purge();
+        DB::unprepared('USE `' . config('database.connections.mysql.database') . '`');
+        DB::connection()->setDatabaseName(config('database.connections.mysql.database'));
+        DB::getSchemaBuilder()->dropAllTables();
+        DB::unprepared(file_get_contents($file));
 
         $this->deleteFile($file);
 

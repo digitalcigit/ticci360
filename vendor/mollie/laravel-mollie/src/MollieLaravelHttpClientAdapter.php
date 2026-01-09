@@ -9,6 +9,8 @@ use Mollie\Api\HttpAdapter\MollieHttpAdapterInterface;
 
 class MollieLaravelHttpClientAdapter implements MollieHttpAdapterInterface
 {
+    private const HTTP_NO_CONTENT = 204;
+
     public function send($httpMethod, $url, $headers, $httpBody): ?object
     {
         $contentType = $headers['Content-Type'] ?? 'application/json';
@@ -18,22 +20,28 @@ class MollieLaravelHttpClientAdapter implements MollieHttpAdapterInterface
             ->withHeaders($headers)
             ->send($httpMethod, $url);
 
-        return match (true) {
-            $response->noContent() => null,
-            $response->failed() => throw ApiException::createFromResponse($response->toPsrResponse(), null),
-            empty($response->body()) => throw new ApiException('Mollie response body is empty.'),
-            default => $this->parseResponseBody($response),
-        };
+        return $this->parseResponseBody($response);
     }
 
     private function parseResponseBody(Response $response): ?object
     {
         $body = $response->body();
+        if (empty($body)) {
+            if ($response->status() === self::HTTP_NO_CONTENT) {
+                return null;
+            }
+
+            throw new ApiException('No response body found.');
+        }
 
         $object = @json_decode($body);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
             throw new ApiException("Unable to decode Mollie response: '{$body}'.");
+        }
+
+        if ($response->status() >= 400) {
+            throw ApiException::createFromResponse($response->toPsrResponse(), null);
         }
 
         return $object;

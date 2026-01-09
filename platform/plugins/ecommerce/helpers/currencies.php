@@ -2,6 +2,7 @@
 
 use Botble\Ecommerce\Facades\Currency as CurrencyFacade;
 use Botble\Ecommerce\Models\Currency;
+use Botble\Ecommerce\Repositories\Interfaces\CurrencyInterface;
 use Botble\Ecommerce\Supports\CurrencySupport;
 use Illuminate\Support\Collection;
 
@@ -14,14 +15,14 @@ if (! function_exists('format_price')) {
     ): string {
         if ($currency) {
             if (! $currency instanceof Currency) {
-                $currency = Currency::query()->find($currency);
+                $currency = app(CurrencyInterface::class)->getFirstBy(['id' => $currency]);
             }
 
             if (! $currency) {
                 return human_price_text($price, $currency);
             }
 
-            if ($currency->getKey() != get_application_currency_id() && $currency->exchange_rate > 0) {
+            if ($currency->id != get_application_currency_id() && $currency->exchange_rate > 0) {
                 $currentCurrency = get_application_currency();
 
                 if ($currentCurrency->is_default) {
@@ -45,11 +46,11 @@ if (! function_exists('format_price')) {
         }
 
         if ($withoutCurrency) {
-            return (string) $price;
+            return (string)$price;
         }
 
         if ($useSymbol && $currency->is_prefix_symbol) {
-            $space = (int) get_ecommerce_setting('add_space_between_price_and_currency', 0) == 1 ? ' ' : null;
+            $space = (int)get_ecommerce_setting('add_space_between_price_and_currency', 0) == 1 ? ' ' : null;
 
             return $currency->symbol . $space . human_price_text($price, $currency);
         }
@@ -59,24 +60,24 @@ if (! function_exists('format_price')) {
 }
 
 if (! function_exists('human_price_text')) {
-    function human_price_text(float|null|string $price, Currency|null|string $currency, ?string $priceUnit = ''): string
+    function human_price_text(float|null|string $price, Currency|null|string $currency, string $priceUnit = ''): string
     {
         $numberAfterDot = ($currency instanceof Currency) ? $currency->decimals : 0;
 
-        if ($convertNumberToText = config('plugins.ecommerce.general.display_big_money_in_million_billion')) {
+        if (config('plugins.ecommerce.general.display_big_money_in_million_billion')) {
             if ($price >= 1000000 && $price < 1000000000) {
                 $price = round($price / 1000000, 2) + 0;
                 $priceUnit = __('million') . ' ' . $priceUnit;
-                $numberAfterDot = strlen(substr(strrchr((string) $price, '.'), 1));
+                $numberAfterDot = strlen(substr(strrchr((string)$price, '.'), 1));
             } elseif ($price >= 1000000000) {
                 $price = round($price / 1000000000, 2) + 0;
                 $priceUnit = __('billion') . ' ' . $priceUnit;
-                $numberAfterDot = strlen(substr(strrchr((string) $price, '.'), 1));
+                $numberAfterDot = strlen(substr(strrchr((string)$price, '.'), 1));
             }
         }
 
         if (is_numeric($price)) {
-            $price = preg_replace('/[^0-9,.]/s', '', (string) $price);
+            $price = preg_replace('/[^0-9,.]/s', '', (string)$price);
         }
 
         $decimalSeparator = get_ecommerce_setting('decimal_separator', '.');
@@ -92,13 +93,13 @@ if (! function_exists('human_price_text')) {
         }
 
         $price = number_format(
-            (float) $price,
-            (int) $numberAfterDot,
+            (float)$price,
+            (int)$numberAfterDot,
             $decimalSeparator,
             $thousandSeparator
         );
 
-        $space = (int) get_ecommerce_setting('add_space_between_price_and_currency', 0) == 1 || $convertNumberToText ? ' ' : null;
+        $space = (int)get_ecommerce_setting('add_space_between_price_and_currency', 0) == 1 ? ' ' : null;
 
         return $price . $space . ($priceUnit ?: '');
     }
@@ -110,7 +111,7 @@ if (! function_exists('get_current_exchange_rate')) {
         if (! $currency) {
             $currency = get_application_currency();
         } elseif (! $currency instanceof Currency) {
-            $currency = Currency::query()->find($currency);
+            $currency = app(CurrencyInterface::class)->getFirstBy(['id' => $currency]);
         }
 
         if (! $currency->is_default && $currency->exchange_rate > 0) {
@@ -140,7 +141,7 @@ if (! function_exists('get_application_currency')) {
     {
         $currency = cms_currency()->getApplicationCurrency();
 
-        if (is_in_admin(true) || ! $currency) {
+        if (is_in_admin() || ! $currency) {
             $currency = cms_currency()->getDefaultCurrency();
         }
 
@@ -151,6 +152,6 @@ if (! function_exists('get_application_currency')) {
 if (! function_exists('get_application_currency_id')) {
     function get_application_currency_id(): int|string|null
     {
-        return get_application_currency()->getKey();
+        return get_application_currency()->id;
     }
 }

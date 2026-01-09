@@ -1,24 +1,17 @@
 <?php
 
-use Botble\Base\Facades\AdminHelper;
-use Botble\Payment\Http\Controllers\PaymentLogController;
+use Botble\Base\Facades\BaseHelper;
 use Illuminate\Support\Facades\Route;
 
-AdminHelper::registerRoutes(function (): void {
-    Route::group(['prefix' => 'payments/logs', 'as' => 'payments.logs.', 'permission' => 'payments.logs'], function (): void {
-        Route::match(['GET', 'POST'], '', [PaymentLogController::class, 'index'])->name('index');
-        Route::get('{paymentLog}', [PaymentLogController::class, 'show'])->name('show');
-        Route::delete('{paymentLog}', [PaymentLogController::class, 'destroy'])->name('destroy');
-    });
-
-    Route::group(['namespace' => 'Botble\Payment\Http\Controllers'], function (): void {
-        Route::group(['prefix' => 'payments/methods', 'permission' => 'payments.settings'], function (): void {
+Route::group(['namespace' => 'Botble\Payment\Http\Controllers', 'middleware' => ['web', 'core']], function () {
+    Route::group(['prefix' => BaseHelper::getAdminPrefix(), 'middleware' => 'auth'], function () {
+        Route::group(['prefix' => 'payments/methods', 'permission' => 'payments.settings'], function () {
             Route::get('', [
                 'as' => 'payments.methods',
                 'uses' => 'PaymentController@methods',
             ]);
 
-            Route::put('settings', [
+            Route::post('settings', [
                 'as' => 'payments.settings',
                 'uses' => 'PaymentController@updateSettings',
                 'middleware' => 'preventDemo',
@@ -37,19 +30,25 @@ AdminHelper::registerRoutes(function (): void {
             ]);
         });
 
-        Route::group(['prefix' => 'payments/transactions', 'as' => 'payment.'], function (): void {
+        Route::group(['prefix' => 'payments/transactions', 'as' => 'payment.'], function () {
             Route::resource('', 'PaymentController')->parameters(['' => 'payment'])->only(['index', 'destroy']);
 
-            Route::get('{payment}', [
+            Route::get('{chargeId}', [
                 'as' => 'show',
                 'uses' => 'PaymentController@show',
                 'permission' => 'payment.index',
             ]);
 
-            Route::put('{payment}', [
+            Route::put('{chargeId}', [
                 'as' => 'update',
                 'uses' => 'PaymentController@update',
                 'permission' => 'payment.index',
+            ]);
+
+            Route::delete('items/destroy', [
+                'as' => 'deletes',
+                'uses' => 'PaymentController@deletes',
+                'permission' => 'payment.destroy',
             ]);
 
             Route::get('refund-detail/{id}/{refundId}', [

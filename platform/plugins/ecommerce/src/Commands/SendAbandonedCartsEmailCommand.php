@@ -2,19 +2,24 @@
 
 namespace Botble\Ecommerce\Commands;
 
+use Botble\Ecommerce\Repositories\Interfaces\OrderInterface;
 use Botble\Base\Facades\EmailHandler;
-use Botble\Ecommerce\Facades\OrderHelper;
-use Botble\Ecommerce\Models\Order;
 use Illuminate\Console\Command;
+use Botble\Ecommerce\Facades\OrderHelper;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Throwable;
 
 #[AsCommand('cms:abandoned-carts:email', 'Send emails abandoned carts')]
 class SendAbandonedCartsEmailCommand extends Command
 {
+    public function __construct(protected OrderInterface $orderRepository)
+    {
+        parent::__construct();
+    }
+
     public function handle(): int
     {
-        $orders = Order::query()
+        $orders = $this->orderRepository->getModel()
             ->with(['user', 'address'])
             ->where('is_finished', 0)
             ->get();
@@ -31,10 +36,6 @@ class SendAbandonedCartsEmailCommand extends Command
             try {
                 $mailer = EmailHandler::setModule(ECOMMERCE_MODULE_SCREEN_NAME);
                 $order->dont_show_order_info_in_product_list = true;
-
-                /**
-                 * @var Order $order
-                 */
                 OrderHelper::setEmailVariables($order);
 
                 $mailer->sendUsingTemplate('order_recover', $email);
@@ -47,7 +48,7 @@ class SendAbandonedCartsEmailCommand extends Command
             }
         }
 
-        $this->components->info('Send ' . $count . ' email' . ($count != 1 ? 's' : '') . ' successfully!');
+        $this->info('Send ' . $count . ' email' . ($count != 1 ? 's' : '') . ' successfully!');
 
         return self::SUCCESS;
     }

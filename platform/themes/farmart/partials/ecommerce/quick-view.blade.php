@@ -2,26 +2,17 @@
     <div class="row">
         <div class="col-md-6">
             <div class="px-1 py-1 px-lg-5 py-lg-5 py-md-1 my-lg-5 my-md-1 my-2 mb-4">
-                <div class="bb-quick-view-gallery-images">
-                    @foreach ($productImages as $image)
-                        <a href="{{ RvMedia::getImageUrl($image) }}">
-                            {{ RvMedia::image($image, $product->name, 'medium') }}
-                        </a>
-                    @endforeach
-                </div>
+                {!! Theme::partial('ecommerce.product-gallery', compact('product', 'productImages')) !!}
             </div>
         </div>
         <div class="col-md-6">
-            <div class="product-modal-entry product-details js-product-content">
+            <div class="product-modal-entry product-details">
                 <div class="entry-product-header">
                     <div class="product-header-left">
-                        <h2 class="h3 product_title entry-title"><a href="{{ $product->url }}">{{ $product->name }}</a>
-                        </h2>
+                        <h2 class="h3 product_title entry-title"><a href="{{ $product->url }}">{!! BaseHelper::clean($product->name) !!}</a></h2>
                         <div class="product-entry-meta">
                             @if ($product->brand_id)
-                                <p class="mb-0 me-2 pe-2 text-secondary">{{ __('Brand') }}: <a
-                                        href="{{ $product->brand->url }}"
-                                    >{{ $product->brand->name }}</a></p>
+                                <p class="mb-0 me-2 pe-2 text-secondary">{{ __('Brand') }}: <a href="{{ $product->brand->url }}">{{ $product->brand->name }}</a></p>
                             @endif
 
                             @if (EcommerceHelper::isReviewEnabled())
@@ -50,39 +41,25 @@
                     {!! BaseHelper::clean($product->description) !!}
                     {!! apply_filters('ecommerce_after_product_description', null, $product) !!}
                 </div>
-                {!! Theme::partial(
-                    'ecommerce.product-cart-form',
-                    compact('product', 'wishlistIds', 'selectedAttrs') + [
-                        'withButtons' => true,
-                        'withVariations' => true,
-                        'withProductOptions' => true,
-                        'withBuyNow' => true,
-                    ],
-                ) !!}
+                {!! Theme::partial('ecommerce.product-cart-form', compact('product', 'wishlistIds', 'selectedAttrs') + ['withButtons' => true, 'withVariations' => true, 'withBuyNow' => true]) !!}
 
                 <div class="meta-sku @if (!$product->sku) d-none @endif">
-                    <span class="meta-label d-inline-block pe-2">{{ __('SKU') }}:</span>
+                    <span class="meta-label d-inline-block">{{ __('SKU') }}:</span>
                     <span class="meta-value">{{ $product->sku }}</span>
                 </div>
-                @if ($product->categories->isNotEmpty())
+                @if ($product->categories->count())
                     <div class="meta-categories">
-                        <span class="meta-label d-inline-block pe-2">{{ __('Categories') }}:</span>
-                        @foreach ($product->categories as $category)
-                            <a href="{{ $category->url }}">{{ $category->name }}</a>
-                            @if (!$loop->last)
-                                ,
-                            @endif
+                        <span class="meta-label d-inline-block">{{ __('Categories') }}:</span>
+                        @foreach($product->categories as $category)
+                            <a href="{{ $category->url }}">{!! BaseHelper::clean($category->name) !!}</a>@if (!$loop->last), @endif
                         @endforeach
                     </div>
                 @endif
-                @if ($product->tags->isNotEmpty())
+                @if ($product->tags->count())
                     <div class="meta-categories">
-                        <span class="meta-label d-inline-block pe-2">{{ __('Tags') }}:</span>
-                        @foreach ($product->tags as $tag)
-                            <a href="{{ $tag->url }}">{{ $tag->name }}</a>
-                            @if (!$loop->last)
-                                ,
-                            @endif
+                        <span class="meta-label d-inline-block">{{ __('Tags') }}:</span>
+                        @foreach($product->tags as $tag)
+                            <a href="{{ $tag->url }}">{{ $tag->name }}</a>@if (!$loop->last), @endif
                         @endforeach
                     </div>
                 @endif

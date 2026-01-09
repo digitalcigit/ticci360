@@ -9,8 +9,7 @@ class BulkChangeRequest extends Request
     public function rules(): array
     {
         return [
-            'key' => ['required', 'string'],
-            'class' => ['required', 'string'],
+            'class' => 'required|string',
         ];
     }
 }

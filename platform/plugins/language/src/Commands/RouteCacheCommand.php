@@ -2,11 +2,11 @@
 
 namespace Botble\Language\Commands;
 
-use Botble\Language\Facades\Language;
 use Botble\Language\LanguageManager;
-use Botble\Language\Traits\TranslatedRouteCommandContext;
 use Illuminate\Foundation\Console\RouteCacheCommand as BaseRouteCacheCommand;
+use Botble\Language\Traits\TranslatedRouteCommandContext;
 use Illuminate\Routing\RouteCollection;
+use Botble\Language\Facades\Language;
 
 class RouteCacheCommand extends BaseRouteCacheCommand
 {
@@ -32,7 +32,7 @@ class RouteCacheCommand extends BaseRouteCacheCommand
 
         $this->cacheRoutesPerLocale();
 
-        $this->components->info('Routes cached successfully for all locales!');
+        $this->info('Routes cached successfully for all locales!');
 
         return self::SUCCESS;
     }
@@ -45,19 +45,15 @@ class RouteCacheCommand extends BaseRouteCacheCommand
 
         $allLocales[] = null;
 
-        $defaultLocale = Language::getDefaultLocale();
-
-        $hideDefaultLocale = Language::hideDefaultLocaleInURL();
-
         foreach ($allLocales as $locale) {
-            if ($hideDefaultLocale && $locale == $defaultLocale) {
+            if (Language::hideDefaultLocaleInURL() && $locale == Language::getDefaultLocale()) {
                 continue;
             }
 
             $routes = $this->getFreshApplicationRoutesForLocale($locale);
 
-            if ($locale == null && $hideDefaultLocale) {
-                $defaultRoutesWithPrefix = $this->getFreshApplicationRoutesForLocale($defaultLocale, true);
+            if ($locale == null && Language::hideDefaultLocaleInURL()) {
+                $defaultRoutesWithPrefix = $this->getFreshApplicationRoutesForLocale(Language::getDefaultLocale(), true);
 
                 $newRoutes = new RouteCollection();
 
@@ -91,26 +87,19 @@ class RouteCacheCommand extends BaseRouteCacheCommand
         return self::SUCCESS;
     }
 
-    protected function getFreshApplicationRoutesForLocale(?string $locale = null, bool $force = false): RouteCollection
+    protected function getFreshApplicationRoutesForLocale(string|null $locale = null, bool $force = false): RouteCollection
     {
-        if (
-            $locale === null ||
-            (Language::hideDefaultLocaleInURL() && $locale == Language::getDefaultLocale() && ! $force)
-        ) {
+        if ($locale === null || (Language::hideDefaultLocaleInURL() && $locale == Language::getDefaultLocale() && ! $force)) {
             return $this->getFreshApplicationRoutes();
         }
 
         $key = LanguageManager::ENV_ROUTE_KEY;
 
-        if (function_exists('putenv')) {
-            putenv("{$key}={$locale}");
-        }
+        putenv("{$key}={$locale}");
 
         $routes = $this->getFreshApplicationRoutes();
 
-        if (function_exists('putenv')) {
-            putenv("{$key}=");
-        }
+        putenv("{$key}=");
 
         return $routes;
     }

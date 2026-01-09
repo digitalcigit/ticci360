@@ -2,11 +2,9 @@
 
 namespace Botble\Base\Repositories\Caches;
 
-use Botble\Base\Repositories\Eloquent\MetaBoxRepository;
+use Botble\Base\Repositories\Interfaces\MetaBoxInterface;
+use Botble\Support\Repositories\Caches\CacheAbstractDecorator;
 
-/**
- * @deprecated
- */
-class MetaBoxCacheDecorator extends MetaBoxRepository
+class MetaBoxCacheDecorator extends CacheAbstractDecorator implements MetaBoxInterface
 {
 }

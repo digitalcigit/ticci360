@@ -1,13 +1,13 @@
 @extends(BaseHelper::getAdminMasterLayoutTemplate())
 
-@push('header')
+@section('head')
     {!! RvMedia::renderHeader() !!}
-@endpush
+@endsection
 
 @section('content')
     {!! RvMedia::renderContent() !!}
 @endsection
 
-@push('footer')
+@section('javascript')
     {!! RvMedia::renderFooter() !!}
-@endpush
+@endsection

@@ -22,10 +22,6 @@ class EnvironmentManager
                 'default' => 'http:\/\/localhost',
                 'value' => $request->input('app_url'),
             ],
-            'FORCE_ROOT_URL' => [
-                'default' => 'https:\/\/your-domain.com',
-                'value' => $request->input('app_url'),
-            ],
             'DB_CONNECTION' => [
                 'default' => 'mysql',
                 'value' => $request->input('database_connection'),

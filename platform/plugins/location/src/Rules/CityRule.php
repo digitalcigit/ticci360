@@ -3,7 +3,7 @@
 namespace Botble\Location\Rules;
 
 use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Location\Models\City;
+use Botble\Location\Repositories\Interfaces\CityInterface;
 use Illuminate\Contracts\Validation\DataAwareRule;
 use Illuminate\Contracts\Validation\Rule;
 use Illuminate\Support\Arr;
@@ -12,7 +12,7 @@ class CityRule implements DataAwareRule, Rule
 {
     protected array $data = [];
 
-    public function __construct(protected ?string $stateKey = '')
+    public function __construct(protected string|null $stateKey = '')
     {
     }
 
@@ -30,11 +30,15 @@ class CityRule implements DataAwareRule, Rule
             'status' => BaseStatusEnum::PUBLISHED,
         ];
 
-        if ($this->stateKey && ($stateId = Arr::get($this->data, $this->stateKey))) {
+        if ($this->stateKey) {
+            $stateId = Arr::get($this->data, $this->stateKey);
+            if (! $stateId) {
+                return false;
+            }
             $condition['state_id'] = $stateId;
         }
 
-        return City::query()->where($condition)->exists();
+        return app(CityInterface::class)->getModel()->where($condition)->exists();
     }
 
     public function message(): string

@@ -2,11 +2,9 @@
 
 namespace Botble\Marketplace\Repositories\Caches;
 
-use Botble\Marketplace\Repositories\Eloquent\VendorInfoRepository;
+use Botble\Support\Repositories\Caches\CacheAbstractDecorator;
+use Botble\Marketplace\Repositories\Interfaces\VendorInfoInterface;
 
-/**
- * @deprecated
- */
-class VendorInfoCacheDecorator extends VendorInfoRepository
+class VendorInfoCacheDecorator extends CacheAbstractDecorator implements VendorInfoInterface
 {
 }

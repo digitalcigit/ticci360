@@ -11,16 +11,14 @@ class PayPalServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        if (! is_plugin_active('payment')) {
-            return;
+        if (is_plugin_active('payment')) {
+            $this->setNamespace('plugins/paypal')
+                ->loadHelpers()
+                ->loadRoutes()
+                ->loadAndPublishViews()
+                ->publishAssets();
+
+            $this->app->register(HookServiceProvider::class);
         }
-
-        $this->setNamespace('plugins/paypal')
-            ->loadHelpers()
-            ->loadRoutes()
-            ->loadAndPublishViews()
-            ->publishAssets();
-
-        $this->app->register(HookServiceProvider::class);
     }
 }

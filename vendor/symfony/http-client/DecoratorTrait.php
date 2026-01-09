@@ -23,23 +23,32 @@ use Symfony\Contracts\Service\ResetInterface;
  */
 trait DecoratorTrait
 {
-    private HttpClientInterface $client;
+    private $client;
 
-    public function __construct(?HttpClientInterface $client = null)
+    public function __construct(HttpClientInterface $client = null)
     {
         $this->client = $client ?? HttpClient::create();
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public function request(string $method, string $url, array $options = []): ResponseInterface
     {
         return $this->client->request($method, $url, $options);
     }
 
-    public function stream(ResponseInterface|iterable $responses, ?float $timeout = null): ResponseStreamInterface
+    /**
+     * {@inheritdoc}
+     */
+    public function stream(ResponseInterface|iterable $responses, float $timeout = null): ResponseStreamInterface
     {
         return $this->client->stream($responses, $timeout);
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public function withOptions(array $options): static
     {
         $clone = clone $this;
@@ -48,7 +57,7 @@ trait DecoratorTrait
         return $clone;
     }
 
-    public function reset(): void
+    public function reset()
     {
         if ($this->client instanceof ResetInterface) {
             $this->client->reset();

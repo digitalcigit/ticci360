@@ -5,11 +5,10 @@ namespace Botble\Language\Commands;
 use Botble\Language\LanguageManager;
 use Botble\Language\Traits\TranslatedRouteCommandContext;
 use Illuminate\Contracts\Console\Kernel;
-use Illuminate\Contracts\Console\PromptsForMissingInput;
 use Illuminate\Foundation\Console\RouteListCommand;
 use Symfony\Component\Console\Input\InputArgument;
 
-class RouteTranslationsListCommand extends RouteListCommand implements PromptsForMissingInput
+class RouteTranslationsListCommand extends RouteListCommand
 {
     use TranslatedRouteCommandContext;
 
@@ -22,7 +21,7 @@ class RouteTranslationsListCommand extends RouteListCommand implements PromptsFo
         $locale = $this->argument('locale');
 
         if (! $this->isSupportedLocale($locale)) {
-            $this->components->error("Unsupported locale: '$locale'.");
+            $this->error("Unsupported locale: '{$locale}'.");
 
             return self::FAILURE;
         }
@@ -40,21 +39,19 @@ class RouteTranslationsListCommand extends RouteListCommand implements PromptsFo
 
         $key = LanguageManager::ENV_ROUTE_KEY;
 
-        if (function_exists('putenv')) {
-            putenv("{$key}={$locale}");
-        }
+        putenv("{$key}={$locale}");
 
         $app->make(Kernel::class)->bootstrap();
 
-        if (function_exists('putenv')) {
-            putenv("{$key}=");
-        }
+        putenv("{$key}=");
 
         $this->router = $app['router'];
     }
 
-    protected function configure(): void
+    protected function getArguments(): array
     {
-        $this->addArgument('locale', InputArgument::REQUIRED, 'The locale to list routes for.');
+        return [
+            ['locale', InputArgument::REQUIRED, 'The locale to list routes for.'],
+        ];
     }
 }

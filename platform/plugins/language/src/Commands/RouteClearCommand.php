@@ -2,8 +2,8 @@
 
 namespace Botble\Language\Commands;
 
-use Botble\Language\Facades\Language;
 use Illuminate\Foundation\Console\RouteClearCommand as BaseRouteClearCommand;
+use Botble\Language\Facades\Language;
 
 class RouteClearCommand extends BaseRouteClearCommand
 {
@@ -11,12 +11,12 @@ class RouteClearCommand extends BaseRouteClearCommand
     {
         parent::handle();
 
-        $defaultLocale = Language::getDefaultLocale();
-
         foreach (Language::getSupportedLanguagesKeys() as $locale) {
             $path = $this->laravel->getCachedRoutesPath();
 
-            $locale = $locale ?: $defaultLocale;
+            if (! $locale) {
+                $locale = Language::getDefaultLocale();
+            }
 
             $path = substr($path, 0, -4) . '_' . $locale . '.php';
 

@@ -7,7 +7,8 @@ use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Ecommerce\Enums\ShippingStatusEnum;
 use Botble\Ecommerce\Models\Order;
 use Botble\Ecommerce\Models\Shipment;
-use Botble\Ecommerce\Models\ShipmentHistory;
+use Botble\Ecommerce\Repositories\Interfaces\ShipmentHistoryInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ShipmentInterface;
 use Botble\Payment\Enums\PaymentMethodEnum;
 use Botble\Shippo\Shippo;
 use Exception;
@@ -21,8 +22,11 @@ class ShippoController extends BaseController
 {
     protected string|int|null $userId = 0;
 
-    public function __construct(protected Shippo $shippo)
-    {
+    public function __construct(
+        protected ShipmentInterface $shipmentRepository,
+        protected ShipmentHistoryInterface $shipmentHistoryRepository,
+        protected Shippo $shippo
+    ) {
         if (is_in_admin(true) && Auth::check()) {
             $this->userId = Auth::id();
         }
@@ -30,10 +34,7 @@ class ShippoController extends BaseController
 
     public function show(int $id, BaseHttpResponse $response)
     {
-        /**
-         * @var Shipment $shipment
-         */
-        $shipment = Shipment::query()->findOrFail($id);
+        $shipment = $this->shipmentRepository->findOrFail($id);
         $this->check($shipment);
 
         $order = $shipment->order;
@@ -96,14 +97,13 @@ class ShippoController extends BaseController
 
     public function createTransaction(int $id, BaseHttpResponse $response)
     {
-        /**
-         * @var Shipment $shipment
-         */
-        $shipment = Shipment::query()->findOrFail($id);
+        $shipment = $this->shipmentRepository->findOrFail($id);
 
         $this->check($shipment);
 
-        abort_unless($this->shippo->canCreateTransaction($shipment), 404);
+        if (! $this->shippo->canCreateTransaction($shipment)) {
+            abort(404);
+        }
 
         $message = trans('plugins/shippo::shippo.transaction.created_success');
 
@@ -120,7 +120,7 @@ class ShippoController extends BaseController
                 $shipment->status = ShippingStatusEnum::READY_TO_BE_SHIPPED_OUT;
                 $shipment->save();
 
-                ShipmentHistory::query()->create([
+                $this->shipmentHistoryRepository->createOrUpdate([
                     'action' => 'create_transaction',
                     'description' => trans('plugins/shippo::shippo.transaction.created', [
                         'tracking' => Arr::get($transaction, 'tracking_number'),
@@ -130,7 +130,7 @@ class ShippoController extends BaseController
                     'shipment_id' => $shipment->id,
                 ]);
 
-                ShipmentHistory::query()->create([
+                $this->shipmentHistoryRepository->createOrUpdate([
                     'action' => 'update_status',
                     'description' => trans('plugins/ecommerce::shipping.changed_shipping_status', [
                         'status' => ShippingStatusEnum::getLabel(ShippingStatusEnum::READY_TO_BE_SHIPPED_OUT),
@@ -182,10 +182,7 @@ class ShippoController extends BaseController
 
     public function getRates(int $id, BaseHttpResponse $response)
     {
-        /**
-         * @var Shipment $shipment
-         */
-        $shipment = Shipment::query()->findOrFail($id);
+        $shipment = $this->shipmentRepository->findOrFail($id);
 
         $this->check($shipment);
 
@@ -226,10 +223,7 @@ class ShippoController extends BaseController
 
     public function updateRate(int $id, Request $request, BaseHttpResponse $response)
     {
-        /**
-         * @var Shipment $shipment
-         */
-        $shipment = Shipment::query()->findOrFail($id);
+        $shipment = $this->shipmentRepository->findOrFail($id);
 
         $this->check($shipment);
 
@@ -287,23 +281,23 @@ class ShippoController extends BaseController
             $vendor = auth('customer')->user();
             $store = $vendor->store;
 
-            abort_if($store->id != $order->store_id, 403);
+            if ($store->id != $order->store_id) {
+                abort(403);
+            }
         }
 
-        abort_if(! $order
-        || ! $order->id
-        || $order->shipping_method->getValue() != SHIPPO_SHIPPING_METHOD_NAME
-        || ! $shipment->shipment_id, 404);
+        if (! $order
+            || ! $order->id
+            || $order->shipping_method->getValue() != SHIPPO_SHIPPING_METHOD_NAME
+            || ! $shipment->shipment_id) {
+            abort(404);
+        }
 
         return true;
     }
 
     public function viewLog(string $logFile)
     {
-        $logPath = storage_path('logs/' . $logFile);
-
-        abort_unless(File::exists($logPath), 404);
-
-        return nl2br(File::get($logPath));
+        return nl2br(File::get(storage_path('logs/' . $logFile)));
     }
 }

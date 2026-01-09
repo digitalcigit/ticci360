@@ -1,4 +1,3 @@
-<x-core::tab.item
-    id="tab_payout_info"
-    :label="__('Payout info')"
-/>
+<li class="nav-item">
+    <a href="#tab_payout_info" class="nav-link" data-bs-toggle="tab">{{ __('Payout info') }} </a>
+</li>

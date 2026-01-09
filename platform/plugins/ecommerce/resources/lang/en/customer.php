@@ -30,6 +30,4 @@ return [
         'approve_here' => 'click here',
         'confirm_button' => 'Verify',
     ],
-    'private_notes' => 'Private notes',
-    'private_notes_helper' => 'Private notes are only visible to admins.',
 ];

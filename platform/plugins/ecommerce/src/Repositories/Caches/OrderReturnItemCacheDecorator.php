@@ -2,11 +2,9 @@
 
 namespace Botble\Ecommerce\Repositories\Caches;
 
-use Botble\Ecommerce\Repositories\Eloquent\OrderReturnItemRepository;
+use Botble\Ecommerce\Repositories\Interfaces\OrderReturnItemInterface;
+use Botble\Support\Repositories\Caches\CacheAbstractDecorator;
 
-/**
- * @deprecated
- */
-class OrderReturnItemCacheDecorator extends OrderReturnItemRepository
+class OrderReturnItemCacheDecorator extends CacheAbstractDecorator implements OrderReturnItemInterface
 {
 }

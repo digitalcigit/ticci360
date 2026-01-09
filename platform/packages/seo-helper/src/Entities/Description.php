@@ -71,7 +71,7 @@ class Description implements DescriptionContract
     public function set($content)
     {
         if ($content) {
-            $this->content = trim(strip_tags(BaseHelper::cleanShortcodes((string) $content)));
+            $this->content = trim(strip_tags(BaseHelper::cleanShortcodes((string)$content)));
         }
 
         return $this;
@@ -104,9 +104,15 @@ class Description implements DescriptionContract
         return $this;
     }
 
-    public static function make(): self
+    /**
+     * Make a description instance.
+     *
+     * @param string $content
+     * @param int $max
+     */
+    public static function make($content, $max = 386): self
     {
-        return app(Description::class);
+        return new self();
     }
 
     /**

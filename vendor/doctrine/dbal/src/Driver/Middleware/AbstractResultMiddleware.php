@@ -1,39 +1,44 @@
 <?php
 
-declare(strict_types=1);
-
 namespace Doctrine\DBAL\Driver\Middleware;
 
 use Doctrine\DBAL\Driver\Result;
-use LogicException;
-
-use function get_debug_type;
-use function method_exists;
-use function sprintf;
 
 abstract class AbstractResultMiddleware implements Result
 {
-    public function __construct(private readonly Result $wrappedResult)
+    private Result $wrappedResult;
+
+    public function __construct(Result $result)
     {
+        $this->wrappedResult = $result;
     }
 
-    public function fetchNumeric(): array|false
+    /**
+     * {@inheritdoc}
+     */
+    public function fetchNumeric()
     {
         return $this->wrappedResult->fetchNumeric();
     }
 
-    public function fetchAssociative(): array|false
+    /**
+     * {@inheritdoc}
+     */
+    public function fetchAssociative()
     {
         return $this->wrappedResult->fetchAssociative();
     }
 
-    public function fetchOne(): mixed
+    /**
+     * {@inheritdoc}
+     */
+    public function fetchOne()
     {
         return $this->wrappedResult->fetchOne();
     }
 
     /**
-     * {@inheritDoc}
+     * {@inheritdoc}
      */
     public function fetchAllNumeric(): array
     {
@@ -41,7 +46,7 @@ abstract class AbstractResultMiddleware implements Result
     }
 
     /**
-     * {@inheritDoc}
+     * {@inheritdoc}
      */
     public function fetchAllAssociative(): array
     {
@@ -49,14 +54,14 @@ abstract class AbstractResultMiddleware implements Result
     }
 
     /**
-     * {@inheritDoc}
+     * {@inheritdoc}
      */
     public function fetchFirstColumn(): array
     {
         return $this->wrappedResult->fetchFirstColumn();
     }
 
-    public function rowCount(): int|string
+    public function rowCount(): int
     {
         return $this->wrappedResult->rowCount();
     }
@@ -64,18 +69,6 @@ abstract class AbstractResultMiddleware implements Result
     public function columnCount(): int
     {
         return $this->wrappedResult->columnCount();
-    }
-
-    public function getColumnName(int $index): string
-    {
-        if (! method_exists($this->wrappedResult, 'getColumnName')) {
-            throw new LogicException(sprintf(
-                'The driver result %s does not support accessing the column name.',
-                get_debug_type($this->wrappedResult),
-            ));
-        }
-
-        return $this->wrappedResult->getColumnName($index);
     }
 
     public function free(): void

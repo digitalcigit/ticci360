@@ -1,35 +1,24 @@
 @if (count($browsers) > 0)
-    <div class="table-responsive">
-        <x-core::table>
-            <x-core::table.header>
-                <x-core::table.header.cell>
-                    #
-                </x-core::table.header.cell>
-                <x-core::table.header.cell>
-                    {{ trans('plugins/analytics::analytics.browser') }}
-                </x-core::table.header.cell>
-                <x-core::table.header.cell class="text-end">
-                    {{ trans('plugins/analytics::analytics.sessions') }}
-                </x-core::table.header.cell>
-            </x-core::table.header>
-
-            <x-core::table.body>
+    <div class="scroller">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>{{ trans('core/base::tables.browser') }}</th>
+                    <th>{{ trans('core/base::tables.session') }}</th>
+                </tr>
+            </thead>
+            <tbody>
                 @foreach ($browsers as $browser)
-                    <x-core::table.body.row>
-                        <x-core::table.body.cell>
-                            {{ $loop->index + 1 }}
-                        </x-core::table.body.cell>
-                        <x-core::table.body.cell>
-                            {{ $browser['browser'] }}
-                        </x-core::table.body.cell>
-                        <x-core::table.body.cell class="text-end">
-                            {{ number_format($browser['sessions']) }}
-                        </x-core::table.body.cell>
-                    </x-core::table.body.row>
+                    <tr>
+                        <td>{{ $loop->index + 1 }}</td>
+                        <td class="text-start">{{ $browser['browser'] }}</td>
+                        <td>{{ $browser['sessions'] }} ({{ trans('plugins/analytics::analytics.sessions') }})</td>
+                    </tr>
                 @endforeach
-            </x-core::table.body>
-        </x-core::table>
+            </tbody>
+        </table>
     </div>
 @else
-    <x-core::empty-state :title="__('No results found')" />
+    @include('core/dashboard::partials.no-data')
 @endif

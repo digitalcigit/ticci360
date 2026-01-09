@@ -2,14 +2,10 @@
 
 namespace Botble\Widget;
 
-use Botble\Theme\Facades\Theme;
-use Botble\Widget\Facades\WidgetGroup as WidgetGroupFacade;
-use Botble\Widget\Forms\WidgetForm;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Botble\Theme\Facades\Theme;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\View;
-use Illuminate\Support\Str;
 use ReflectionClass;
 
 abstract class AbstractWidget
@@ -22,13 +18,11 @@ abstract class AbstractWidget
 
     private string $backendTemplate = 'backend';
 
-    protected ?string $theme = null;
+    protected string|null $theme = null;
 
     protected array|Collection $data = [];
 
     protected bool $loaded = false;
-
-    protected ?WidgetGroup $group = null;
 
     public function __construct(array $config = [])
     {
@@ -37,19 +31,15 @@ abstract class AbstractWidget
         }
     }
 
-    public function getWidgetDirectory(): ?string
+    public function getWidgetDirectory(): string|null
     {
         $reflection = new ReflectionClass($this);
 
         return File::basename(File::dirname($reflection->getFilename()));
     }
 
-    public function getConfig(string $name = null, $default = null): array|int|string|null
+    public function getConfig(): array
     {
-        if ($name) {
-            return Arr::get($this->config, $name, $default);
-        }
-
         return $this->config;
     }
 
@@ -62,12 +52,8 @@ abstract class AbstractWidget
      * Treat this method as a controller action.
      * Return view() or other content to display.
      */
-    public function run(): ?string
+    public function run(): string|null
     {
-        if ($this->checkIfMissingPlugins()) {
-            return '';
-        }
-
         $widgetGroup = app('botble.widget-group-collection');
         $widgetGroup->load();
         $widgetGroupData = $widgetGroup->getData();
@@ -75,12 +61,9 @@ abstract class AbstractWidget
         Theme::uses(Theme::getThemeName());
 
         $args = func_get_args();
-
-        $this->group = WidgetGroupFacade::group($args[0]);
-
         $data = $widgetGroupData
             ->where('widget_id', $this->getId())
-            ->where('sidebar_id', $this->group->getId())
+            ->where('sidebar_id', $args[0])
             ->where('position', $args[1])
             ->first();
 
@@ -91,18 +74,15 @@ abstract class AbstractWidget
         $viewData = array_merge([
             'config' => $this->config,
             'sidebar' => $args[0],
-            'position' => $data->position,
-            'widgetId' => $data->widget_id,
         ], $this->data());
 
         $html = null;
 
         $widgetDirectory = $this->getWidgetDirectory();
-        $namespace = Str::afterLast($this->frontendTemplate, '.');
 
-        if (View::exists(Theme::getThemeNamespace('widgets.' . $widgetDirectory . '.templates.' . $namespace))) {
+        if (View::exists(Theme::getThemeNamespace('widgets.' . $widgetDirectory . '.templates.' . $this->frontendTemplate))) {
             $html = Theme::loadPartial(
-                $namespace,
+                $this->frontendTemplate,
                 Theme::getThemeNamespace('/../widgets/' . $widgetDirectory . '/templates'),
                 $viewData
             );
@@ -115,15 +95,11 @@ abstract class AbstractWidget
 
     public function getId(): string
     {
-        return $this::class;
+        return get_class($this);
     }
 
-    public function form(?string $sidebarId = null, int $position = 0): ?string
+    public function form(string|null $sidebarId = null, int $position = 0): string|null
     {
-        if ($this->checkIfMissingPlugins()) {
-            return '';
-        }
-
         Theme::uses(Theme::getThemeName());
 
         if (! empty($sidebarId)) {
@@ -142,19 +118,11 @@ abstract class AbstractWidget
             }
         }
 
-        $settingForm = $this->settingForm();
-
-        return $settingForm instanceof WidgetForm ? $settingForm->renderForm() : $settingForm;
-    }
-
-    protected function settingForm(): WidgetForm|string|null
-    {
         $widgetDirectory = $this->getWidgetDirectory();
-        $namespace = Str::afterLast($this->backendTemplate, '.');
 
-        if (View::exists(Theme::getThemeNamespace('widgets.' . $widgetDirectory . '.templates.' . $namespace))) {
+        if (View::exists(Theme::getThemeNamespace('widgets.' . $widgetDirectory . '.templates.' . $this->backendTemplate))) {
             return Theme::loadPartial(
-                $namespace,
+                $this->backendTemplate,
                 Theme::getThemeNamespace('/../widgets/' . $widgetDirectory . '/templates'),
                 array_merge([
                     'config' => $this->config,
@@ -188,36 +156,5 @@ abstract class AbstractWidget
         $this->frontendTemplate = $template;
 
         return $this;
-    }
-
-    public function getGroup(): ?WidgetGroup
-    {
-        return $this->group;
-    }
-
-    protected function requiredPlugins(): array
-    {
-        return [];
-    }
-
-    protected function checkIfMissingPlugins(): bool
-    {
-        if (! empty($this->requiredPlugins())) {
-            foreach ($this->requiredPlugins() as $plugin) {
-                if (! is_plugin_active($plugin)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    protected function setConfigs(array $config): void
-    {
-        $this->config = [
-            ...$this->config,
-            ...$config,
-        ];
     }
 }

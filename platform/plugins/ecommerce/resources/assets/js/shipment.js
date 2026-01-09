@@ -1,36 +1,48 @@
 class ShipmentManagement {
     init() {
-        $(document).on('click', '[data-bb-toggle="update-shipping-status"]', () => {
-            $('#update-shipping-status-modal').modal('show')
-        })
-
-        $(document).on('click', '[data-bb-toggle="update-shipping-cod-status"]', () => {
-            $('#update-shipping-cod-status-modal').modal('show')
-        })
-
-        $(document).on('click', '#confirm-update-shipping-status-button', (event) => {
+        $(document).on('click', '.shipment-actions .dropdown-menu a', event => {
             event.preventDefault()
+            let _self = $(event.currentTarget)
+            $('#confirm-change-shipment-status-button').data('target', _self.data('target')).data('status', _self.data('value'))
+            let $modal = $('#confirm-change-status-modal')
+            $modal.find('.shipment-status-label').text(_self.text().toLowerCase())
+            $modal.modal('show')
+        })
 
-            const _self = $(event.currentTarget)
-            const form = _self.closest('.modal-dialog').find('form')
+        $(document).on('click', '#confirm-change-shipment-status-button', event => {
+            event.preventDefault()
+            let _self = $(event.currentTarget)
 
-            $httpClient
-                .make()
-                .withButtonLoading(_self)
-                .post(form.prop('action'), form.serialize())
-                .then(({ data }) => {
-                    if (!data.error) {
-                        $('.page-body').load(`${window.location.href} .page-body > *`)
-                        Botble.showSuccess(data.message)
-                        _self.closest('.modal').modal('hide')
+            _self.addClass('button-loading')
+
+            $.ajax({
+                type: 'POST',
+                cache: false,
+                url: _self.data('target'),
+                data: {
+                    status: _self.data('status'),
+                },
+                success: res => {
+                    if (!res.error) {
+                        Botble.showSuccess(res.message)
+                        $('.max-width-1200').load(window.location.href + ' .max-width-1200 > *', () => {
+                            $('#confirm-change-status-modal').modal('hide')
+                            _self.removeClass('button-loading')
+                        })
                     } else {
-                        Botble.showError(data.message)
+                        Botble.showError(res.message)
+                        _self.removeClass('button-loading')
                     }
-                })
+                },
+                error: res => {
+                    Botble.handleError(res)
+                    _self.removeClass('button-loading')
+                },
+            })
         })
     }
 }
 
-$(() => {
+$(document).ready(() => {
     new ShipmentManagement().init()
 })

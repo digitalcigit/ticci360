@@ -1,12 +1,7 @@
 {
     "name": "tightenco/ziggy",
-    "description": "Use your Laravel named routes in JavaScript.",
-    "keywords": [
-        "laravel",
-        "routes",
-        "javascript",
-        "ziggy"
-    ],
+    "description": "Generates a Blade directive exporting all of your named Laravel routes. Also provides a nice route() helper function in JavaScript.",
+    "keywords": ["laravel", "routes", "javascript", "ziggy"],
     "homepage": "https://github.com/tighten/ziggy",
     "license": "MIT",
     "authors": [
@@ -24,19 +19,16 @@
         }
     ],
     "require": {
-        "php": ">=8.1",
         "ext-json": "*",
-        "laravel/framework": ">=9.0"
+        "laravel/framework": ">=5.4@dev"
     },
     "require-dev": {
-        "laravel/folio": "^1.1",
-        "orchestra/testbench": "^7.0 || ^8.0 || ^9.0 || ^10.0",
-        "pestphp/pest": "^2.26|^3.0",
-        "pestphp/pest-plugin-laravel": "^2.4|^3.0"
+        "orchestra/testbench": "^3.0 || ^4.0 || ^5.0 || ^6.0 || ^7.0 || ^8.0",
+        "phpunit/phpunit": "^6.0 || ^7.0 || ^8.0 || ^9.0"
     },
     "autoload": {
         "psr-4": {
-            "Tighten\\Ziggy\\": "src/"
+            "Tightenco\\Ziggy\\": "src/"
         }
     },
     "autoload-dev": {
@@ -47,16 +39,13 @@
     "extra": {
         "laravel": {
             "providers": [
-                "Tighten\\Ziggy\\ZiggyServiceProvider"
+                "Tightenco\\Ziggy\\ZiggyServiceProvider"
             ]
         }
     },
     "config": {
-        "optimize-autoloader": true,
-        "sort-packages": true,
         "allow-plugins": {
-            "kylekatarnls/update-helper": true,
-            "pestphp/pest-plugin": true
+            "kylekatarnls/update-helper": true
         }
     },
     "minimum-stability": "dev",

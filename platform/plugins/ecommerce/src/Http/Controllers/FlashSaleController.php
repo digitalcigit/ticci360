@@ -4,65 +4,53 @@ namespace Botble\Ecommerce\Http\Controllers;
 
 use Botble\Base\Events\BeforeEditContentEvent;
 use Botble\Base\Events\CreatedContentEvent;
+use Botble\Base\Events\DeletedContentEvent;
 use Botble\Base\Events\UpdatedContentEvent;
-use Botble\Base\Http\Actions\DeleteResourceAction;
-use Botble\Base\Supports\Breadcrumb;
-use Botble\Ecommerce\Facades\FlashSale as FlashSaleFacade;
+use Botble\Base\Facades\PageTitle;
+use Botble\Base\Forms\FormBuilder;
+use Botble\Base\Http\Controllers\BaseController;
+use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Ecommerce\Forms\FlashSaleForm;
 use Botble\Ecommerce\Http\Requests\FlashSaleRequest;
 use Botble\Ecommerce\Models\FlashSale;
+use Botble\Ecommerce\Repositories\Interfaces\FlashSaleInterface;
 use Botble\Ecommerce\Tables\FlashSaleTable;
-use Closure;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 
 class FlashSaleController extends BaseController
 {
-    public function __construct()
+    public function __construct(protected FlashSaleInterface $flashSaleRepository)
     {
-        $this->middleware(function (Request $request, Closure $next) {
-            abort_unless(FlashSaleFacade::isEnabled(), 404);
-
-            return $next($request);
-        });
-    }
-
-    protected function breadcrumb(): Breadcrumb
-    {
-        return parent::breadcrumb()
-            ->add(trans('plugins/ecommerce::flash-sale.name'), route('flash-sale.index'));
     }
 
     public function index(FlashSaleTable $table)
     {
-        $this->pageTitle(trans('plugins/ecommerce::flash-sale.name'));
+        PageTitle::setTitle(trans('plugins/ecommerce::flash-sale.name'));
 
         return $table->renderTable();
     }
 
-    public function create()
+    public function create(FormBuilder $formBuilder)
     {
-        $this->pageTitle(trans('plugins/ecommerce::flash-sale.create'));
+        PageTitle::setTitle(trans('plugins/ecommerce::flash-sale.create'));
 
-        return FlashSaleForm::create()->renderForm();
+        return $formBuilder->create(FlashSaleForm::class)->renderForm();
     }
 
-    public function store(FlashSaleRequest $request)
+    public function store(FlashSaleRequest $request, BaseHttpResponse $response)
     {
-        /**
-         * @var FlashSale $flashSale
-         */
-        $flashSale = FlashSale::query()->create($request->input());
+        $flashSale = $this->flashSaleRepository->createOrUpdate($request->input());
 
         event(new CreatedContentEvent(FLASH_SALE_MODULE_SCREEN_NAME, $request, $flashSale));
 
         $this->storeProducts($request, $flashSale);
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setPreviousUrl(route('flash-sale.index'))
             ->setNextUrl(route('flash-sale.edit', $flashSale->id))
-            ->withCreatedSuccessMessage();
+            ->setMessage(trans('core/base::notices.create_success_message'));
     }
 
     protected function storeProducts(FlashSaleRequest $request, FlashSale $flashSale)
@@ -72,7 +60,7 @@ class FlashSaleController extends BaseController
         $flashSale->products()->detach();
 
         foreach ($products as $index => $productId) {
-            if (! (int) $productId) {
+            if (! (int)$productId) {
                 continue;
             }
 
@@ -82,11 +70,11 @@ class FlashSaleController extends BaseController
                 continue;
             }
 
-            $extra['price'] = (float) $extra['price'];
-            $extra['quantity'] = (int) $extra['quantity'];
+            $extra['price'] = (float)$extra['price'];
+            $extra['quantity'] = (int)$extra['quantity'];
 
             if ($flashSale->products()->where('id', $productId)->count()) {
-                $flashSale->products()->sync([(int) $productId => $extra]);
+                $flashSale->products()->sync([(int)$productId => $extra]);
             } else {
                 $flashSale->products()->attach($productId, $extra);
             }
@@ -95,32 +83,66 @@ class FlashSaleController extends BaseController
         return count($products);
     }
 
-    public function edit(FlashSale $flashSale, Request $request)
+    public function edit(int|string $id, FormBuilder $formBuilder, Request $request)
     {
+        $flashSale = $this->flashSaleRepository->findOrFail($id);
+
         event(new BeforeEditContentEvent($request, $flashSale));
 
-        $this->pageTitle(trans('core/base::forms.edit_item', ['name' => $flashSale->name]));
+        PageTitle::setTitle(trans('core/base::forms.edit_item', ['name' => $flashSale->name]));
 
-        return FlashSaleForm::createFromModel($flashSale)->renderForm();
+        return $formBuilder->create(FlashSaleForm::class, ['model' => $flashSale])->renderForm();
     }
 
-    public function update(FlashSale $flashSale, FlashSaleRequest $request)
+    public function update(int|string $id, FlashSaleRequest $request, BaseHttpResponse $response)
     {
+        $flashSale = $this->flashSaleRepository->findOrFail($id);
+
         $flashSale->fill($request->input());
-        $flashSale->save();
+
+        $this->flashSaleRepository->createOrUpdate($flashSale);
 
         $this->storeProducts($request, $flashSale);
 
         event(new UpdatedContentEvent(FLASH_SALE_MODULE_SCREEN_NAME, $request, $flashSale));
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setPreviousUrl(route('flash-sale.index'))
-            ->withUpdatedSuccessMessage();
+            ->setMessage(trans('core/base::notices.update_success_message'));
     }
 
-    public function destroy(FlashSale $flashSale)
+    public function destroy(int|string $id, Request $request, BaseHttpResponse $response)
     {
-        return DeleteResourceAction::make($flashSale);
+        try {
+            $flashSale = $this->flashSaleRepository->findOrFail($id);
+
+            $this->flashSaleRepository->delete($flashSale);
+
+            event(new DeletedContentEvent(FLASH_SALE_MODULE_SCREEN_NAME, $request, $flashSale));
+
+            return $response->setMessage(trans('core/base::notices.delete_success_message'));
+        } catch (Exception $exception) {
+            return $response
+                ->setError()
+                ->setMessage($exception->getMessage());
+        }
+    }
+
+    public function deletes(Request $request, BaseHttpResponse $response)
+    {
+        $ids = $request->input('ids');
+        if (empty($ids)) {
+            return $response
+                ->setError()
+                ->setMessage(trans('core/base::notices.no_select'));
+        }
+
+        foreach ($ids as $id) {
+            $flashSale = $this->flashSaleRepository->findOrFail($id);
+            $this->flashSaleRepository->delete($flashSale);
+            event(new DeletedContentEvent(FLASH_SALE_MODULE_SCREEN_NAME, $request, $flashSale));
+        }
+
+        return $response->setMessage(trans('core/base::notices.delete_success_message'));
     }
 }

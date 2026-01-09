@@ -35,7 +35,6 @@ use Exception;
 use Google\ApiCore\Call;
 use Google\ApiCore\ValidationException;
 use Google\Auth\HttpHandler\HttpHandlerFactory;
-use Psr\Log\LoggerInterface;
 
 /**
  * A trait for shared functionality between transports that support only unary RPCs using simple
@@ -110,8 +109,7 @@ trait HttpUnaryTransportTrait
             // Prevent unexpected behavior, as the authorization header callback
             // uses lowercase "authorization"
             unset($headers['authorization']);
-            // Mitigate scenario where InsecureCredentialsWrapper returns null.
-            $authHeaders = empty($callback) ? [] : $callback();
+            $authHeaders = $callback();
             if (!is_array($authHeaders)) {
                 throw new \UnexpectedValueException(
                     'Expected array response from authorization header callback'
@@ -127,12 +125,12 @@ trait HttpUnaryTransportTrait
      * @return callable
      * @throws ValidationException
      */
-    private static function buildHttpHandlerAsync(null|false|LoggerInterface $logger = null)
+    private static function buildHttpHandlerAsync()
     {
         try {
-            return [HttpHandlerFactory::build(logger: $logger), 'async'];
+            return [HttpHandlerFactory::build(), 'async'];
         } catch (Exception $ex) {
-            throw new ValidationException('Failed to build HttpHandler', $ex->getCode(), $ex);
+            throw new ValidationException("Failed to build HttpHandler", $ex->getCode(), $ex);
         }
     }
 

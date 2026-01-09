@@ -8,7 +8,6 @@ use Illuminate\Contracts\Queue\QueueableEntity;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Relations\Concerns\AsPivot;
 use Illuminate\Database\Eloquent\Relations\Pivot;
-use Illuminate\Support\Collection;
 
 trait SerializesAndRestoresModelIdentifiers
 {
@@ -16,16 +15,15 @@ trait SerializesAndRestoresModelIdentifiers
      * Get the property value prepared for serialization.
      *
      * @param  mixed  $value
-     * @param  bool  $withRelations
      * @return mixed
      */
-    protected function getSerializedPropertyValue($value, $withRelations = true)
+    protected function getSerializedPropertyValue($value)
     {
         if ($value instanceof QueueableCollection) {
             return (new ModelIdentifier(
                 $value->getQueueableClass(),
                 $value->getQueueableIds(),
-                $withRelations ? $value->getQueueableRelations() : [],
+                $value->getQueueableRelations(),
                 $value->getQueueableConnection()
             ))->useCollectionClass(
                 ($collectionClass = get_class($value)) !== EloquentCollection::class
@@ -38,7 +36,7 @@ trait SerializesAndRestoresModelIdentifiers
             return new ModelIdentifier(
                 get_class($value),
                 $value->getQueueableId(),
-                $withRelations ? $value->getQueueableRelations() : [],
+                $value->getQueueableRelations(),
                 $value->getQueueableConnection()
             );
         }
@@ -59,8 +57,8 @@ trait SerializesAndRestoresModelIdentifiers
         }
 
         return is_array($value->id)
-            ? $this->restoreCollection($value)
-            : $this->restoreModel($value);
+                ? $this->restoreCollection($value)
+                : $this->restoreModel($value);
     }
 
     /**
@@ -91,9 +89,9 @@ trait SerializesAndRestoresModelIdentifiers
         $collectionClass = get_class($collection);
 
         return new $collectionClass(
-            (new Collection($value->id))
-                ->map(fn ($id) => $collection[$id] ?? null)
-                ->filter()
+            collect($value->id)->map(function ($id) use ($collection) {
+                return $collection[$id] ?? null;
+            })->filter()
         );
     }
 
@@ -107,17 +105,15 @@ trait SerializesAndRestoresModelIdentifiers
     {
         return $this->getQueryForModelRestoration(
             (new $value->class)->setConnection($value->connection), $value->id
-        )->useWritePdo()->firstOrFail()->loadMissing($value->relations ?? []);
+        )->useWritePdo()->firstOrFail()->load($value->relations ?? []);
     }
 
     /**
      * Get the query for model restoration.
      *
-     * @template TModel of \Illuminate\Database\Eloquent\Model
-     *
-     * @param  TModel  $model
+     * @param  \Illuminate\Database\Eloquent\Model  $model
      * @param  array|int  $ids
-     * @return \Illuminate\Database\Eloquent\Builder<TModel>
+     * @return \Illuminate\Database\Eloquent\Builder
      */
     protected function getQueryForModelRestoration($model, $ids)
     {

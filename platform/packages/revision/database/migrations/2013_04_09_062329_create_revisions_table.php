@@ -9,12 +9,12 @@ return new class () extends Migration {
     {
         Schema::dropIfExists('revisions');
 
-        Schema::create('revisions', function (Blueprint $table): void {
+        Schema::create('revisions', function (Blueprint $table) {
             $table->id();
             $table->string('revisionable_type');
             $table->foreignId('revisionable_id');
             $table->foreignId('user_id')->nullable();
-            $table->string('key', 120);
+            $table->string('key');
             $table->text('old_value')->nullable();
             $table->text('new_value')->nullable();
             $table->timestamps();

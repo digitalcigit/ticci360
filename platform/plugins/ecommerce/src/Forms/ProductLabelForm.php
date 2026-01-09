@@ -2,39 +2,42 @@
 
 namespace Botble\Ecommerce\Forms;
 
-use Botble\Base\Forms\FieldOptions\ColorFieldOption;
-use Botble\Base\Forms\FieldOptions\NameFieldOption;
-use Botble\Base\Forms\FieldOptions\StatusFieldOption;
-use Botble\Base\Forms\Fields\ColorField;
-use Botble\Base\Forms\Fields\SelectField;
-use Botble\Base\Forms\Fields\TextField;
+use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Base\Forms\FormAbstract;
 use Botble\Ecommerce\Http\Requests\ProductLabelRequest;
 use Botble\Ecommerce\Models\ProductLabel;
 
 class ProductLabelForm extends FormAbstract
 {
-    public function setup(): void
+    public function buildForm(): void
     {
         $this
-            ->model(ProductLabel::class)
+            ->setupModel(new ProductLabel())
             ->setValidatorClass(ProductLabelRequest::class)
-            ->add('name', TextField::class, NameFieldOption::make())
-            ->add(
-                'color',
-                ColorField::class,
-                ColorFieldOption::make()
-                    ->label(trans('plugins/ecommerce::product-label.background_color'))
-            )
-            ->add(
-                'text_color',
-                ColorField::class,
-                ColorFieldOption::make()
-                    ->label(trans('plugins/ecommerce::product-label.text_color'))
-                    ->helperText(trans('plugins/ecommerce::product-label.text_color_helper'))
-                    ->defaultValue('#ffffff')
-            )
-            ->add('status', SelectField::class, StatusFieldOption::make())
+            ->withCustomFields()
+            ->add('name', 'text', [
+                'label' => trans('core/base::forms.name'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'placeholder' => trans('core/base::forms.name_placeholder'),
+                    'data-counter' => 120,
+                ],
+            ])
+            ->add('color', 'customColor', [
+                'label' => trans('plugins/ecommerce::product-label.color'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'placeholder' => trans('plugins/ecommerce::product-label.color_placeholder'),
+                ],
+            ])
+            ->add('status', 'customSelect', [
+                'label' => trans('core/base::tables.status'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'class' => 'form-control address',
+                ],
+                'choices' => BaseStatusEnum::labels(),
+            ])
             ->setBreakFieldPoint('status');
     }
 }

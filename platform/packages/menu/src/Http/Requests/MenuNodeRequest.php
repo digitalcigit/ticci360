@@ -9,8 +9,7 @@ class MenuNodeRequest extends Request
     public function rules(): array
     {
         return [
-            'data' => ['required', 'array'],
-            'data.menu_id' => ['required'],
+            'data.menu_id' => 'required',
         ];
     }
 

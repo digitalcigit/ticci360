@@ -41,13 +41,6 @@ class ServiceAccountJwtAccessCredentials extends CredentialsLoader implements
     use ServiceAccountSignerTrait;
 
     /**
-     * Used in observability metric headers
-     *
-     * @var string
-     */
-    private const CRED_TYPE = 'jwt';
-
-    /**
      * The OAuth2 instance used to conduct authorization.
      *
      * @var OAuth2
@@ -114,13 +107,13 @@ class ServiceAccountJwtAccessCredentials extends CredentialsLoader implements
      *
      * @param array<mixed> $metadata metadata hashmap
      * @param string $authUri optional auth uri
-     * @param callable|null $httpHandler callback which delivers psr7 request
+     * @param callable $httpHandler callback which delivers psr7 request
      * @return array<mixed> updated metadata hashmap
      */
     public function updateMetadata(
         $metadata,
         $authUri = null,
-        ?callable $httpHandler = null
+        callable $httpHandler = null
     ) {
         $scope = $this->auth->getScope();
         if (empty($authUri) && empty($scope)) {
@@ -135,11 +128,11 @@ class ServiceAccountJwtAccessCredentials extends CredentialsLoader implements
     /**
      * Implements FetchAuthTokenInterface#fetchAuthToken.
      *
-     * @param callable|null $httpHandler
+     * @param callable $httpHandler
      *
      * @return null|array{access_token:string} A set of auth related metadata
      */
-    public function fetchAuthToken(?callable $httpHandler = null)
+    public function fetchAuthToken(callable $httpHandler = null)
     {
         $audience = $this->auth->getAudience();
         $scope = $this->auth->getScope();
@@ -158,29 +151,15 @@ class ServiceAccountJwtAccessCredentials extends CredentialsLoader implements
         // Set the self-signed access token in OAuth2 for getLastReceivedToken
         $this->auth->setAccessToken($access_token);
 
-        return [
-            'access_token' => $access_token,
-            'expires_in' => $this->auth->getExpiry(),
-            'token_type' => 'Bearer'
-        ];
+        return ['access_token' => $access_token];
     }
 
     /**
-     * Return the cache key for the credentials.
-     * The format for the Cache Key one of the following:
-     * ClientEmail.Scope
-     * ClientEmail.Audience
-     *
      * @return string
      */
     public function getCacheKey()
     {
-        $scopeOrAudience = $this->auth->getScope();
-        if (!$scopeOrAudience) {
-            $scopeOrAudience = $this->auth->getAudience();
-        }
-
-        return $this->auth->getIssuer() . '.' . $scopeOrAudience;
+        return $this->auth->getCacheKey();
     }
 
     /**
@@ -196,10 +175,10 @@ class ServiceAccountJwtAccessCredentials extends CredentialsLoader implements
      *
      * Returns null if the project ID does not exist in the keyfile.
      *
-     * @param callable|null $httpHandler Not used by this credentials type.
+     * @param callable $httpHandler Not used by this credentials type.
      * @return string|null
      */
-    public function getProjectId(?callable $httpHandler = null)
+    public function getProjectId(callable $httpHandler = null)
     {
         return $this->projectId;
     }
@@ -209,24 +188,12 @@ class ServiceAccountJwtAccessCredentials extends CredentialsLoader implements
      *
      * In this case, it returns the keyfile's client_email key.
      *
-     * @param callable|null $httpHandler Not used by this credentials type.
+     * @param callable $httpHandler Not used by this credentials type.
      * @return string
      */
-    public function getClientName(?callable $httpHandler = null)
+    public function getClientName(callable $httpHandler = null)
     {
         return $this->auth->getIssuer();
-    }
-
-    /**
-     * Get the private key from the keyfile.
-     *
-     * In this case, it returns the keyfile's private_key key, needed for JWT signing.
-     *
-     * @return string
-     */
-    public function getPrivateKey()
-    {
-        return $this->auth->getSigningKey();
     }
 
     /**
@@ -237,10 +204,5 @@ class ServiceAccountJwtAccessCredentials extends CredentialsLoader implements
     public function getQuotaProject()
     {
         return $this->quotaProject;
-    }
-
-    protected function getCredType(): string
-    {
-        return self::CRED_TYPE;
     }
 }

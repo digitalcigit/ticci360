@@ -2,38 +2,38 @@
 
 namespace Botble\Ecommerce\Http\Controllers\Customers;
 
-use Botble\Base\Http\Controllers\BaseController;
-use Botble\Ecommerce\Facades\InvoiceHelper;
+use App\Http\Controllers\Controller;
+use Botble\Base\Facades\PageTitle;
 use Botble\Ecommerce\Models\Invoice;
+use Botble\Ecommerce\Repositories\Interfaces\InvoiceInterface;
+use Illuminate\Http\Request;
+use Botble\Ecommerce\Facades\InvoiceHelper;
 use Botble\SeoHelper\Facades\SeoHelper;
 use Botble\Theme\Facades\Theme;
-use Illuminate\Http\Request;
 
-class InvoiceController extends BaseController
+class InvoiceController extends Controller
 {
     public function index()
     {
         SeoHelper::setTitle(__('Invoices'));
 
         Theme::breadcrumb()
+            ->add(__('Home'), route('public.index'))
             ->add(__('My Profile'), route('public.account.dashboard'))
             ->add(__('Manage Invoices'));
 
         return '';
     }
 
-    public function show($id)
+    public function show($id, InvoiceInterface $invoiceRepository)
     {
-        /**
-         * @var Invoice $invoice
-         */
-        $invoice = Invoice::query()->findOrFail($id);
+        $invoice = $invoiceRepository->findOrFail($id);
 
         abort_unless($this->canViewInvoice($invoice), 404);
 
         $title = __('Invoice detail :code', ['code' => $invoice->code]);
 
-        $this->pageTitle($title);
+        PageTitle::setTitle($title);
 
         SeoHelper::setTitle($title);
 
@@ -44,12 +44,9 @@ class InvoiceController extends BaseController
         )->render();
     }
 
-    public function getGenerateInvoice(int|string $invoiceId, Request $request)
+    public function getGenerateInvoice(int|string $invoiceId, Request $request, InvoiceInterface $invoiceRepository)
     {
-        /**
-         * @var Invoice $invoice
-         */
-        $invoice = Invoice::query()->findOrFail($invoiceId);
+        $invoice = $invoiceRepository->findOrFail($invoiceId);
 
         abort_unless($this->canViewInvoice($invoice), 404);
 

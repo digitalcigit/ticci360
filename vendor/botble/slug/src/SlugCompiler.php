@@ -7,27 +7,34 @@ use Carbon\Carbon;
 
 class SlugCompiler
 {
-    public function getVariables(): array
+    protected array $variables = [];
+
+    public function __construct()
     {
         $now = Carbon::now();
 
-        return apply_filters('cms_slug_variables', [
+        $this->variables = [
             '%%year%%' => [
-                'label' => trans('packages/slug::slug.current_year'),
+                'label' => __('Current year'),
                 'value' => $now->year,
             ],
             '%%month%%' => [
-                'label' => trans('packages/slug::slug.current_month'),
+                'label' => __('Current month'),
                 'value' => $now->month,
             ],
             '%%day%%' => [
-                'label' => trans('packages/slug::slug.current_day'),
+                'label' => __('Current day'),
                 'value' => $now->month,
             ],
-        ]);
+        ];
     }
 
-    public function compile(?string $prefix, BaseModel|string|null $model = null): string
+    public function getVariables(): array
+    {
+        return apply_filters(CMS_SLUG_VARIABLES, $this->variables);
+    }
+
+    public function compile(string|null $prefix, BaseModel|string|null $model = null): string
     {
         if (! $prefix) {
             return '';

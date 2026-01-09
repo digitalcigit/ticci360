@@ -2,7 +2,6 @@
 
 return [
     'name' => 'Brands',
-    'brands' => 'Brands',
     'create' => 'New brand',
     'edit' => 'Edit brand',
     'form' => [
@@ -11,7 +10,6 @@ return [
         'description' => 'Description',
         'description_placeholder' => 'Short description for brand (Maximum 400 characters)',
         'website' => 'Website',
-        'website_placeholder' => 'Ex: https://example.com',
         'logo' => 'Logo',
         'is_featured' => 'Is featured',
     ],
@@ -24,11 +22,10 @@ return [
     'cannot_delete' => 'Brand could not be deleted',
     'brand_deleted' => 'Brand deleted',
     'menu' => 'Brands',
-    'select_brand' => 'Select a brand...',
+    'no_brand' => 'No brand',
     'intro' => [
         'title' => 'Manage brands',
         'description' => 'Manage product brands such as Nike, Adidas, Bitis ...',
         'button_text' => 'Create brand',
     ],
-    'edit_this_brand' => 'Edit this brand',
 ];

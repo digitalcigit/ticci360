@@ -1,4 +1,4 @@
-<x-core::modal
+<x-core-base::modal
     :id="$name"
     :title="$title"
     :type="$type"
@@ -7,4 +7,4 @@
     :button-label="$action_name"
 >
     {!! $content !!}
-</x-core::modal>
+</x-core-base::modal>

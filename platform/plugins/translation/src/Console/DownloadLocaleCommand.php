@@ -4,12 +4,11 @@ namespace Botble\Translation\Console;
 
 use Botble\Translation\Manager;
 use Illuminate\Console\Command;
-use Illuminate\Contracts\Console\PromptsForMissingInput;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputArgument;
 
 #[AsCommand('cms:translations:download-locale', 'Download translation files from https://github.com/botble/translations')]
-class DownloadLocaleCommand extends Command implements PromptsForMissingInput
+class DownloadLocaleCommand extends Command
 {
     public function handle(Manager $manager): int
     {
@@ -28,8 +27,10 @@ class DownloadLocaleCommand extends Command implements PromptsForMissingInput
         return self::SUCCESS;
     }
 
-    protected function configure(): void
+    protected function getArguments(): array
     {
-        $this->addArgument('locale', InputArgument::REQUIRED, 'The locale that you want to download');
+        return [
+            ['locale', InputArgument::REQUIRED, 'The locale that you want to download'],
+        ];
     }
 }

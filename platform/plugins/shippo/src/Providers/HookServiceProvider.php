@@ -16,7 +16,7 @@ class HookServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
-        add_filter('handle_shipping_fee', [$this, 'handleShippingFee'], 11, 2);
+        add_filter('handle_shipping_fee', [$this, 'handleShippingFee'], 11, 3);
 
         add_filter(SHIPPING_METHODS_SETTINGS_PAGE, [$this, 'addSettings'], 2);
 

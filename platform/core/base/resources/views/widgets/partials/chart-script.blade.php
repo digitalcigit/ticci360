@@ -1,17 +1,18 @@
 @php
-    Assets::addScripts('apexchart')->addStyles('apexchart');
+    Assets::addScripts('apexchart')
+        ->addStyles('apexchart')
 @endphp
 
 @push('footer')
     <script>
-        $(document).ready(function() {
-            (new ApexCharts(document.getElementById("{{ $id }}"), {{ Js::from($options) }})).render()
+        $(document).ready(function () {
+            (new ApexCharts(document.querySelector("#{{ $id }}"), @json($options))).render()
         })
     </script>
 @endpush
 
-@if (request()->ajax())
+@if(request()->ajax())
     <script>
-        (new ApexCharts(document.getElementById("{{ $id }}"), {{ Js::from($options) }})).render()
+        (new ApexCharts(document.querySelector("#{{ $id }}"), @json($options))).render()
     </script>
 @endif

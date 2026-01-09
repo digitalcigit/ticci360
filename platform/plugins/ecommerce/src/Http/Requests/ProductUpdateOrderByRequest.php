@@ -9,8 +9,7 @@ class ProductUpdateOrderByRequest extends Request
     public function rules(): array
     {
         return [
-            'pk' => ['required', 'integer', 'min:1'],
-            'value' => ['required', 'numeric', 'min:0', 'max:100000'],
+            'value' => 'required|numeric|min:0|max:100000',
         ];
     }
 }

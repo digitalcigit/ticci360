@@ -2,15 +2,42 @@
 
 namespace Botble\AuditLog;
 
+use Botble\AuditLog\Events\AuditHandlerEvent;
+use Botble\Base\Models\BaseModel;
 use Illuminate\Database\Eloquent\Model;
 
 class AuditLog
 {
-    public static function getReferenceName(string $screen, Model $data): string
+    public function handleEvent(string $screen, Model $data, string $action, string $type = 'info'): bool
     {
-        return match ($screen) {
-            USER_MODULE_SCREEN_NAME, AUTH_MODULE_SCREEN_NAME => $data->name,
-            default => $data->name ?: $data->title ?: ($data->id ? "ID: $data->id" : ''),
-        };
+        if (! $data instanceof BaseModel || ! $data->id) {
+            return false;
+        }
+
+        event(new AuditHandlerEvent($screen, $action, $data->id, $this->getReferenceName($screen, $data), $type));
+
+        return true;
+    }
+
+    public function getReferenceName(string $screen, Model $data): string
+    {
+        $name = '';
+        switch ($screen) {
+            case USER_MODULE_SCREEN_NAME:
+            case AUTH_MODULE_SCREEN_NAME:
+                $name = $data->name;
+
+                break;
+            default:
+                if (isset($data->name)) {
+                    $name = $data->name;
+                } elseif (isset($data->title)) {
+                    $name = $data->title;
+                } elseif (isset($data->id)) {
+                    $name = 'ID: ' . $data->id;
+                }
+        }
+
+        return $name;
     }
 }

@@ -1,25 +1,19 @@
 <?php
 
-use Botble\Base\Facades\AdminHelper;
+use Botble\Base\Facades\BaseHelper;
 use Illuminate\Support\Facades\Route;
 
-Route::group(['namespace' => 'Botble\Language\Http\Controllers'], function (): void {
-    AdminHelper::registerRoutes(function (): void {
-        Route::group(['prefix' => 'settings/languages'], function (): void {
+Route::group(['namespace' => 'Botble\Language\Http\Controllers', 'middleware' => ['web', 'core']], function () {
+    Route::group(['prefix' => BaseHelper::getAdminPrefix(), 'middleware' => 'auth'], function () {
+        Route::group(['prefix' => 'settings/languages'], function () {
             Route::get('', [
                 'as' => 'languages.index',
                 'uses' => 'LanguageController@index',
             ]);
 
-            Route::get('options', [
-                'as' => 'settings.language',
-                'uses' => 'LanguageController@index',
-                'permission' => 'languages.index',
-            ]);
-
             Route::post('store', [
                 'as' => 'languages.store',
-                'uses' => 'LanguageController@store',
+                'uses' => 'LanguageController@postStore',
                 'permission' => 'languages.create',
                 'middleware' => 'preventDemo',
             ]);
@@ -50,13 +44,13 @@ Route::group(['namespace' => 'Botble\Language\Http\Controllers'], function (): v
 
             Route::post('edit-setting', [
                 'as' => 'languages.settings',
-                'uses' => 'Settings\LanguageSettingController@update',
+                'uses' => 'LanguageController@postEditSettings',
                 'permission' => 'languages.edit',
             ]);
         });
     });
 
-    Route::group(['prefix' => 'languages'], function (): void {
+    Route::group(['prefix' => 'languages'], function () {
         Route::post('change-item-language', [
             'as' => 'languages.change.item.language',
             'uses' => 'LanguageController@postChangeItemLanguage',

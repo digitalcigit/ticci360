@@ -3,23 +3,24 @@
 namespace Botble\Ecommerce\Http\Controllers\Customers;
 
 use Botble\Base\Http\Controllers\BaseController;
-use Botble\Ecommerce\Forms\Fronts\Customer\AddressForm;
+use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Ecommerce\Http\Requests\CreateAddressFromAdminRequest;
 use Botble\Ecommerce\Models\Address;
+use Botble\Ecommerce\Repositories\Interfaces\AddressInterface;
 
 class AddressController extends BaseController
 {
-    public function store(CreateAddressFromAdminRequest $request)
+    public function __construct(protected AddressInterface $addressRepository)
+    {
+    }
+
+    public function store(CreateAddressFromAdminRequest $request, BaseHttpResponse $response)
     {
         if ($request->boolean('is_default')) {
-            Address::query()
-                ->where([
-                    'is_default' => 1,
-                    'customer_id' => $request->input('customer_id'),
-                ])
-                ->update([
-                    'is_default' => 0,
-                ]);
+            $this->addressRepository->update([
+                'is_default' => 1,
+                'customer_id' => $request->input('customer_id'),
+            ], ['is_default' => 0]);
         }
 
         $request->merge([
@@ -27,25 +28,20 @@ class AddressController extends BaseController
             'is_default' => $request->input('is_default', 0),
         ]);
 
-        Address::query()->create($request->input());
+        $this->addressRepository->createOrUpdate($request->input());
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setNextUrl(route('customer.address'))
-            ->withCreatedSuccessMessage();
+            ->setMessage(trans('core/base::notices.create_success_message'));
     }
 
-    public function update(Address $address, CreateAddressFromAdminRequest $request)
+    public function update($id, CreateAddressFromAdminRequest $request, BaseHttpResponse $response)
     {
-        if ($request->boolean('is_default')) {
-            Address::query()
-                ->where([
-                    'is_default' => 1,
-                    'customer_id' => $request->input('customer_id'),
-                ])
-                ->update([
-                    'is_default' => 0,
-                ]);
+        if ($request->input('is_default') == 1) {
+            $this->addressRepository->update([
+                'is_default' => $id,
+                'customer_id' => $request->input('customer_id'),
+            ], ['is_default' => 0]);
         }
 
         $request->merge([
@@ -53,32 +49,30 @@ class AddressController extends BaseController
             'is_default' => $request->input('is_default', 0),
         ]);
 
-        $address->fill($request->input());
+        $this->addressRepository->update([
+            'id' => $id,
+        ], $request->input());
 
-        $address->save();
-
-        return $this
-            ->httpResponse()
+        return $response
             ->setNextUrl(route('customer.address'))
-            ->withUpdatedSuccessMessage();
+            ->setMessage(trans('core/base::notices.update_success_message'));
     }
 
-    public function destroy(Address $address)
+    public function destroy(int|string $id, BaseHttpResponse $response)
     {
+        $address = Address::findOrFail($id);
+
         $address->delete();
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setNextUrl(route('customer.address'))
             ->setMessage(trans('core/base::notices.delete_success_message'));
     }
 
-    public function edit(Address $address)
+    public function edit($id)
     {
-        return AddressForm::createFromModel($address)
-            ->setUrl(route('customers.addresses.update', $address->getKey()))
-            ->add('customer_id', 'hidden', ['value' => $address->customer_id])
-            ->remove('submit')
-            ->renderForm();
+        $address = Address::findOrFail($id);
+
+        return view('plugins/ecommerce::customers.addresses.form-edit', compact('address'))->render();
     }
 }

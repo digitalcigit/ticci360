@@ -8,13 +8,15 @@ use Botble\Setting\Models\Setting;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Cache;
 use UnexpectedValueException;
 
 class DatabaseSettingStore extends SettingStore
 {
     protected bool $connectedDatabase = false;
 
-    public function forget(string $key, bool $force = false): SettingStore
+    public function forget($key): SettingStore
     {
         parent::forget($key);
 
@@ -42,21 +44,32 @@ class DatabaseSettingStore extends SettingStore
 
     protected function write(array $data): void
     {
-        $keys = $this->newQuery()->pluck('key')->all();
+        $keys = $this->newQuery()->pluck('key');
 
-        $data = Arr::dot($data);
+        $insertData = Arr::dot($data);
+        $updateData = [];
+        $deleteKeys = [];
 
-        $updateData = Arr::only($data, $keys);
-        $insertData = Arr::except($data, $keys);
+        foreach ($keys as $key) {
+            if (isset($insertData[$key])) {
+                $updateData[$key] = $insertData[$key];
+            } else {
+                $deleteKeys[] = $key;
+            }
+            unset($insertData[$key]);
+        }
 
         foreach ($updateData as $key => $value) {
-            $this->newQuery()
-                ->where('key', $key)
+            $this->newQuery()->where('key', $key)
                 ->update(['value' => $value]);
         }
 
         if ($insertData) {
             $this->newQuery()->insert($this->prepareInsertData($insertData));
+        }
+
+        if ($deleteKeys) {
+            $this->newQuery()->whereIn('key', $deleteKeys)->delete();
         }
     }
 
@@ -66,8 +79,8 @@ class DatabaseSettingStore extends SettingStore
 
         foreach ($data as $key => $value) {
             $data = compact('key', 'value');
-            if (BaseModel::isUsingStringId()) {
-                $data['id'] = (new BaseModel())->newUniqueId();
+            if (BaseModel::determineIfUsingUuidsForId()) {
+                $data['id'] = BaseModel::newUniqueId();
             }
 
             $dbData[] = $data;
@@ -86,7 +99,13 @@ class DatabaseSettingStore extends SettingStore
             return [];
         }
 
-        return $this->parseReadData($this->newQuery()->get());
+        if (App::runningInConsole()) {
+            return $this->parseReadData($this->newQuery()->get());
+        }
+
+        return Cache::remember($this->cacheKey, $this->settingTime, function () {
+            return $this->parseReadData($this->newQuery()->get());
+        });
     }
 
     public function parseReadData(Collection|array $data): array
@@ -112,20 +131,10 @@ class DatabaseSettingStore extends SettingStore
         return $results;
     }
 
-    public function delete(array|string $keys = [], array $except = [], bool $force = false)
+    public function delete(array $keys = [], array $except = [])
     {
         if (! $keys && ! $except) {
             return false;
-        }
-
-        if (! is_array($keys)) {
-            $keys = [$keys];
-        }
-
-        foreach ($keys as $k => $v) {
-            if (! $force && in_array($k, $this->guard)) {
-                unset($keys[$k]);
-            }
         }
 
         $query = $this->newQuery();
@@ -138,11 +147,10 @@ class DatabaseSettingStore extends SettingStore
             $query = $query->whereNotIn('key', $keys);
         }
 
-        return $query->delete();
-    }
+        $deleted = $query->delete();
 
-    public function forceDelete(array|string $keys = [], array $except = [])
-    {
-        return $this->delete($keys, $except, true);
+        $this->clearCache();
+
+        return $deleted;
     }
 }

@@ -7,9 +7,9 @@
 return [
     'offline' => env('ASSETS_OFFLINE', true),
     'enable_version' => env('ASSETS_ENABLE_VERSION', true),
-    'version' => env('ASSETS_VERSION'),
+    'version' => env('ASSETS_VERSION', get_cms_version()),
     'scripts' => [
-        'core-ui',
+        'respond',
         'excanvas',
         'ie8-fix',
         'modernizr',
@@ -18,17 +18,20 @@ return [
         'cookie',
         'core',
         'app',
+        'bootstrap',
         'toastr',
+        'pace',
         'custom-scrollbar',
         'stickytableheaders',
         'jquery-waypoints',
         'spectrum',
         'fancybox',
-        'fslightbox',
     ],
     'styles' => [
         'fontawesome',
+        'simple-line-icons',
         'select2',
+        'pace',
         'toastr',
         'custom-scrollbar',
         'datepicker',
@@ -37,13 +40,6 @@ return [
     ],
     'resources' => [
         'scripts' => [
-            'core-ui' => [
-                'use_cdn' => false,
-                'location' => 'footer',
-                'src' => [
-                    'local' => '/vendor/core/core/base/js/core-ui.js',
-                ],
-            ],
             'core' => [
                 'use_cdn' => false,
                 'location' => 'footer',
@@ -55,19 +51,7 @@ return [
                 'use_cdn' => false,
                 'location' => 'header',
                 'src' => [
-                    'local' => [
-                        '/vendor/core/core/base/libraries/jquery.min.js',
-                        '/vendor/core/core/base/js/app.js',
-                    ],
-                ],
-            ],
-            'vue' => [
-                'use_cdn' => false,
-                'location' => 'header',
-                'src' => [
-                    'local' => [
-                        '/vendor/core/core/base/libraries/vue.global.min.js',
-                    ],
+                    'local' => '/vendor/core/core/base/js/app.js',
                 ],
             ],
             'vue-app' => [
@@ -94,6 +78,13 @@ return [
                     'cdn' => '//cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.3/modernizr.js',
                 ],
             ],
+            'respond' => [
+                'use_cdn' => false,
+                'location' => 'footer',
+                'src' => [
+                    'local' => '/vendor/core/core/base/libraries/respond.min.js',
+                ],
+            ],
             'excanvas' => [
                 'use_cdn' => false,
                 'location' => 'footer',
@@ -114,6 +105,16 @@ return [
                 'src' => [
                     'local' => [
                         '/vendor/core/core/base/libraries/counterup/jquery.counterup.min.js',
+                    ],
+                ],
+            ],
+            'jquery-validation' => [
+                'use_cdn' => false,
+                'location' => 'footer',
+                'src' => [
+                    'local' => [
+                        '/vendor/core/core/base/libraries/jquery-validation/jquery.validate.min.js',
+                        '/vendor/core/core/base/libraries/jquery-validation/additional-methods.min.js',
                     ],
                 ],
             ],
@@ -140,27 +141,12 @@ return [
                     'cdn' => '//cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js',
                 ],
             ],
-            'dropzone' => [
-                'use_cdn' => false,
-                'location' => 'footer',
-                'src' => [
-                    'local' => '/vendor/core/core/base/libraries/dropzone/dropzone.js',
-                ],
-            ],
             'jqueryTree' => [
                 'use_cdn' => false,
                 'location' => 'footer',
                 'include_style' => true,
                 'src' => [
                     'local' => '/vendor/core/core/base/libraries/jquery-tree/jquery.tree.min.js',
-                ],
-            ],
-            'jqueryTreeView' => [
-                'use_cdn' => false,
-                'location' => 'footer',
-                'include_style' => true,
-                'src' => [
-                    'local' => '/vendor/core/core/base/libraries/jquery-treeview/jquery.treeview.min.js',
                 ],
             ],
             'bootstrap-editable' => [
@@ -179,20 +165,20 @@ return [
                     'cdn' => '//cdnjs.cloudflare.com/ajax/libs/toastr.js/2.1.2/toastr.min.js',
                 ],
             ],
+            'pace' => [
+                'use_cdn' => true,
+                'location' => 'footer',
+                'src' => [
+                    'local' => '/vendor/core/core/base/libraries/pace/pace.min.js',
+                    'cdn' => '//cdnjs.cloudflare.com/ajax/libs/pace/1.0.2/pace.min.js',
+                ],
+            ],
             'fancybox' => [
                 'use_cdn' => false,
                 'location' => 'footer',
                 'src' => [
                     'local' => '/vendor/core/core/base/libraries/fancybox/jquery.fancybox.min.js',
-                    'cdn' => '//fastly.jsdelivr.net/gh/fancyapps/fancybox@3.5.7/dist/jquery.fancybox.min.js',
-                ],
-            ],
-            'fslightbox' => [
-                'use_cdn' => false,
-                'location' => 'footer',
-                'src' => [
-                    'local' => '/vendor/core/core/base/libraries/fslightbox.js',
-                    'cdn' => '//fastly.jsdelivr.net/npm/fslightbox@3.4.1/index.min.js',
+                    'cdn' => '//cdn.jsdelivr.net/gh/fancyapps/fancybox@3.5.7/dist/jquery.fancybox.min.js',
                 ],
             ],
             'datatables' => [
@@ -208,6 +194,7 @@ return [
                     ],
                 ],
             ],
+
             'raphael' => [
                 'use_cdn' => false,
                 'location' => 'footer',
@@ -237,8 +224,8 @@ return [
                 'use_cdn' => true,
                 'location' => 'footer',
                 'src' => [
-                    'local' => '/vendor/core/core/base/libraries/cropper/cropper.min.js',
-                    'cdn' => '//cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js',
+                    'local' => '/vendor/core/core/base/libraries/cropper.min.js',
+                    'cdn' => '//cdnjs.cloudflare.com/ajax/libs/cropper/0.7.9/cropper.min.js',
                 ],
             ],
             'datepicker' => [
@@ -246,7 +233,7 @@ return [
                 'location' => 'footer',
                 'src' => [
                     'local' => '/vendor/core/core/base/libraries/flatpickr/flatpickr.min.js',
-                    'cdn' => '//fastly.jsdelivr.net/npm/flatpickr',
+                    'cdn' => '//cdn.jsdelivr.net/npm/flatpickr',
                 ],
             ],
             'sortable' => [
@@ -254,13 +241,6 @@ return [
                 'location' => 'footer',
                 'src' => [
                     'local' => '/vendor/core/core/base/libraries/sortable/sortable.min.js',
-                ],
-            ],
-            'jquery-nestable' => [
-                'use_cdn' => false,
-                'location' => 'footer',
-                'src' => [
-                    'local' => '/vendor/core/core/base/libraries/jquery-nestable/jquery.nestable.min.js',
                 ],
             ],
             'custom-scrollbar' => [
@@ -275,6 +255,13 @@ return [
                 'location' => 'footer',
                 'src' => [
                     'local' => '/vendor/core/core/base/libraries/stickytableheaders/jquery.stickytableheaders.js',
+                ],
+            ],
+            'equal-height' => [
+                'use_cdn' => false,
+                'location' => 'footer',
+                'src' => [
+                    'local' => '/vendor/core/core/base/libraries/jQuery.equalHeights/jquery.equalheights.min.js',
                 ],
             ],
             'are-you-sure' => [
@@ -349,31 +336,10 @@ return [
                     'local' => '/vendor/core/core/base/libraries/apexchart/apexcharts.min.js',
                 ],
             ],
-            'coloris' => [
-                'use_cdn' => true,
-                'location' => 'footer',
-                'src' => [
-                    'local' => '/vendor/core/core/base/libraries/coloris/coloris.min.js',
-                    'cdn' => '//fastly.jsdelivr.net/gh/mdbassit/Coloris@latest/dist/coloris.min.js',
-                ],
-            ],
-            'tagify' => [
-                'use_cdn' => true,
-                'location' => 'footer',
-                'src' => [
-                    'local' => '/vendor/core/core/base/libraries/tagify/tagify.js',
-                    'cdn' => '//cdnjs.cloudflare.com/ajax/libs/tagify/4.16.4/tagify.min.js',
-                ],
-            ],
+            // End JS
         ],
+        /* -- STYLESHEET ASSETS -- */
         'styles' => [
-            'core' => [
-                'use_cdn' => false,
-                'location' => 'header',
-                'src' => [
-                    'local' => '/vendor/core/core/base/css/core.css',
-                ],
-            ],
             'fontawesome' => [
                 'use_cdn' => true,
                 'location' => 'header',
@@ -382,11 +348,18 @@ return [
                     'cdn' => '//use.fontawesome.com/releases/v6.1.1/css/all.css',
                 ],
             ],
-            'dropzone' => [
+            'simple-line-icons' => [
                 'use_cdn' => false,
-                'location' => 'footer',
+                'location' => 'header',
                 'src' => [
-                    'local' => '/vendor/core/core/base/libraries/dropzone/dropzone.css',
+                    'local' => '/vendor/core/core/base/libraries/simple-line-icons/css/simple-line-icons.css',
+                ],
+            ],
+            'core' => [
+                'use_cdn' => false,
+                'location' => 'header',
+                'src' => [
+                    'local' => '/vendor/core/core/base/css/core.css',
                 ],
             ],
             'jqueryTree' => [
@@ -394,13 +367,6 @@ return [
                 'location' => 'footer',
                 'src' => [
                     'local' => '/vendor/core/core/base/libraries/jquery-tree/jquery.tree.min.css',
-                ],
-            ],
-            'jqueryTreeView' => [
-                'use_cdn' => false,
-                'location' => 'footer',
-                'src' => [
-                    'local' => '/vendor/core/core/base/libraries/jquery-treeview/jquery.treeview.min.css',
                 ],
             ],
             'jquery-ui' => [
@@ -417,6 +383,14 @@ return [
                 'src' => [
                     'local' => '/vendor/core/core/base/libraries/toastr/toastr.min.css',
                     'cdn' => '//cdnjs.cloudflare.com/ajax/libs/toastr.js/2.1.2/toastr.min.css',
+                ],
+            ],
+            'pace' => [
+                'use_cdn' => true,
+                'location' => 'header',
+                'src' => [
+                    'local' => '/vendor/core/core/base/libraries/pace/pace-theme-minimal.css',
+                    'cdn' => '//cdnjs.cloudflare.com/ajax/libs/pace/1.0.2/themes/blue/pace-theme-minimal.css',
                 ],
             ],
             'kendo' => [
@@ -453,27 +427,12 @@ return [
                     'cdn' => '//cdnjs.cloudflare.com/ajax/libs/morris.js/0.5.1/morris.css',
                 ],
             ],
-            'cropper' => [
-                'use_cdn' => false,
-                'location' => 'header',
-                'src' => [
-                    'local' => '/vendor/core/core/base/libraries/cropper/cropper.min.css',
-                    'cdn' => '//cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css',
-                ],
-            ],
             'datepicker' => [
                 'use_cdn' => false,
                 'location' => 'header',
                 'src' => [
                     'local' => '/vendor/core/core/base/libraries/flatpickr/flatpickr.min.css',
-                    'cdn' => '//fastly.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css',
-                ],
-            ],
-            'jquery-nestable' => [
-                'use_cdn' => false,
-                'location' => 'header',
-                'src' => [
-                    'local' => '/vendor/core/core/base/libraries/jquery-nestable/jquery.nestable.min.css',
+                    'cdn' => '//cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css',
                 ],
             ],
             'select2' => [
@@ -482,7 +441,7 @@ return [
                 'src' => [
                     'local' => [
                         '/vendor/core/core/base/libraries/select2/css/select2.min.css',
-                        '/vendor/core/core/base/css/libraries/select2.css',
+                        '/vendor/core/core/base/libraries/select2/css/select2-bootstrap.min.css',
                     ],
                     'cdn' => '//cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/css/select2.min.css',
                 ],
@@ -492,7 +451,7 @@ return [
                 'location' => 'header',
                 'src' => [
                     'local' => '/vendor/core/core/base/libraries/fancybox/jquery.fancybox.min.css',
-                    'cdn' => '//fastly.jsdelivr.net/gh/fancyapps/fancybox@3.5.7/dist/jquery.fancybox.min.css',
+                    'cdn' => '//cdn.jsdelivr.net/gh/fancyapps/fancybox@3.5.7/dist/jquery.fancybox.min.css',
                 ],
             ],
             'custom-scrollbar' => [
@@ -536,22 +495,6 @@ return [
                 'location' => 'header',
                 'src' => [
                     'local' => '/vendor/core/core/base/libraries/apexchart/apexcharts.css',
-                ],
-            ],
-            'coloris' => [
-                'use_cdn' => true,
-                'location' => 'header',
-                'src' => [
-                    'local' => '/vendor/core/core/base/libraries/coloris/coloris.min.css',
-                    'cdn' => '//fastly.jsdelivr.net/gh/mdbassit/Coloris@latest/dist/coloris.min.css',
-                ],
-            ],
-            'tagify' => [
-                'use_cdn' => true,
-                'location' => 'header',
-                'src' => [
-                    'local' => '/vendor/core/core/base/libraries/tagify/tagify.css',
-                    'cdn' => '//cdnjs.cloudflare.com/ajax/libs/tagify/4.16.4/tagify.css',
                 ],
             ],
         ],

@@ -2,120 +2,114 @@
 
 namespace Botble\Blog\Forms;
 
-use Botble\Base\Forms\FieldOptions\ContentFieldOption;
-use Botble\Base\Forms\FieldOptions\DescriptionFieldOption;
-use Botble\Base\Forms\FieldOptions\IsFeaturedFieldOption;
-use Botble\Base\Forms\FieldOptions\MediaImageFieldOption;
-use Botble\Base\Forms\FieldOptions\NameFieldOption;
-use Botble\Base\Forms\FieldOptions\RadioFieldOption;
-use Botble\Base\Forms\FieldOptions\SelectFieldOption;
-use Botble\Base\Forms\FieldOptions\StatusFieldOption;
-use Botble\Base\Forms\FieldOptions\TagFieldOption;
-use Botble\Base\Forms\Fields\EditorField;
-use Botble\Base\Forms\Fields\MediaImageField;
-use Botble\Base\Forms\Fields\OnOffField;
-use Botble\Base\Forms\Fields\RadioField;
-use Botble\Base\Forms\Fields\SelectField;
+use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Base\Forms\Fields\TagField;
-use Botble\Base\Forms\Fields\TextareaField;
-use Botble\Base\Forms\Fields\TextField;
-use Botble\Base\Forms\Fields\TreeCategoryField;
 use Botble\Base\Forms\FormAbstract;
+use Botble\Blog\Forms\Fields\CategoryMultiField;
 use Botble\Blog\Http\Requests\PostRequest;
-use Botble\Blog\Models\Category;
 use Botble\Blog\Models\Post;
-use Botble\Blog\Models\Tag;
+use Botble\Blog\Repositories\Interfaces\CategoryInterface;
 
 class PostForm extends FormAbstract
 {
-    public function setup(): void
+    protected $template = 'core/base::forms.form-tabs';
+
+    public function buildForm(): void
     {
+        $selectedCategories = [];
+        if ($this->getModel()) {
+            $selectedCategories = $this->getModel()->categories()->pluck('category_id')->all();
+        }
+
+        if (empty($selectedCategories)) {
+            $selectedCategories = app(CategoryInterface::class)
+                ->getModel()
+                ->where('is_default', 1)
+                ->pluck('id')
+                ->all();
+        }
+
+        $tags = null;
+
+        if ($this->getModel()) {
+            $tags = $this->getModel()->tags()->pluck('name')->all();
+            $tags = implode(',', $tags);
+        }
+
+        if (! $this->formHelper->hasCustomField('categoryMulti')) {
+            $this->formHelper->addCustomField('categoryMulti', CategoryMultiField::class);
+        }
+
         $this
-            ->model(Post::class)
+            ->setupModel(new Post())
             ->setValidatorClass(PostRequest::class)
-            ->add('name', TextField::class, NameFieldOption::make()->required())
-            ->add('description', TextareaField::class, DescriptionFieldOption::make())
-            ->add(
-                'is_featured',
-                OnOffField::class,
-                IsFeaturedFieldOption::make()
-            )
-            ->add('content', EditorField::class, ContentFieldOption::make()->allowedShortcodes())
-            ->add('status', SelectField::class, StatusFieldOption::make())
-            ->when(get_post_formats(true), function (PostForm $form, array $postFormats): void {
-                if (count($postFormats) > 1) {
-                    $choices = [];
-
-                    foreach ($postFormats as $postFormat) {
-                        $choices[$postFormat[0]] = $postFormat[1];
-                    }
-
-                    $form
-                        ->add(
-                            'format_type',
-                            RadioField::class,
-                            RadioFieldOption::make()
-                                ->label(trans('plugins/blog::posts.form.format_type'))
-                                ->choices($choices)
-                        );
-                }
-            })
-            ->add(
-                'categories[]',
-                TreeCategoryField::class,
-                SelectFieldOption::make()
-                    ->label(trans('plugins/blog::posts.form.categories'))
-                    ->choices(function () {
-                        return Category::query()
-                            ->wherePublished()
-                            ->select(['id', 'name', 'parent_id'])
-                            ->with('activeChildren')
-                            ->where('parent_id', 0)
-                            ->get();
-                    })
-                    ->when($this->getModel()->getKey(), function (SelectFieldOption $fieldOption) {
-                        /**
-                         * @var Post $post
-                         */
-                        $post = $this->getModel();
-
-                        return $fieldOption->selected($post->categories()->pluck('category_id')->all());
-                    }, function (SelectFieldOption $fieldOption) {
-                        return $fieldOption
-                            ->selected(
-                                Category::query()
-                                    ->wherePublished()
-                                    ->where('is_default', 1)
-                                    ->pluck('id')
-                                    ->all()
-                            );
-                    })
-            )
-            ->add('image', MediaImageField::class, MediaImageFieldOption::make())
-            ->add(
-                'tag',
-                TagField::class,
-                TagFieldOption::make()
-                    ->label(trans('plugins/blog::posts.form.tags'))
-                    ->when($this->getModel()->getKey(), function (TagFieldOption $fieldOption) {
-                        /**
-                         * @var Post $post
-                         */
-                        $post = $this->getModel();
-
-                        return $fieldOption
-                            ->selected(
-                                $post
-                                    ->tags()
-                                    ->select('name')
-                                    ->get()
-                                    ->map(fn (Tag $item) => $item->name)
-                                    ->implode(',')
-                            );
-                    })
-                    ->placeholder(trans('plugins/blog::base.write_some_tags'))
-                    ->ajaxUrl(route('tags.all'))
-            )
+            ->withCustomFields()
+            ->addCustomField('tags', TagField::class)
+            ->add('name', 'text', [
+                'label' => trans('core/base::forms.name'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'placeholder' => trans('core/base::forms.name_placeholder'),
+                    'data-counter' => 150,
+                ],
+            ])
+            ->add('description', 'textarea', [
+                'label' => trans('core/base::forms.description'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'rows' => 4,
+                    'placeholder' => trans('core/base::forms.description_placeholder'),
+                    'data-counter' => 400,
+                ],
+            ])
+            ->add('is_featured', 'onOff', [
+                'label' => trans('core/base::forms.is_featured'),
+                'label_attr' => ['class' => 'control-label'],
+                'default_value' => false,
+            ])
+            ->add('content', 'editor', [
+                'label' => trans('core/base::forms.content'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'rows' => 4,
+                    'placeholder' => trans('core/base::forms.description_placeholder'),
+                    'with-short-code' => true,
+                ],
+            ])
+            ->add('status', 'customSelect', [
+                'label' => trans('core/base::tables.status'),
+                'label_attr' => ['class' => 'control-label required'],
+                'choices' => BaseStatusEnum::labels(),
+            ])
+            ->add('categories[]', 'categoryMulti', [
+                'label' => trans('plugins/blog::posts.form.categories'),
+                'label_attr' => ['class' => 'control-label required'],
+                'choices' => get_categories_with_children(),
+                'value' => old('categories', $selectedCategories),
+            ])
+            ->add('image', 'mediaImage', [
+                'label' => trans('core/base::forms.image'),
+                'label_attr' => ['class' => 'control-label'],
+            ])
+            ->add('tag', 'tags', [
+                'label' => trans('plugins/blog::posts.form.tags'),
+                'label_attr' => ['class' => 'control-label'],
+                'value' => $tags,
+                'attr' => [
+                    'placeholder' => trans('plugins/blog::base.write_some_tags'),
+                    'data-url' => route('tags.all'),
+                ],
+            ])
             ->setBreakFieldPoint('status');
+
+        $postFormats = get_post_formats(true);
+
+        if (count($postFormats) > 1) {
+            $this->addAfter('status', 'format_type', 'customRadio', [
+                'label' => trans('plugins/blog::posts.form.format_type'),
+                'label_attr' => ['class' => 'control-label'],
+                'choices' => get_post_formats(true),
+            ]);
+        }
     }
 }

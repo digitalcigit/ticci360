@@ -1,176 +1,171 @@
 @php
     use Botble\Payment\Enums\PaymentMethodEnum;
     use Botble\Payment\Models\Payment;
+    use Botble\Payment\Supports\PaymentHelper;
 @endphp
 
 @extends(BaseHelper::getAdminMasterLayoutTemplate())
 
 @section('content')
-    {!! $form->renderForm() !!}
+    <div class="container">
+        <div class="row">
+            <div class="group flexbox-annotated-section">
+                <div class="col-md-3">
+                    <h4>{{ trans('plugins/payment::payment.payment_methods') }}</h4>
+                    <p>{{ trans('plugins/payment::payment.payment_methods_description') }}</p>
+                </div>
+                <div class="col-md-9">
+                    @php do_action(BASE_ACTION_META_BOXES, 'top', new Payment) @endphp
 
-    @php
-        do_action(BASE_ACTION_META_BOXES, 'top', new Payment);
-    @endphp
+                    <div class="wrapper-content pd-all-20">
+                        {!! Form::open(['route' => 'payments.settings']) !!}
+                        <x-core-setting::select
+                            name="default_payment_method"
+                            :label="trans('plugins/payment::payment.default_payment_method')"
+                            :options="PaymentMethodEnum::labels()"
+                            :value="PaymentHelper::defaultPaymentMethod()"
+                        />
+                        <button type="button" class="btn btn-info button-save-payment-settings">{{ trans('core/base::forms.save') }}</button>
+                        {!! Form::close() !!}
+                    </div>
 
-    <div class="my-5 d-block d-md-flex">
-        <div class="col-12 col-md-3"></div>
-        <div class="col-12 col-md-9">
-            {!! apply_filters(PAYMENT_METHODS_SETTINGS_PAGE, null) !!}
+                    <br>
 
-            <x-core::card class="mb-3">
-                <x-core::table :hover="false" :striped="false">
-                    @php
-                        $codStatus = get_payment_setting('status', PaymentMethodEnum::COD);
-                    @endphp
-                    <x-core::table.body>
-                        <x-core::table.body.row>
-                            <x-core::table.body.cell class="border-end">
-                                <x-core::icon name="ti ti-wallet" />
-                            </x-core::table.body.cell>
-                            <x-core::table.body.cell style="width: 20%">
-                                {{ trans('plugins/payment::payment.payment_methods') }}
-                            </x-core::table.body.cell>
-                            <x-core::table.body.cell>
-                                <p class="mb-0">{{ trans('plugins/payment::payment.payment_methods_instruction') }}</p>
-                            </x-core::table.body.cell>
-                        </x-core::table.body.row>
-                        <x-core::table.body.row>
-                            <x-core::table.body.cell colspan="3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
+                    {!! apply_filters(PAYMENT_METHODS_SETTINGS_PAGE, null) !!}
+
+                    <div class="table-responsive">
+                        <table class="table payment-method-item">
+                            <tbody>
+                            <tr class="border-pay-row">
+                                <td class="border-pay-col"><i class="fa fa-theme-payments"></i></td>
+                                <td style="width: 20%;">
+                                    <span>{{ trans('plugins/payment::payment.payment_methods') }}</span>
+                                </td>
+                                <td class="border-right">
+                                    <ul>
+                                        <li>
+                                            <p>{{ trans('plugins/payment::payment.payment_methods_instruction') }}</p>
+                                        </li>
+                                    </ul>
+                                </td>
+                            </tr>
+
+                            @php $codStatus = setting('payment_cod_status'); @endphp
+                            <tr class="bg-white">
+                                <td colspan="3">
+                                    <div class="float-start" style="margin-top: 5px;">
                                         <div class="payment-name-label-group">
-                                            @if($codStatus)
-                                                {{ trans('plugins/payment::payment.use') }}
+                                            @if ($codStatus != 0)
+                                                <span class="payment-note v-a-t">{{ trans('plugins/payment::payment.use') }}:</span>
                                             @endif
-                                            <span class="method-name-label">{{ get_payment_setting('name', PaymentMethodEnum::COD, PaymentMethodEnum::COD()->label()) }}</span>
+                                            <label class="ws-nm inline-display method-name-label">{{ setting('payment_cod_name', PaymentMethodEnum::COD()->label()) }}</label>
                                         </div>
                                     </div>
-
-                                    <x-core::button @class(['toggle-payment-item edit-payment-item-btn-trigger', 'hidden' => !$codStatus])>
-                                        {{ trans('plugins/payment::payment.edit') }}
-                                    </x-core::button>
-                                    <x-core::button @class(['toggle-payment-item save-payment-item-btn-trigger', 'hidden' => $codStatus])>
-                                        {{ trans('plugins/payment::payment.settings') }}
-                                    </x-core::button>
-                                </div>
-                            </x-core::table.body.cell>
-                        </x-core::table.body.row>
-                        <x-core::table.body.row class="payment-content-item hidden">
-                            <x-core::table.body.cell colspan="3">
-                                <x-core::form>
-                                    {!! $codForm->renderForm() !!}
-
-                                    <div class="btn-list justify-content-end">
-                                        <x-core::button
-                                            type="button"
-                                            @class(['disable-payment-item', 'hidden' => !$codStatus])
-                                        >
-                                            {{ trans('plugins/payment::payment.deactivate') }}
-                                        </x-core::button>
-
-                                        <x-core::button
-                                            @class(['save-payment-item btn-text-trigger-save', 'hidden' => $codStatus])
-                                            type="button"
-                                            color="info"
-                                        >
-                                            {{ trans('plugins/payment::payment.activate') }}
-                                        </x-core::button>
-                                        <x-core::button
-                                            type="button"
-                                            color="info"
-                                            @class(['save-payment-item btn-text-trigger-update', 'hidden' => !$codStatus])
-                                        >
-                                            {{ trans('plugins/payment::payment.update') }}
-                                        </x-core::button>
+                                    <div class="float-end">
+                                        <a class="btn btn-secondary toggle-payment-item edit-payment-item-btn-trigger @if ($codStatus == 0) hidden @endif">{{ trans('plugins/payment::payment.edit') }}</a>
+                                        <a class="btn btn-secondary toggle-payment-item save-payment-item-btn-trigger @if ($codStatus == 1) hidden @endif">{{ trans('plugins/payment::payment.settings') }}</a>
                                     </div>
-                                </x-core::form>
-                            </x-core::table.body.cell>
-                        </x-core::table.body.row>
-                    </x-core::table.body>
+                                </td>
+                            </tr>
+                            <tr class="payment-content-item hidden">
+                                <td class="border-left" colspan="3">
+                                    {!! Form::open() !!}
+                                    {!! Form::hidden('type', 'cod', ['class' => 'payment_type']) !!}
+                                    <div class="col-sm-12 mt-2">
+                                        <div class="well bg-white">
+                                            <x-core-setting::text-input
+                                                name="payment_cod_name"
+                                                :label="trans('plugins/payment::payment.method_name')"
+                                                :value="setting('payment_cod_name', PaymentMethodEnum::COD()->label())"
+                                                data-counter="400"
+                                            />
 
-                    @php
-                        $bankTransferStatus = setting('payment_bank_transfer_status');
-                    @endphp
-                    <x-core::table.body>
-                        <x-core::table.body.row>
-                            <x-core::table.body.cell colspan="3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <div class="payment-name-label-group">
-                                            @if($bankTransferStatus)
-                                                {{ trans('plugins/payment::payment.use') }}
-                                            @endif
-                                            <span class="method-name-label">{{ get_payment_setting('name', 'bank_transfer', PaymentMethodEnum::BANK_TRANSFER()->label()) }}</span>
+                                            <x-core-setting::form-group>
+                                                <label class="text-title-field" for="payment_cod_description">{{ trans('plugins/payment::payment.payment_method_description') }}</label>
+                                                {!! Form::editor('payment_cod_description', setting('payment_cod_description')) !!}
+                                            </x-core-setting::form-group>
+
+                                            {!! apply_filters(PAYMENT_METHOD_SETTINGS_CONTENT, null, 'cod') !!}
                                         </div>
                                     </div>
-
-                                    <x-core::button @class(['toggle-payment-item edit-payment-item-btn-trigger', 'hidden' => !$bankTransferStatus])>
-                                        {{ trans('plugins/payment::payment.edit') }}
-                                    </x-core::button>
-                                    <x-core::button @class(['toggle-payment-item save-payment-item-btn-trigger', 'hidden' => $bankTransferStatus])>
-                                        {{ trans('plugins/payment::payment.settings') }}
-                                    </x-core::button>
-                                </div>
-                            </x-core::table.body.cell>
-                        </x-core::table.body.row>
-                        <x-core::table.body.row class="payment-content-item hidden">
-                            <x-core::table.body.cell colspan="3">
-                                <x-core::form>
-                                    {!! $bankTransferForm->renderForm() !!}
-
-                                    <div class="btn-list justify-content-end">
-                                        <x-core::button
-                                            type="button"
-                                            @class(['disable-payment-item', 'hidden' => !$bankTransferStatus])
-                                        >
-                                            {{ trans('plugins/payment::payment.deactivate') }}
-                                        </x-core::button>
-
-                                        <x-core::button
-                                            @class(['save-payment-item btn-text-trigger-save', 'hidden' => $bankTransferStatus])
-                                            type="button"
-                                            color="info"
-                                        >
-                                            {{ trans('plugins/payment::payment.activate') }}
-                                        </x-core::button>
-                                        <x-core::button
-                                            type="button"
-                                            color="info"
-                                            @class(['save-payment-item btn-text-trigger-update', 'hidden' => !$bankTransferStatus])
-                                        >
-                                            {{ trans('plugins/payment::payment.update') }}
-                                        </x-core::button>
+                                    <div class="col-12 bg-white text-end">
+                                        <button class="btn btn-warning disable-payment-item @if ($codStatus == 0) hidden @endif" type="button">{{ trans('plugins/payment::payment.deactivate')  }}</button>
+                                        <button class="btn btn-info save-payment-item btn-text-trigger-save @if ($codStatus == 1) hidden @endif" type="button">{{ trans('plugins/payment::payment.activate') }}</button>
+                                        <button class="btn btn-info save-payment-item btn-text-trigger-update @if ($codStatus == 0) hidden @endif" type="button">{{ trans('plugins/payment::payment.update') }}</button>
                                     </div>
-                                </x-core::form>
-                            </x-core::table.body.cell>
-                        </x-core::table.body.row>
-                    </x-core::table.body>
-                </x-core::table>
-            </x-core::card>
+                                    {!! Form::close() !!}
+                                </td>
+                            </tr>
+                            </tbody>
+
+                            @php $bankTransferStatus = setting('payment_bank_transfer_status'); @endphp
+                            <tbody class="border-none-t">
+                            <tr class="bg-white">
+                                <td colspan="3">
+                                    <div class="float-start" style="margin-top: 5px;">
+                                        <div class="payment-name-label-group">
+                                            @if ($bankTransferStatus != 0)
+                                                <span class="payment-note v-a-t">{{ trans('plugins/payment::payment.use') }}:</span>
+                                            @endif
+                                            <label class="ws-nm inline-display method-name-label">{{ setting('payment_bank_transfer_name', PaymentMethodEnum::BANK_TRANSFER()->label()) }}</label>
+                                        </div>
+                                    </div>
+                                    <div class="float-end">
+                                        <a class="btn btn-secondary toggle-payment-item edit-payment-item-btn-trigger @if ($bankTransferStatus == 0) hidden @endif">{{ trans('plugins/payment::payment.edit') }}</a>
+                                        <a class="btn btn-secondary toggle-payment-item save-payment-item-btn-trigger @if ($bankTransferStatus == 1) hidden @endif">{{ trans('plugins/payment::payment.settings') }}</a>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr class="payment-content-item hidden">
+                                <td class="border-left" colspan="3">
+                                    {!! Form::open() !!}
+                                    {!! Form::hidden('type', 'digital_pay', ['class' => 'payment_type']) !!}
+                                    <div class="col-sm-12 mt-2">
+                                        <div class="well bg-white">
+                                            <x-core-setting::text-input
+                                                name="payment_bank_transfer_name"
+                                                :label="trans('plugins/payment::payment.method_name')"
+                                                :value="setting('payment_bank_transfer_name', PaymentMethodEnum::BANK_TRANSFER()->label())"
+                                                data-counter="400"
+                                            />
+
+                                            <x-core-setting::form-group>
+                                                <label class="text-title-field" for="payment_bank_transfer_description">{{ trans('plugins/payment::payment.payment_method_description') }}</label>
+                                                {!! Form::editor('payment_bank_transfer_description', setting('payment_bank_transfer_description')) !!}
+                                            </x-core-setting::form-group>
+
+                                            {!! apply_filters(PAYMENT_METHOD_SETTINGS_CONTENT, null, 'bank_transfer') !!}
+                                        </div>
+                                    </div>
+                                    <div class="col-12 bg-white text-end">
+                                        <button class="btn btn-warning disable-payment-item @if ($bankTransferStatus == 0) hidden @endif" type="button">{{ trans('plugins/payment::payment.deactivate') }}</button>
+                                        <button class="btn btn-info save-payment-item btn-text-trigger-save @if ($bankTransferStatus == 1) hidden @endif" type="button">{{ trans('plugins/payment::payment.activate') }}</button>
+                                        <button class="btn btn-info save-payment-item btn-text-trigger-update @if ($bankTransferStatus == 0) hidden @endif" type="button">{{ trans('plugins/payment::payment.update') }}</button>
+                                    </div>
+                                    {!! Form::close() !!}
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            @php do_action(BASE_ACTION_META_BOXES, 'main', new Payment) @endphp
+            <div class="group">
+                <div class="col-md-3"></div>
+                <div class="col-md-9">
+                    @php do_action(BASE_ACTION_META_BOXES, 'advanced', new Payment) @endphp
+                </div>
+            </div>
         </div>
     </div>
 
-    @php
-        do_action(BASE_ACTION_META_BOXES, 'main', new Payment);
-    @endphp
-
-    <div class="row">
-        <div class="col-md-9 offset-col-md-3">
-            @php
-                do_action(BASE_ACTION_META_BOXES, 'advanced', new Payment);
-            @endphp
-        </div>
-    </div>
-
-    {!! apply_filters('payment_method_after_settings', null) !!}
-@endsection
-
-@push('footer')
-    <x-core::modal.action
+    <x-core-base::modal
         id="confirm-disable-payment-method-modal"
         :title="trans('plugins/payment::payment.deactivate_payment_method')"
-        :description="trans('plugins/payment::payment.deactivate_payment_method_description')"
-        :submit-button-attrs="['id' => 'confirm-disable-payment-method-button']"
-        :submit-button-label="trans('plugins/payment::payment.agree')"
-    />
-@endpush
+        button-id="confirm-disable-payment-method-button"
+        :button-label="trans('plugins/payment::payment.agree')"
+    >
+        {!! trans('plugins/payment::payment.deactivate_payment_method_description') !!}
+    </x-core-base::modal>
+@endsection

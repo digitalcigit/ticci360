@@ -5,19 +5,23 @@ namespace Botble\Shippo\Http\Controllers;
 use Botble\Base\Http\Controllers\BaseController;
 use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Ecommerce\Enums\ShippingStatusEnum;
-use Botble\Ecommerce\Facades\OrderHelper;
 use Botble\Ecommerce\Models\Shipment;
-use Botble\Ecommerce\Models\ShipmentHistory;
+use Botble\Ecommerce\Repositories\Interfaces\ShipmentHistoryInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ShipmentInterface;
 use Botble\Shippo\Shippo;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
+use Botble\Ecommerce\Facades\OrderHelper;
 
 class ShippoWebhookController extends BaseController
 {
-    public function __construct(protected Shippo $shippo)
-    {
+    public function __construct(
+        protected ShipmentInterface $shipmentRepository,
+        protected ShipmentHistoryInterface $shipmentHistoryRepository,
+        protected Shippo $shippo
+    ) {
     }
 
     public function index(Request $request, BaseHttpResponse $response)
@@ -50,10 +54,7 @@ class ShippoWebhookController extends BaseController
             'tracking_id' => $transactionId,
         ];
 
-        /**
-         * @var Shipment $shipment
-         */
-        $shipment = Shipment::query()->where($condition)->first();
+        $shipment = $this->shipmentRepository->getFirstBy($condition);
 
         if (! $shipment) {
             $this->shippo->log([__LINE__, print_r($condition, true)]);
@@ -83,7 +84,7 @@ class ShippoWebhookController extends BaseController
             $shipment->save();
         }
 
-        ShipmentHistory::query()->create([
+        $this->shipmentHistoryRepository->createOrUpdate([
             'action' => 'transaction_updated',
             'description' => trans('plugins/shippo::shippo.transaction.updated', [
                 'tracking' => Arr::get($data, 'tracking_number'),
@@ -121,7 +122,7 @@ class ShippoWebhookController extends BaseController
                 break;
         }
 
-        ShipmentHistory::query()->create([
+        $this->shipmentHistoryRepository->createOrUpdate([
             'action' => 'track_updated',
             'description' => trans('plugins/shippo::shippo.tracking.statuses.' . Str::lower($status)),
             'order_id' => $shipment->order_id,

@@ -2,62 +2,62 @@
 
 namespace Botble\Ecommerce\Forms;
 
-use Botble\Base\Forms\FieldOptions\DatePickerFieldOption;
-use Botble\Base\Forms\FieldOptions\TextareaFieldOption;
-use Botble\Base\Forms\Fields\DatePickerField;
-use Botble\Base\Forms\Fields\TextareaField;
-use Botble\Base\Forms\Fields\TextField;
 use Botble\Base\Forms\FormAbstract;
-use Botble\Ecommerce\Forms\Concerns\HasSubmitButton;
-use Botble\Ecommerce\Forms\Fronts\Auth\FieldOptions\TextFieldOption;
 use Botble\Ecommerce\Http\Requests\ShipmentRequest;
 use Botble\Ecommerce\Models\Shipment;
 
 class ShipmentInfoForm extends FormAbstract
 {
-    use HasSubmitButton;
+    protected $template = 'core/base::forms.form-content-only';
 
-    public function setup(): void
+    public function buildForm(): void
     {
         $this
-            ->model(Shipment::class)
+            ->setupModel(new Shipment())
             ->setValidatorClass(ShipmentRequest::class)
-            ->contentOnly()
-            ->add(
-                'shipping_company_name',
-                TextField::class,
-                TextFieldOption::make()
-                    ->label(trans('plugins/ecommerce::shipping.shipping_company_name'))
-                    ->placeholder(trans('plugins/ecommerce::shipping.shipping_company_name_placeholder'))
-            )
-            ->add(
-                'tracking_id',
-                TextField::class,
-                TextFieldOption::make()
-                    ->label(trans('plugins/ecommerce::shipping.tracking_id'))
-                    ->placeholder(trans('plugins/ecommerce::shipping.tracking_id_placeholder'))
-            )
-            ->add(
-                'tracking_link',
-                TextField::class,
-                TextFieldOption::make()
-                    ->label(trans('plugins/ecommerce::shipping.tracking_link'))
-                    ->placeholder(trans('plugins/ecommerce::shipping.tracking_link_placeholder'))
-            )
-            ->add(
-                'estimate_date_shipped',
-                DatePickerField::class,
-                DatePickerFieldOption::make()
-                    ->label(trans('plugins/ecommerce::shipping.estimate_date_shipped'))
-            )
-            ->add(
-                'note',
-                TextareaField::class,
-                TextareaFieldOption::make()
-                    ->label(trans('plugins/ecommerce::shipping.note'))
-                    ->placeholder(trans('plugins/ecommerce::shipping.add_note'))
-                    ->rows(3)
-            )
-            ->addSubmitButton(trans('core/base::forms.save_and_continue'), 'ti ti-circle-check');
+            ->withCustomFields()
+            ->add('shipping_company_name', 'text', [
+                'label' => trans('plugins/ecommerce::shipping.shipping_company_name'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'placeholder' => 'Ex: DHL, AliExpress...',
+                ],
+            ])
+            ->add('tracking_id', 'text', [
+                'label' => trans('plugins/ecommerce::shipping.tracking_id'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'placeholder' => 'Ex: JJD0099999999',
+                ],
+            ])
+            ->add('tracking_link', 'text', [
+                'label' => trans('plugins/ecommerce::shipping.tracking_link'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'placeholder' => 'Ex: https://mydhl.express.dhl/us/en/tracking.html#/track-by-reference',
+                ],
+            ])
+            ->add('estimate_date_shipped', 'datePicker', [
+                'label' => trans('plugins/ecommerce::shipping.estimate_date_shipped'),
+                'label_attr' => ['class' => 'control-label'],
+            ])
+            ->add('note', 'textarea', [
+                'label' => trans('plugins/ecommerce::shipping.note'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'rows' => 3,
+                    'placeholder' => trans('plugins/ecommerce::shipping.add_note'),
+                ],
+            ])
+            ->add('submit', 'button', [
+                'label' => '<i class="fa fa-check-circle me-2"></i>' . trans('core/base::forms.save'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'class' => 'btn btn-success',
+                    'value' => 'save',
+                    'type' => 'submit',
+                    'name' => 'submit',
+                ],
+            ]);
     }
 }

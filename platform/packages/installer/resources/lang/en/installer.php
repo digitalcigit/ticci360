@@ -7,7 +7,7 @@ return [
      * Shared translations.
      *
      */
-    'title' => 'Installation',
+    'title' => 'Installer',
     'next' => 'Next Step',
     'back' => 'Previous',
     'finish' => 'Install',
@@ -22,9 +22,9 @@ return [
      *
      */
     'welcome' => [
+        'templateTitle' => 'Welcome',
         'title' => 'Welcome',
         'message' => 'Before getting started, we need some information on the database. You will need to know the following items before proceeding.',
-        'language' => 'Language',
         'next' => 'Let\'s go',
     ],
 
@@ -34,6 +34,7 @@ return [
      *
      */
     'requirements' => [
+        'templateTitle' => 'Step 1 | Server Requirements',
         'title' => 'Server Requirements',
         'next' => 'Check Permissions',
     ],
@@ -44,6 +45,8 @@ return [
      *
      */
     'permissions' => [
+        'templateTitle' => 'Step 2 | Permissions',
+        'title' => 'Permissions',
         'next' => 'Configure Environment',
     ],
 
@@ -54,6 +57,7 @@ return [
      */
     'environment' => [
         'wizard' => [
+            'templateTitle' => 'Environment Settings',
             'title' => 'Environment Settings',
             'form' => [
                 'name_required' => 'An environment name is required.',
@@ -90,51 +94,21 @@ return [
         'errors' => 'Unable to save the .env file, Please create it manually.',
     ],
 
-    'theme' => [
-        'title' => 'Choose theme',
-        'message' => 'Choose a theme to personalize the appearance of your website. This selection will also import sample data tailored to the chosen theme.',
-    ],
-
-    'theme_preset' => [
-        'title' => 'Choose theme preset',
-        'message' => 'Choose a theme preset to personalize the appearance of your website. This selection will also import sample data tailored to the chosen theme.',
-    ],
-
-    /**
-     * Create account page.
-     */
-    'createAccount' => [
-        'title' => 'Create account',
-        'form' => [
-            'first_name' => 'First name',
-            'last_name' => 'Last name',
-            'username' => 'Username',
-            'email' => 'Email',
-            'password' => 'Password',
-            'password_confirmation' => 'Password confirmation',
-            'create' => 'Create',
-        ],
-    ],
-
-    /**
-     * License page.
-     */
-
-    'license' => [
-        'title' => 'Activate License',
-        'skip' => 'Skip for now',
-    ],
-
     'install' => 'Install',
 
     'final' => [
-        'pageTitle' => 'Installation Finished',
-        'title' => 'Done',
-        'message' => 'Application has been successfully installed.',
-        'exit' => 'Go to admin dashboard',
+        'title' => 'Installation Finished',
+        'templateTitle' => 'Installation Finished',
+        'finished' => 'Application has been successfully installed.',
+        'exit' => 'Click here to exit',
     ],
-
+    'create_account' => 'Create account',
+    'first_name' => 'First name',
+    'last_name' => 'Last name',
+    'username' => 'Username',
+    'email' => 'Email',
+    'password' => 'Password',
+    'password_confirmation' => 'Password confirmation',
+    'create' => 'Create',
     'install_success' => 'Installed successfully!',
-
-    'install_step_title' => 'Installation - Step :step: :title',
 ];

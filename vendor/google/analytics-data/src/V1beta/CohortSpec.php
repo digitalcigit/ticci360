@@ -41,13 +41,13 @@ class CohortSpec extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>.google.analytics.data.v1beta.CohortsRange cohorts_range = 2;</code>
      */
-    protected $cohorts_range = null;
+    private $cohorts_range = null;
     /**
      * Optional settings for a cohort report.
      *
      * Generated from protobuf field <code>.google.analytics.data.v1beta.CohortReportSettings cohort_report_settings = 3;</code>
      */
-    protected $cohort_report_settings = null;
+    private $cohort_report_settings = null;
 
     /**
      * Constructor.

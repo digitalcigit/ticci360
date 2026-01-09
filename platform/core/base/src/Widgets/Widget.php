@@ -34,12 +34,12 @@ abstract class Widget
         };
     }
 
-    public function getLabel(): ?string
+    public function getLabel(): string|null
     {
         return null;
     }
 
-    public function getPriority(): ?int
+    public function getPriority(): int|null
     {
         return null;
     }

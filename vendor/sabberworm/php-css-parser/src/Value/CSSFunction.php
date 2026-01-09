@@ -3,21 +3,11 @@
 namespace Sabberworm\CSS\Value;
 
 use Sabberworm\CSS\OutputFormat;
-use Sabberworm\CSS\Parsing\ParserState;
-use Sabberworm\CSS\Parsing\SourceException;
-use Sabberworm\CSS\Parsing\UnexpectedEOFException;
-use Sabberworm\CSS\Parsing\UnexpectedTokenException;
 
-/**
- * A `CSSFunction` represents a special kind of value that also contains a function name and where the values are the
- * function’s arguments. It also handles equals-sign-separated argument lists like `filter: alpha(opacity=90);`.
- */
 class CSSFunction extends ValueList
 {
     /**
      * @var string
-     *
-     * @internal since 8.8.0
      */
     protected $sName;
 
@@ -36,28 +26,6 @@ class CSSFunction extends ValueList
         $this->sName = $sName;
         $this->iLineNo = $iLineNo;
         parent::__construct($aArguments, $sSeparator, $iLineNo);
-    }
-
-    /**
-     * @param ParserState $oParserState
-     * @param bool $bIgnoreCase
-     *
-     * @return CSSFunction
-     *
-     * @throws SourceException
-     * @throws UnexpectedEOFException
-     * @throws UnexpectedTokenException
-     *
-     * @internal since V8.8.0
-     */
-    public static function parse(ParserState $oParserState, $bIgnoreCase = false)
-    {
-        $mResult = $oParserState->parseIdentifier($bIgnoreCase);
-        $oParserState->consume('(');
-        $aArguments = Value::parseValue($oParserState, ['=', ' ', ',']);
-        $mResult = new CSSFunction($mResult, $aArguments, ',', $oParserState->currentLine());
-        $oParserState->consume(')');
-        return $mResult;
     }
 
     /**
@@ -88,8 +56,6 @@ class CSSFunction extends ValueList
 
     /**
      * @return string
-     *
-     * @deprecated in V8.8.0, will be removed in V9.0.0. Use `render` instead.
      */
     public function __toString()
     {
@@ -97,11 +63,9 @@ class CSSFunction extends ValueList
     }
 
     /**
-     * @param OutputFormat|null $oOutputFormat
-     *
      * @return string
      */
-    public function render($oOutputFormat)
+    public function render(OutputFormat $oOutputFormat)
     {
         $aArguments = parent::render($oOutputFormat);
         return "{$this->sName}({$aArguments})";

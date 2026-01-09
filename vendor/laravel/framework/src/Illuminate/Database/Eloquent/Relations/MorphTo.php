@@ -4,16 +4,10 @@ namespace Illuminate\Database\Eloquent\Relations;
 
 use BadMethodCallException;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Concerns\InteractsWithDictionary;
 
-/**
- * @template TRelatedModel of \Illuminate\Database\Eloquent\Model
- * @template TDeclaringModel of \Illuminate\Database\Eloquent\Model
- *
- * @extends \Illuminate\Database\Eloquent\Relations\BelongsTo<TRelatedModel, TDeclaringModel>
- */
 class MorphTo extends BelongsTo
 {
     use InteractsWithDictionary;
@@ -26,16 +20,9 @@ class MorphTo extends BelongsTo
     protected $morphType;
 
     /**
-     * The associated key on the parent model.
-     *
-     * @var string|null
-     */
-    protected $ownerKey;
-
-    /**
      * The models whose relations are being eager loaded.
      *
-     * @var \Illuminate\Database\Eloquent\Collection<int, TDeclaringModel>
+     * @var \Illuminate\Database\Eloquent\Collection
      */
     protected $models;
 
@@ -77,12 +64,13 @@ class MorphTo extends BelongsTo
     /**
      * Create a new morph to relationship instance.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<TRelatedModel>  $query
-     * @param  TDeclaringModel  $parent
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @param  \Illuminate\Database\Eloquent\Model  $parent
      * @param  string  $foreignKey
-     * @param  string|null  $ownerKey
+     * @param  string  $ownerKey
      * @param  string  $type
      * @param  string  $relation
+     * @return void
      */
     public function __construct(Builder $query, Model $parent, $foreignKey, $ownerKey, $type, $relation)
     {
@@ -91,20 +79,24 @@ class MorphTo extends BelongsTo
         parent::__construct($query, $parent, $foreignKey, $ownerKey, $relation);
     }
 
-    /** @inheritDoc */
-    #[\Override]
+    /**
+     * Set the constraints for an eager load of the relation.
+     *
+     * @param  array  $models
+     * @return void
+     */
     public function addEagerConstraints(array $models)
     {
-        $this->buildDictionary($this->models = new EloquentCollection($models));
+        $this->buildDictionary($this->models = Collection::make($models));
     }
 
     /**
      * Build a dictionary with the models.
      *
-     * @param  \Illuminate\Database\Eloquent\Collection<int, TRelatedModel>  $models
+     * @param  \Illuminate\Database\Eloquent\Collection  $models
      * @return void
      */
-    protected function buildDictionary(EloquentCollection $models)
+    protected function buildDictionary(Collection $models)
     {
         foreach ($models as $model) {
             if ($model->{$this->morphType}) {
@@ -121,7 +113,7 @@ class MorphTo extends BelongsTo
      *
      * Called via eager load method of Eloquent query builder.
      *
-     * @return \Illuminate\Database\Eloquent\Collection<int, TDeclaringModel>
+     * @return mixed
      */
     public function getEager()
     {
@@ -136,7 +128,7 @@ class MorphTo extends BelongsTo
      * Get all of the relation results for a type.
      *
      * @param  string  $type
-     * @return \Illuminate\Database\Eloquent\Collection<int, TRelatedModel>
+     * @return \Illuminate\Database\Eloquent\Collection
      */
     protected function getResultsByType($type)
     {
@@ -145,14 +137,14 @@ class MorphTo extends BelongsTo
         $ownerKey = $this->ownerKey ?? $instance->getKeyName();
 
         $query = $this->replayMacros($instance->newQuery())
-            ->mergeConstraintsFrom($this->getQuery())
-            ->with(array_merge(
-                $this->getQuery()->getEagerLoads(),
-                (array) ($this->morphableEagerLoads[get_class($instance)] ?? [])
-            ))
-            ->withCount(
-                (array) ($this->morphableEagerLoadCounts[get_class($instance)] ?? [])
-            );
+                            ->mergeConstraintsFrom($this->getQuery())
+                            ->with(array_merge(
+                                $this->getQuery()->getEagerLoads(),
+                                (array) ($this->morphableEagerLoads[get_class($instance)] ?? [])
+                            ))
+                            ->withCount(
+                                (array) ($this->morphableEagerLoadCounts[get_class($instance)] ?? [])
+                            );
 
         if ($callback = ($this->morphableConstraints[get_class($instance)] ?? null)) {
             $callback($query);
@@ -161,7 +153,7 @@ class MorphTo extends BelongsTo
         $whereIn = $this->whereInMethod($instance, $ownerKey);
 
         return $query->{$whereIn}(
-            $instance->qualifyColumn($ownerKey), $this->gatherKeysByType($type, $instance->getKeyType())
+            $instance->getTable().'.'.$ownerKey, $this->gatherKeysByType($type, $instance->getKeyType())
         )->get();
     }
 
@@ -175,17 +167,17 @@ class MorphTo extends BelongsTo
     protected function gatherKeysByType($type, $keyType)
     {
         return $keyType !== 'string'
-            ? array_keys($this->dictionary[$type])
-            : array_map(function ($modelId) {
-                return (string) $modelId;
-            }, array_filter(array_keys($this->dictionary[$type])));
+                    ? array_keys($this->dictionary[$type])
+                    : array_map(function ($modelId) {
+                        return (string) $modelId;
+                    }, array_filter(array_keys($this->dictionary[$type])));
     }
 
     /**
      * Create a new model instance by type.
      *
      * @param  string  $type
-     * @return TRelatedModel
+     * @return \Illuminate\Database\Eloquent\Model
      */
     public function createModelByType($type)
     {
@@ -198,9 +190,15 @@ class MorphTo extends BelongsTo
         });
     }
 
-    /** @inheritDoc */
-    #[\Override]
-    public function match(array $models, EloquentCollection $results, $relation)
+    /**
+     * Match the eagerly loaded results to their parents.
+     *
+     * @param  array  $models
+     * @param  \Illuminate\Database\Eloquent\Collection  $results
+     * @param  string  $relation
+     * @return array
+     */
+    public function match(array $models, Collection $results, $relation)
     {
         return $models;
     }
@@ -209,10 +207,10 @@ class MorphTo extends BelongsTo
      * Match the results for a given type to their parents.
      *
      * @param  string  $type
-     * @param  \Illuminate\Database\Eloquent\Collection<int, TRelatedModel>  $results
+     * @param  \Illuminate\Database\Eloquent\Collection  $results
      * @return void
      */
-    protected function matchToMorphParents($type, EloquentCollection $results)
+    protected function matchToMorphParents($type, Collection $results)
     {
         foreach ($results as $result) {
             $ownerKey = ! is_null($this->ownerKey) ? $this->getDictionaryKey($result->{$this->ownerKey}) : $result->getKey();
@@ -228,16 +226,15 @@ class MorphTo extends BelongsTo
     /**
      * Associate the model instance to the given parent.
      *
-     * @param  TRelatedModel|null  $model
-     * @return TDeclaringModel
+     * @param  \Illuminate\Database\Eloquent\Model  $model
+     * @return \Illuminate\Database\Eloquent\Model
      */
-    #[\Override]
     public function associate($model)
     {
         if ($model instanceof Model) {
             $foreignKey = $this->ownerKey && $model->{$this->ownerKey}
-                ? $this->ownerKey
-                : $model->getKeyName();
+                            ? $this->ownerKey
+                            : $model->getKeyName();
         }
 
         $this->parent->setAttribute(
@@ -254,9 +251,8 @@ class MorphTo extends BelongsTo
     /**
      * Dissociate previously associated model from the given parent.
      *
-     * @return TDeclaringModel
+     * @return \Illuminate\Database\Eloquent\Model
      */
-    #[\Override]
     public function dissociate()
     {
         $this->parent->setAttribute($this->foreignKey, null);
@@ -266,17 +262,24 @@ class MorphTo extends BelongsTo
         return $this->parent->setRelation($this->relationName, null);
     }
 
-    /** @inheritDoc */
-    #[\Override]
+    /**
+     * Touch all of the related models for the relationship.
+     *
+     * @return void
+     */
     public function touch()
     {
-        if (! is_null($this->getParentKey())) {
+        if (! is_null($this->child->{$this->foreignKey})) {
             parent::touch();
         }
     }
 
-    /** @inheritDoc */
-    #[\Override]
+    /**
+     * Make a new related instance for the given model.
+     *
+     * @param  \Illuminate\Database\Eloquent\Model  $parent
+     * @return \Illuminate\Database\Eloquent\Model
+     */
     protected function newRelatedInstanceFor(Model $parent)
     {
         return $parent->{$this->getRelationName()}()->getRelated()->newInstance();
@@ -306,7 +309,7 @@ class MorphTo extends BelongsTo
      * Specify which relations to load for a given morph type.
      *
      * @param  array  $with
-     * @return $this
+     * @return \Illuminate\Database\Eloquent\Relations\MorphTo
      */
     public function morphWith(array $with)
     {
@@ -321,7 +324,7 @@ class MorphTo extends BelongsTo
      * Specify which relationship counts to load for a given morph type.
      *
      * @param  array  $withCount
-     * @return $this
+     * @return \Illuminate\Database\Eloquent\Relations\MorphTo
      */
     public function morphWithCount(array $withCount)
     {
@@ -336,7 +339,7 @@ class MorphTo extends BelongsTo
      * Specify constraints on the query for a given morph type.
      *
      * @param  array  $callbacks
-     * @return $this
+     * @return \Illuminate\Database\Eloquent\Relations\MorphTo
      */
     public function constrain(array $callbacks)
     {
@@ -348,61 +351,10 @@ class MorphTo extends BelongsTo
     }
 
     /**
-     * Indicate that soft deleted models should be included in the results.
-     *
-     * @return $this
-     */
-    public function withTrashed()
-    {
-        $callback = fn ($query) => $query->hasMacro('withTrashed') ? $query->withTrashed() : $query;
-
-        $this->macroBuffer[] = [
-            'method' => 'when',
-            'parameters' => [true, $callback],
-        ];
-
-        return $this->when(true, $callback);
-    }
-
-    /**
-     * Indicate that soft deleted models should not be included in the results.
-     *
-     * @return $this
-     */
-    public function withoutTrashed()
-    {
-        $callback = fn ($query) => $query->hasMacro('withoutTrashed') ? $query->withoutTrashed() : $query;
-
-        $this->macroBuffer[] = [
-            'method' => 'when',
-            'parameters' => [true, $callback],
-        ];
-
-        return $this->when(true, $callback);
-    }
-
-    /**
-     * Indicate that only soft deleted models should be included in the results.
-     *
-     * @return $this
-     */
-    public function onlyTrashed()
-    {
-        $callback = fn ($query) => $query->hasMacro('onlyTrashed') ? $query->onlyTrashed() : $query;
-
-        $this->macroBuffer[] = [
-            'method' => 'when',
-            'parameters' => [true, $callback],
-        ];
-
-        return $this->when(true, $callback);
-    }
-
-    /**
      * Replay stored macro calls on the actual related instance.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<TRelatedModel>  $query
-     * @return \Illuminate\Database\Eloquent\Builder<TRelatedModel>
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @return \Illuminate\Database\Eloquent\Builder
      */
     protected function replayMacros(Builder $query)
     {
@@ -411,17 +363,6 @@ class MorphTo extends BelongsTo
         }
 
         return $query;
-    }
-
-    /** @inheritDoc */
-    #[\Override]
-    public function getQualifiedOwnerKeyName()
-    {
-        if (is_null($this->ownerKey)) {
-            return '';
-        }
-
-        return parent::getQualifiedOwnerKeyName();
     }
 
     /**
@@ -446,7 +387,7 @@ class MorphTo extends BelongsTo
         // If we tried to call a method that does not exist on the parent Builder instance,
         // we'll assume that we want to call a query macro (e.g. withTrashed) that only
         // exists on related models. We will just store the call and replay it later.
-        catch (BadMethodCallException) {
+        catch (BadMethodCallException $e) {
             $this->macroBuffer[] = compact('method', 'parameters');
 
             return $this;

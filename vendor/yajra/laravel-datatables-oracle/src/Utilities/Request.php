@@ -9,6 +9,9 @@ use Illuminate\Http\Request as BaseRequest;
  */
 class Request
 {
+    /**
+     * @var BaseRequest
+     */
     protected BaseRequest $request;
 
     /**
@@ -47,6 +50,8 @@ class Request
 
     /**
      * Get all columns request input.
+     *
+     * @return array
      */
     public function columns(): array
     {
@@ -55,6 +60,8 @@ class Request
 
     /**
      * Check if DataTables is searchable.
+     *
+     * @return bool
      */
     public function isSearchable(): bool
     {
@@ -63,6 +70,9 @@ class Request
 
     /**
      * Check if DataTables must uses regular expressions.
+     *
+     * @param  int  $index
+     * @return bool
      */
     public function isRegex(int $index): bool
     {
@@ -71,6 +81,8 @@ class Request
 
     /**
      * Get orderable columns.
+     *
+     * @return array
      */
     public function orderableColumns(): array
     {
@@ -86,7 +98,7 @@ class Request
             /** @var string $direction */
             $direction = $this->request->input("order.$i.dir");
 
-            $order_dir = $direction && strtolower($direction) === 'asc' ? 'asc' : 'desc';
+            $order_dir = strtolower($direction) === 'asc' ? 'asc' : 'desc';
             if ($this->isColumnOrderable($order_col)) {
                 $orderable[] = ['column' => $order_col, 'direction' => $order_dir];
             }
@@ -97,6 +109,8 @@ class Request
 
     /**
      * Check if DataTables ordering is enabled.
+     *
+     * @return bool
      */
     public function isOrderable(): bool
     {
@@ -105,6 +119,9 @@ class Request
 
     /**
      * Check if a column is orderable.
+     *
+     * @param  int  $index
+     * @return bool
      */
     public function isColumnOrderable(int $index): bool
     {
@@ -131,6 +148,10 @@ class Request
 
     /**
      * Check if a column is searchable.
+     *
+     * @param  int  $i
+     * @param  bool  $column_search
+     * @return bool
      */
     public function isColumnSearchable(int $i, bool $column_search = true): bool
     {
@@ -152,6 +173,9 @@ class Request
 
     /**
      * Get column's search value.
+     *
+     * @param  int  $index
+     * @return string
      */
     public function columnKeyword(int $index): string
     {
@@ -163,6 +187,9 @@ class Request
 
     /**
      * Prepare keyword string value.
+     *
+     * @param  float|array|int|string  $keyword
+     * @return string
      */
     protected function prepareKeyword(float|array|int|string $keyword): string
     {
@@ -175,6 +202,8 @@ class Request
 
     /**
      * Get global search keyword.
+     *
+     * @return string
      */
     public function keyword(): string
     {
@@ -186,6 +215,9 @@ class Request
 
     /**
      * Get column name by index.
+     *
+     * @param  int  $i
+     * @return string|null
      */
     public function columnName(int $i): ?string
     {
@@ -197,6 +229,8 @@ class Request
 
     /**
      * Check if DataTables allow pagination.
+     *
+     * @return bool
      */
     public function isPaginationable(): bool
     {
@@ -205,6 +239,9 @@ class Request
             $this->request->input('length') != -1;
     }
 
+    /**
+     * @return BaseRequest
+     */
     public function getBaseRequest(): BaseRequest
     {
         return $this->request;
@@ -212,31 +249,31 @@ class Request
 
     /**
      * Get starting record value.
+     *
+     * @return int
      */
     public function start(): int
     {
-        $start = $this->request->input('start', 0);
-
-        return is_numeric($start) ? intval($start) : 0;
+        return intval($this->request->input('start', 0));
     }
 
     /**
      * Get per page length.
+     *
+     * @return int
      */
     public function length(): int
     {
-        $length = $this->request->input('length', 10);
-
-        return is_numeric($length) ? intval($length) : 10;
+        return intval($this->request->input('length', 10));
     }
 
     /**
      * Get draw request.
+     *
+     * @return int
      */
     public function draw(): int
     {
-        $draw = $this->request->input('draw', 0);
-
-        return is_numeric($draw) ? intval($draw) : 0;
+        return intval($this->request->input('draw', 0));
     }
 }

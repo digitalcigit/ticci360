@@ -8,16 +8,11 @@
                     {!! Theme::partial('post-item', compact('post')) !!}
                 @endforeach
             </div>
-            <div class="d-flex align-items-center justify-content-center">
-                {!! $posts->withQueryString()->links() !!}
-            </div>
+            {!! $posts->withQueryString()->links() !!}
         </div>
         <div class="col-md-3">
             <div class="primary-sidebar">
-                <aside
-                    class="widget-area"
-                    id="primary-sidebar"
-                >
+                <aside class="widget-area" id="primary-sidebar">
                     {!! dynamic_sidebar('primary_sidebar') !!}
                 </aside>
             </div>

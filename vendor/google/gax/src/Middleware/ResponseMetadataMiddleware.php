@@ -38,7 +38,7 @@ use GuzzleHttp\Promise\PromiseInterface;
 /**
  * Middleware which transforms $response into [$response, $metadata]
  */
-class ResponseMetadataMiddleware implements MiddlewareInterface
+class ResponseMetadataMiddleware
 {
     /** @var callable */
     private $nextHandler;

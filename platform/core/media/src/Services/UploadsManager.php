@@ -2,31 +2,44 @@
 
 namespace Botble\Media\Services;
 
-use Botble\Media\Facades\RvMedia;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Storage;
 use League\Flysystem\FilesystemException;
 use League\Flysystem\UnableToRetrieveMetadata;
+use Mimey\MimeTypes;
+use Botble\Media\Facades\RvMedia;
+use Illuminate\Support\Facades\Storage;
 
 class UploadsManager
 {
+    public function __construct(protected MimeTypes $mimeType)
+    {
+    }
+
     public function fileDetails(string $path): array
     {
         return [
             'filename' => File::basename($path),
             'url' => $path,
-            'mime_type' => $this->fileMimeType(RvMedia::getRealPath($path)),
+            'mime_type' => $this->fileMimeType($path),
             'size' => $this->fileSize($path),
             'modified' => $this->fileModified($path),
         ];
     }
 
-    public function fileMimeType(string $path): ?string
+    public function fileMimeType(string $path): string|null
     {
-        return RvMedia::getMimeType($path);
+        if (File::extension($path) == 'jfif') {
+            return 'image/jpeg';
+        }
+
+        try {
+            return $this->mimeType->getMimeType(File::extension(RvMedia::getRealPath($path)));
+        } catch (UnableToRetrieveMetadata) {
+            return null;
+        }
     }
 
     public function fileSize(string $path): int
@@ -87,16 +100,10 @@ class UploadsManager
         string $path,
         string $content,
         UploadedFile $file = null,
-        string $visibility = 'public'
+        array $visibility = ['visibility' => 'public']
     ): bool {
-        $storage = Storage::disk(RvMedia::getConfig('disk'));
-
-        if ($visibility === 'private' && ! RvMedia::isUsingCloud()) {
-            $storage = Storage::disk('local');
-        }
-
         if (! RvMedia::isChunkUploadEnabled() || ! $file) {
-            return $storage->put($this->cleanFolder($path), $content);
+            return Storage::put($this->cleanFolder($path), $content, $visibility);
         }
 
         $currentChunksPath = RvMedia::getConfig('chunk.storage.chunks') . '/' . $file->getFilename();
@@ -105,11 +112,11 @@ class UploadsManager
         try {
             $stream = $disk->getDriver()->readStream($currentChunksPath);
 
-            if ($result = Storage::writeStream($path, $stream, ['visibility' => $visibility])) {
+            if ($result = Storage::writeStream($path, $stream, $visibility)) {
                 $disk->delete($currentChunksPath);
             }
         } catch (Exception|FilesystemException) {
-            return $storage->put($this->cleanFolder($path), $content);
+            return Storage::put($this->cleanFolder($path), $content, $visibility);
         }
 
         return $result;

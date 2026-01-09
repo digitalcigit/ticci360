@@ -2,99 +2,86 @@
 
 namespace Botble\Blog\Http\Controllers;
 
-use Botble\ACL\Models\User;
 use Botble\Base\Facades\Assets;
+use Botble\ACL\Models\User;
+use Botble\Base\Events\CreatedContentEvent;
+use Botble\Base\Events\DeletedContentEvent;
+use Botble\Base\Events\UpdatedContentEvent;
+use Botble\Base\Facades\PageTitle;
 use Botble\Base\Forms\FormAbstract;
-use Botble\Base\Http\Actions\DeleteResourceAction;
+use Botble\Base\Forms\FormBuilder;
 use Botble\Base\Http\Controllers\BaseController;
-use Botble\Base\Http\Requests\UpdateTreeCategoryRequest;
 use Botble\Base\Http\Responses\BaseHttpResponse;
-use Botble\Base\Supports\Breadcrumb;
-use Botble\Base\Supports\RepositoryHelper;
 use Botble\Blog\Forms\CategoryForm;
 use Botble\Blog\Http\Requests\CategoryRequest;
 use Botble\Blog\Models\Category;
+use Botble\Blog\Repositories\Interfaces\CategoryInterface;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class CategoryController extends BaseController
 {
-    protected function breadcrumb(): Breadcrumb
+    public function __construct(protected CategoryInterface $categoryRepository)
     {
-        return parent::breadcrumb()
-            ->add(trans('plugins/blog::base.menu_name'))
-            ->add(trans('plugins/blog::categories.menu'), route('categories.index'));
     }
 
-    public function index(Request $request)
+    public function index(FormBuilder $formBuilder, Request $request, BaseHttpResponse $response)
     {
-        $this->pageTitle(trans('plugins/blog::categories.menu'));
+        PageTitle::setTitle(trans('plugins/blog::categories.menu'));
 
-        $categories = Category::query()
-            ->latest('is_default')
-            ->oldest('order')->oldest()
-            ->with('slugable');
+        $categories = $this->categoryRepository->getCategories(['*'], [
+            'created_at' => 'DESC',
+            'is_default' => 'DESC',
+            'order' => 'ASC',
+        ], []);
 
-        $categories = RepositoryHelper::applyBeforeExecuteQuery($categories, new Category())->get();
+        $categories->load('slugable')->loadCount('posts');
 
         if ($request->ajax()) {
             $data = view('core/base::forms.partials.tree-categories', $this->getOptions(compact('categories')))
                 ->render();
 
-            return $this
-                ->httpResponse()
-                ->setData($data);
+            return $response->setData($data);
         }
 
-        Assets::addStylesDirectly('vendor/core/core/base/css/tree-category.css')
-            ->addScriptsDirectly('vendor/core/core/base/js/tree-category.js');
+        Assets::addStylesDirectly(['vendor/core/core/base/css/tree-category.css'])
+            ->addScriptsDirectly(['vendor/core/core/base/js/tree-category.js']);
 
-        $form = CategoryForm::create(['template' => 'core/base::forms.form-tree-category']);
+        $form = $formBuilder->create(CategoryForm::class, ['template' => 'core/base::forms.form-tree-category']);
         $form = $this->setFormOptions($form, null, compact('categories'));
 
         return $form->renderForm();
     }
 
-    public function create(Request $request)
+    public function create(FormBuilder $formBuilder, Request $request, BaseHttpResponse $response)
     {
-        $this->pageTitle(trans('plugins/blog::categories.create'));
+        PageTitle::setTitle(trans('plugins/blog::categories.create'));
 
         if ($request->ajax()) {
-            return $this
-                ->httpResponse()
-                ->setData($this->getForm());
+            return $response->setData($this->getForm());
         }
 
-        return CategoryForm::create()->renderForm();
+        return $formBuilder->create(CategoryForm::class)->renderForm();
     }
 
-    public function store(CategoryRequest $request)
+    public function store(CategoryRequest $request, BaseHttpResponse $response)
     {
         if ($request->input('is_default')) {
-            Category::query()->where('id', '>', 0)->update(['is_default' => 0]);
+            $this->categoryRepository->getModel()->where('id', '>', 0)->update(['is_default' => 0]);
         }
 
-        $form = CategoryForm::create();
-        $form
-            ->saving(function (CategoryForm $form) use ($request): void {
-                $form
-                    ->getModel()
-                    ->fill([...$request->validated(),
-                        'author_id' => Auth::guard()->id(),
-                        'author_type' => User::class,
-                    ])
-                    ->save();
-            });
+        $category = $this->categoryRepository->createOrUpdate(
+            array_merge($request->input(), [
+                'author_id' => Auth::id(),
+                'author_type' => User::class,
+            ])
+        );
 
-        $response = $this->httpResponse();
-
-        /**
-         * @var Category $category
-         */
-        $category = $form->getModel();
+        event(new CreatedContentEvent(CATEGORY_MODULE_SCREEN_NAME, $request, $category));
 
         if ($request->ajax()) {
-            if ($response->isSaving()) {
+            if ($request->input('submit') == $response->saveAction) {
                 $form = $this->getForm();
             } else {
                 $form = $this->getForm($category);
@@ -107,36 +94,36 @@ class CategoryController extends BaseController
         }
 
         return $response
-            ->setPreviousRoute('categories.index')
-            ->setNextRoute('categories.edit', $category->getKey())
-            ->withCreatedSuccessMessage();
+            ->setPreviousUrl(route('categories.index'))
+            ->setNextUrl(route('categories.edit', $category->id))
+            ->setMessage(trans('core/base::notices.create_success_message'));
     }
 
-    public function edit(Category $category, Request $request)
+    public function edit(Category $category, FormBuilder $formBuilder, Request $request, BaseHttpResponse $response)
     {
         if ($request->ajax()) {
-            return $this
-                ->httpResponse()
-                ->setData($this->getForm($category));
+            return $response->setData($this->getForm($category));
         }
 
-        $this->pageTitle(trans('core/base::forms.edit_item', ['name' => $category->name]));
+        PageTitle::setTitle(trans('core/base::forms.edit_item', ['name' => $category->name]));
 
-        return CategoryForm::createFromModel($category)->renderForm();
+        return $formBuilder->create(CategoryForm::class, ['model' => $category])->renderForm();
     }
 
-    public function update(Category $category, CategoryRequest $request)
+    public function update(Category $category, CategoryRequest $request, BaseHttpResponse $response)
     {
         if ($request->input('is_default')) {
-            Category::query()->where('id', '!=', $category->getKey())->update(['is_default' => 0]);
+            $this->categoryRepository->getModel()->where('id', '!=', $category->id)->update(['is_default' => 0]);
         }
 
-        CategoryForm::createFromModel($category)->save();
+        $category->fill($request->input());
 
-        $response = $this->httpResponse();
+        $this->categoryRepository->createOrUpdate($category);
+
+        event(new UpdatedContentEvent(CATEGORY_MODULE_SCREEN_NAME, $request, $category));
 
         if ($request->ajax()) {
-            if ($response->isSaving()) {
+            if ($request->input('submit') == $response->saveAction) {
                 $form = $this->getForm();
             } else {
                 $form = $this->getForm($category);
@@ -149,22 +136,39 @@ class CategoryController extends BaseController
         }
 
         return $response
-            ->setPreviousRoute('categories.index')
-            ->withUpdatedSuccessMessage();
+            ->setPreviousUrl(route('categories.index'))
+            ->setMessage(trans('core/base::notices.update_success_message'));
     }
 
-    public function destroy(Category $category)
+    public function destroy(Category $category, Request $request, BaseHttpResponse $response)
     {
-        return DeleteResourceAction::make($category);
+        try {
+            $this->categoryRepository->delete($category);
+            event(new DeletedContentEvent(CATEGORY_MODULE_SCREEN_NAME, $request, $category));
+
+            return $response->setMessage(trans('core/base::notices.delete_success_message'));
+        } catch (Exception $exception) {
+            return $response
+                ->setError()
+                ->setMessage($exception->getMessage());
+        }
     }
 
-    public function updateTree(UpdateTreeCategoryRequest $request): BaseHttpResponse
+    public function deletes(Request $request, BaseHttpResponse $response)
     {
-        Category::updateTree($request->validated('data'));
+        $ids = $request->input('ids');
+        if (empty($ids)) {
+            return $response->setMessage(trans('core/base::notices.no_select'));
+        }
 
-        return $this
-            ->httpResponse()
-            ->withUpdatedSuccessMessage();
+        foreach ($ids as $id) {
+            $category = $this->categoryRepository->findOrFail($id);
+            $this->categoryRepository->delete($category);
+
+            event(new DeletedContentEvent(CATEGORY_MODULE_SCREEN_NAME, $request, $category));
+        }
+
+        return $response->setMessage(trans('core/base::notices.delete_success_message'));
     }
 
     protected function getForm(?Category $model = null): string
@@ -175,7 +179,7 @@ class CategoryController extends BaseController
             $options['model'] = $model;
         }
 
-        $form = CategoryForm::create($options);
+        $form = app(FormBuilder::class)->create(CategoryForm::class, $options);
 
         $form = $this->setFormOptions($form, $model);
 
@@ -188,7 +192,7 @@ class CategoryController extends BaseController
             $form->setUrl(route('categories.create'));
         }
 
-        if (! Auth::guard()->user()->hasPermission('categories.create') && ! $model) {
+        if (! Auth::user()->hasPermission('categories.create') && ! $model) {
             $class = $form->getFormOption('class');
             $form->setFormOption('class', $class . ' d-none');
         }
@@ -201,13 +205,12 @@ class CategoryController extends BaseController
     protected function getOptions(array $options = []): array
     {
         return array_merge([
-            'canCreate' => Auth::guard()->user()->hasPermission('categories.create'),
-            'canEdit' => Auth::guard()->user()->hasPermission('categories.edit'),
-            'canDelete' => Auth::guard()->user()->hasPermission('categories.destroy'),
+            'canCreate' => Auth::user()->hasPermission('categories.create'),
+            'canEdit' => Auth::user()->hasPermission('categories.edit'),
+            'canDelete' => Auth::user()->hasPermission('categories.destroy'),
             'createRoute' => 'categories.create',
             'editRoute' => 'categories.edit',
             'deleteRoute' => 'categories.destroy',
-            'updateTreeRoute' => 'categories.update-tree',
         ], $options);
     }
 }

@@ -2,58 +2,93 @@
 
 namespace Botble\Marketplace\Tables;
 
+use Illuminate\Support\Facades\Auth;
+use Botble\Base\Facades\BaseHelper;
 use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Base\Facades\Html;
-use Botble\Marketplace\Models\Store;
+use Botble\Marketplace\Repositories\Interfaces\StoreInterface;
 use Botble\Table\Abstracts\TableAbstract;
-use Botble\Table\Actions\Action;
-use Botble\Table\Actions\DeleteAction;
-use Botble\Table\Actions\EditAction;
-use Botble\Table\BulkActions\DeleteBulkAction;
-use Botble\Table\Columns\Column;
-use Botble\Table\Columns\CreatedAtColumn;
-use Botble\Table\Columns\IdColumn;
-use Botble\Table\Columns\ImageColumn;
-use Botble\Table\Columns\NameColumn;
-use Botble\Table\Columns\StatusColumn;
+use Botble\Base\Facades\Html;
+use Illuminate\Contracts\Routing\UrlGenerator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\JsonResponse;
+use Botble\Media\Facades\RvMedia;
+use Botble\Table\DataTables;
 
 class StoreTable extends TableAbstract
 {
-    public function setup(): void
+    protected $hasActions = true;
+
+    protected $hasFilter = true;
+
+    protected bool $canEditWalletBalance = false;
+
+    public function __construct(DataTables $table, UrlGenerator $urlGenerator, StoreInterface $storeRepository)
     {
-        $this
-            ->model(Store::class)
-            ->addActions([
-                Action::make('view')
-                    ->route('marketplace.store.view')
-                    ->permission('marketplace.store.view')
-                    ->label(trans('plugins/marketplace::store.view'))
-                    ->icon('ti ti-eye'),
-                EditAction::make()->route('marketplace.store.edit'),
-                DeleteAction::make()->route('marketplace.store.destroy'),
-            ]);
+        $this->repository = $storeRepository;
+        parent::__construct($table, $urlGenerator);
+
+        if (! Auth::user()->hasAnyPermission(['marketplace.store.edit', 'marketplace.store.destroy'])) {
+            $this->hasOperations = false;
+            $this->hasActions = false;
+        }
+
+        if (Auth::user()->hasAnyPermission(['marketplace.store.view'])) {
+            $this->canEditWalletBalance = true;
+        }
     }
 
     public function ajax(): JsonResponse
     {
         $data = $this->table
             ->eloquent($this->query())
+            ->editColumn('name', function ($item) {
+                if (! Auth::user()->hasPermission('marketplace.store.edit')) {
+                    return BaseHelper::clean($item->name);
+                }
+
+                return Html::link(route('marketplace.store.edit', $item->id), BaseHelper::clean($item->name));
+            })
+            ->editColumn('logo', function ($item) {
+                return Html::image(
+                    RvMedia::getImageUrl($item->logo, 'thumb', false, RvMedia::getDefaultImage()),
+                    BaseHelper::clean($item->name),
+                    ['width' => 50]
+                );
+            })
+            ->editColumn('checkbox', function ($item) {
+                return $this->getCheckbox($item->id);
+            })
+            ->editColumn('created_at', function ($item) {
+                return BaseHelper::formatDate($item->created_at);
+            })
             ->editColumn('earnings', function ($item) {
                 return $item->customer->id ? format_price($item->customer->balance ?: 0) : '--';
             })
             ->editColumn('products_count', function ($item) {
                 return $item->products_count;
             })
-            ->addColumn('customer_name', function ($item) {
-                if (! $item->customer->name) {
-                    return '&mdash;';
+            ->editColumn('status', function ($item) {
+                return BaseHelper::clean($item->status->toHtml());
+            })
+            ->addColumn('operations', function ($item) {
+                $viewBtn = '';
+                if ($this->canEditWalletBalance && $item->customer->id) {
+                    $viewBtn = Html::link(
+                        route('marketplace.store.view', $item->id),
+                        '<i class="fa fa-eye"></i>',
+                        [
+                            'class' => 'btn btn-info',
+                            'data-bs-toggle' => 'tooltip',
+                            'data-bs-original-title' => trans('plugins/marketplace::store.view'),
+                        ],
+                        null,
+                        false
+                    );
                 }
 
-                return Html::link(route('customers.edit', $item->customer->id), $item->customer->name);
+                return $this->getOperations('marketplace.store.edit', 'marketplace.store.destroy', $item, $viewBtn);
             });
 
         return $this->toJson($data);
@@ -61,9 +96,7 @@ class StoreTable extends TableAbstract
 
     public function query(): Relation|Builder|QueryBuilder
     {
-        $query = $this
-            ->getModel()
-            ->query()
+        $query = $this->repository->getModel()
             ->select([
                 'id',
                 'logo',
@@ -81,28 +114,38 @@ class StoreTable extends TableAbstract
     public function columns(): array
     {
         return [
-            IdColumn::make(),
-            ImageColumn::make('logo')
-                ->title(trans('plugins/marketplace::store.forms.logo')),
-            NameColumn::make()->route('marketplace.store.edit'),
-            Column::make('earnings')
-                ->title(trans('plugins/marketplace::marketplace.tables.earnings'))
-                ->alignStart()
-                ->orderable(false)
-                ->searchable(false)
-                ->width('100'),
-            Column::make('products_count')
-                ->title(trans('plugins/marketplace::marketplace.tables.products_count'))
-                ->orderable(false)
-                ->searchable(false),
-            Column::make('customer_name')
-                ->title(trans('plugins/marketplace::marketplace.vendor'))
-                ->alignStart()
-                ->orderable(false)
-                ->searchable(false)
-                ->printable(false),
-            CreatedAtColumn::make(),
-            StatusColumn::make(),
+            'id' => [
+                'title' => trans('core/base::tables.id'),
+                'width' => '20px',
+            ],
+            'logo' => [
+                'title' => trans('plugins/marketplace::store.forms.logo'),
+                'width' => '70px',
+            ],
+            'name' => [
+                'title' => trans('core/base::tables.name'),
+                'class' => 'text-start',
+            ],
+            'earnings' => [
+                'title' => trans('plugins/marketplace::marketplace.tables.earnings'),
+                'class' => 'text-start',
+                'searchable' => false,
+                'orderable' => false,
+                'width' => '100px',
+            ],
+            'products_count' => [
+                'title' => trans('plugins/marketplace::marketplace.tables.products_count'),
+                'searchable' => false,
+                'orderable' => false,
+            ],
+            'created_at' => [
+                'title' => trans('core/base::tables.created_at'),
+                'width' => '100px',
+            ],
+            'status' => [
+                'title' => trans('core/base::tables.status'),
+                'width' => '100px',
+            ],
         ];
     }
 
@@ -113,9 +156,11 @@ class StoreTable extends TableAbstract
 
     public function bulkActions(): array
     {
-        return [
-            DeleteBulkAction::make()->permission('marketplace.store.destroy'),
-        ];
+        return $this->addDeleteAction(
+            route('marketplace.store.deletes'),
+            'marketplace.store.destroy',
+            parent::bulkActions()
+        );
     }
 
     public function getBulkChanges(): array
@@ -135,6 +180,21 @@ class StoreTable extends TableAbstract
             'created_at' => [
                 'title' => trans('core/base::tables.created_at'),
                 'type' => 'datePicker',
+            ],
+        ];
+    }
+
+    public function getOperationsHeading(): array
+    {
+        return [
+            'operations' => [
+                'title' => trans('core/base::tables.operations'),
+                'width' => '180px',
+                'class' => 'text-end',
+                'orderable' => false,
+                'searchable' => false,
+                'exportable' => false,
+                'printable' => false,
             ],
         ];
     }

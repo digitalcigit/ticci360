@@ -5,7 +5,6 @@ namespace Laravel\Sanctum\Http\Middleware;
 use Illuminate\Routing\Pipeline;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
-use Laravel\Sanctum\Sanctum;
 
 class EnsureFrontendRequestsAreStateful
 {
@@ -51,8 +50,8 @@ class EnsureFrontendRequestsAreStateful
             config('sanctum.middleware.encrypt_cookies', \Illuminate\Cookie\Middleware\EncryptCookies::class),
             \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
             \Illuminate\Session\Middleware\StartSession::class,
-            config('sanctum.middleware.validate_csrf_token', config('sanctum.middleware.verify_csrf_token', \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)),
-            config('sanctum.middleware.authenticate_session'),
+            config('sanctum.middleware.validate_csrf_token'),
+            config('sanctum.middleware.verify_csrf_token', \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class),
         ])));
 
         array_unshift($middleware, function ($request, $next) {
@@ -84,9 +83,7 @@ class EnsureFrontendRequestsAreStateful
 
         $stateful = array_filter(config('sanctum.stateful', []));
 
-        return Str::is(Collection::make($stateful)->map(function ($uri) use ($request) {
-            $uri = $uri === Sanctum::$currentRequestHostPlaceholder ? $request->getHttpHost() : $uri;
-
+        return Str::is(Collection::make($stateful)->map(function ($uri) {
             return trim($uri).'/*';
         })->all(), $domain);
     }

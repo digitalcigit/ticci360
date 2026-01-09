@@ -9,7 +9,11 @@ use mysqli;
 use mysqli_sql_exception;
 use ReflectionProperty;
 
-/** @internal */
+/**
+ * @internal
+ *
+ * @psalm-immutable
+ */
 final class ConnectionError extends AbstractException
 {
     public static function new(mysqli $connection): self
@@ -20,7 +24,8 @@ final class ConnectionError extends AbstractException
     public static function upcast(mysqli_sql_exception $exception): self
     {
         $p = new ReflectionProperty(mysqli_sql_exception::class, 'sqlstate');
+        $p->setAccessible(true);
 
-        return new self($exception->getMessage(), $p->getValue($exception), $exception->getCode(), $exception);
+        return new self($exception->getMessage(), $p->getValue($exception), (int) $exception->getCode(), $exception);
     }
 }

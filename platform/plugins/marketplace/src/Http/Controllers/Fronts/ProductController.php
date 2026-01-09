@@ -3,34 +3,31 @@
 namespace Botble\Marketplace\Http\Controllers\Fronts;
 
 use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Base\Events\CreatedContentEvent;
-use Botble\Base\Facades\EmailHandler;
+use Botble\Base\Facades\PageTitle;
+use Botble\Base\Forms\FormBuilder;
 use Botble\Base\Http\Controllers\BaseController;
-use Botble\Base\Rules\MediaImageRule;
+use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Ecommerce\Enums\ProductTypeEnum;
-use Botble\Ecommerce\Facades\EcommerceHelper;
-use Botble\Ecommerce\Http\Requests\DeleteProductVariationsRequest;
 use Botble\Ecommerce\Http\Requests\ProductRequest;
 use Botble\Ecommerce\Http\Requests\ProductVersionRequest;
 use Botble\Ecommerce\Models\Customer;
-use Botble\Ecommerce\Models\GlobalOption;
-use Botble\Ecommerce\Models\GroupedProduct;
-use Botble\Ecommerce\Models\Product;
-use Botble\Ecommerce\Models\ProductAttribute;
-use Botble\Ecommerce\Models\ProductAttributeSet;
-use Botble\Ecommerce\Models\ProductVariation;
-use Botble\Ecommerce\Models\ProductVariationItem;
+use Botble\Ecommerce\Repositories\Interfaces\GlobalOptionInterface;
+use Botble\Ecommerce\Repositories\Interfaces\GroupedProductInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ProductAttributeSetInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ProductVariationInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ProductVariationItemInterface;
 use Botble\Ecommerce\Services\Products\StoreAttributesOfProductService;
 use Botble\Ecommerce\Services\Products\StoreProductService;
 use Botble\Ecommerce\Services\StoreProductTagService;
 use Botble\Ecommerce\Traits\ProductActionsTrait;
-use Botble\Marketplace\Facades\MarketplaceHelper;
 use Botble\Marketplace\Forms\ProductForm;
 use Botble\Marketplace\Tables\ProductTable;
-use Botble\Marketplace\Tables\ProductVariationTable;
-use Botble\Media\Facades\RvMedia;
+use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Base\Facades\EmailHandler;
 use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
+use Botble\Marketplace\Facades\MarketplaceHelper;
+use Botble\Marketplace\Tables\ProductVariationTable;
 
 class ProductController extends BaseController
 {
@@ -38,57 +35,56 @@ class ProductController extends BaseController
         ProductActionsTrait::postAddVersion as basePostAddVersion;
         ProductActionsTrait::postUpdateVersion as basePostUpdateVersion;
         ProductActionsTrait::deleteVersionItem as baseDeleteVersionItem;
-        ProductActionsTrait::deleteVersions as baseDeleteVersions;
     }
 
     public function index(ProductTable $table)
     {
-        $this->pageTitle(__('Products'));
+        PageTitle::setTitle(__('Products'));
 
-        return $table->renderTable();
+        return $table->render(MarketplaceHelper::viewPath('dashboard.table.base'));
     }
 
-    public function create()
+    public function create(FormBuilder $formBuilder, Request $request)
     {
-        if (EcommerceHelper::getCurrentCreationContextProductType() == ProductTypeEnum::DIGITAL) {
-            $this->pageTitle(trans('plugins/ecommerce::products.create_product_type.digital'));
-        } elseif (EcommerceHelper::getCurrentCreationContextProductType() == ProductTypeEnum::PHYSICAL) {
-            $this->pageTitle(trans('plugins/ecommerce::products.create_product_type.physical'));
+        if (EcommerceHelper::isEnabledSupportDigitalProducts()) {
+            if ($request->input('product_type') == ProductTypeEnum::DIGITAL) {
+                PageTitle::setTitle(trans('plugins/ecommerce::products.create_product_type.digital'));
+            } else {
+                PageTitle::setTitle(trans('plugins/ecommerce::products.create_product_type.physical'));
+            }
         } else {
-            abort(404);
+            PageTitle::setTitle(trans('plugins/ecommerce::products.create'));
         }
 
-        return ProductForm::create()->renderForm();
+        return $formBuilder->create(ProductForm::class)->renderForm();
     }
 
     public function store(
         ProductRequest $request,
         StoreProductService $service,
+        BaseHttpResponse $response,
+        ProductVariationInterface $variationRepository,
+        ProductVariationItemInterface $productVariationItemRepository,
+        GroupedProductInterface $groupedProductRepository,
         StoreAttributesOfProductService $storeAttributesOfProductService,
         StoreProductTagService $storeProductTagService
     ) {
-        $request->merge(['video_media' => $this->uploadVideoMedia($request)]);
-
         $request = $this->processRequestData($request);
 
-        $product = new Product();
+        $product = $this->productRepository->getModel();
 
         $product->status = MarketplaceHelper::getSetting(
             'enable_product_approval',
             1
         ) ? BaseStatusEnum::PENDING : BaseStatusEnum::PUBLISHED;
 
-        if (EcommerceHelper::getCurrentCreationContextProductType() == ProductTypeEnum::DIGITAL) {
-            $product->product_type = ProductTypeEnum::DIGITAL;
-        } elseif (EcommerceHelper::getCurrentCreationContextProductType() == ProductTypeEnum::PHYSICAL) {
-            $product->product_type = ProductTypeEnum::PHYSICAL;
-        } else {
-            abort(404);
+        if (EcommerceHelper::isEnabledSupportDigitalProducts() && $request->input('product_type')) {
+            $product->product_type = $request->input('product_type');
         }
 
         $product = $service->execute($request, $product);
 
-        $product->store_id = auth('customer')->user()->store?->id;
+        $product->store_id = auth('customer')->user()->store->id;
         $product->created_by_id = auth('customer')->id();
         $product->created_by_type = Customer::class;
         $product->save();
@@ -100,14 +96,12 @@ class ProductController extends BaseController
         if ($request->input('is_added_attributes') == 1 && $addedAttributes) {
             $storeAttributesOfProductService->execute($product, array_keys($addedAttributes), array_values($addedAttributes));
 
-            $variation = ProductVariation::query()->create([
-                'configurable_product_id' => $product->getKey(),
+            $variation = $variationRepository->create([
+                'configurable_product_id' => $product->id,
             ]);
 
-            new CreatedContentEvent(PRODUCT_VARIATIONS_MODULE_SCREEN_NAME, request(), $variation);
-
             foreach ($addedAttributes as $attribute) {
-                ProductVariationItem::query()->create([
+                $productVariationItemRepository->createOrUpdate([
                     'attribute_id' => $attribute,
                     'variation_id' => $variation->id,
                 ]);
@@ -119,17 +113,17 @@ class ProductController extends BaseController
 
             $variation['sku'] = $product->sku ?? time();
             foreach ($addedAttributes as $attributeId) {
-                $attribute = ProductAttribute::query()->find($attributeId);
+                $attribute = $this->productAttributeRepository->findById($attributeId);
                 if ($attribute) {
                     $variation['sku'] .= '-' . $attribute->slug;
                 }
             }
 
-            $this->postSaveAllVersions([$variation['id'] => $variation], $product->getKey(), $this->httpResponse());
+            $this->postSaveAllVersions([$variation['id'] => $variation], $variationRepository, $product->id, $response);
         }
 
         if ($request->has('grouped_products')) {
-            GroupedProduct::createGroupedProducts($product->getKey(), array_map(function ($item) {
+            $groupedProductRepository->createGroupedProducts($product->id, array_map(function ($item) {
                 return [
                     'id' => $item,
                     'qty' => 1,
@@ -141,59 +135,63 @@ class ProductController extends BaseController
             EmailHandler::setModule(MARKETPLACE_MODULE_SCREEN_NAME)
                 ->setVariableValues([
                     'product_name' => $product->name,
-                    'product_url' => route('products.edit', $product->getKey()),
+                    'product_url' => route('products.edit', $product->id),
                     'store_name' => auth('customer')->user()->store->name,
                 ])
                 ->sendUsingTemplate('pending-product-approval');
         }
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setPreviousUrl(route('marketplace.vendor.products.index'))
-            ->setNextUrl(route('marketplace.vendor.products.edit', $product->getKey()))
-            ->withCreatedSuccessMessage();
+            ->setNextUrl(route('marketplace.vendor.products.edit', $product->id))
+            ->setMessage(trans('core/base::notices.create_success_message'));
     }
 
-    public function edit(int|string $id)
+    public function edit(int|string $id, FormBuilder $formBuilder)
     {
-        $product = Product::query()->findOrFail($id);
+        $product = $this->productRepository->findOrFail($id);
 
-        abort_if($product->is_variation || $product->store?->id != auth('customer')->user()->store?->id, 404);
+        if ($product->is_variation || $product->store_id != auth('customer')->user()->store->id) {
+            abort(404);
+        }
 
-        $this->pageTitle(trans('plugins/ecommerce::products.edit', ['name' => $product->name]));
+        PageTitle::setTitle(trans('plugins/ecommerce::products.edit', ['name' => $product->name]));
 
-        return ProductForm::createFromModel($product)->renderForm();
+        return $formBuilder
+            ->create(ProductForm::class, ['model' => $product])
+            ->renderForm();
     }
 
     public function update(
         int|string $id,
         ProductRequest $request,
         StoreProductService $service,
+        GroupedProductInterface $groupedProductRepository,
+        BaseHttpResponse $response,
+        ProductVariationInterface $variationRepository,
+        ProductVariationItemInterface $productVariationItemRepository,
         StoreProductTagService $storeProductTagService
     ) {
-        /**
-         * @var Product $product
-         */
-        $product = Product::query()->findOrFail($id);
+        $product = $this->productRepository->findOrFail($id);
 
-        abort_if($product->is_variation || $product->store?->id != auth('customer')->user()->store?->id, 404);
-
-        $request->merge(['video_media' => $this->uploadVideoMedia($request)]);
+        if ($product->is_variation || $product->store_id != auth('customer')->user()->store->id) {
+            abort(404);
+        }
 
         $request = $this->processRequestData($request);
 
-        $product->store_id = auth('customer')->user()->store?->id;
+        $product->store_id = auth('customer')->user()->store->id;
 
         $product = $service->execute($request, $product);
         $storeProductTagService->execute($request, $product);
 
         if ($request->has('variation_default_id')) {
-            ProductVariation::query()
-                ->where('configurable_product_id', $product->getKey())
+            $variationRepository
+                ->getModel()
+                ->where('configurable_product_id', $product->id)
                 ->update(['is_default' => 0]);
 
-            $defaultVariation = ProductVariation::query()->find($request->input('variation_default_id'));
-
+            $defaultVariation = $variationRepository->findById($request->input('variation_default_id'));
             if ($defaultVariation) {
                 $defaultVariation->is_default = true;
                 $defaultVariation->save();
@@ -203,17 +201,17 @@ class ProductController extends BaseController
         $addedAttributes = $request->input('added_attributes', []);
 
         if ($request->input('is_added_attributes') == 1 && $addedAttributes) {
-            $result = ProductVariation::getVariationByAttributesOrCreate($product->getKey(), $addedAttributes);
+            $result = $variationRepository->getVariationByAttributesOrCreate($id, $addedAttributes);
 
             /**
-             * @var ProductVariation $variation
+             * @var Collection $variation
              */
             $variation = $result['variation'];
 
             foreach ($addedAttributes as $attribute) {
-                ProductVariationItem::query()->firstOrCreate([
+                $productVariationItemRepository->createOrUpdate([
                     'attribute_id' => $attribute,
-                    'variation_id' => $variation->getKey(),
+                    'variation_id' => $variation->id,
                 ]);
             }
 
@@ -222,16 +220,21 @@ class ProductController extends BaseController
 
             $product->productAttributeSets()->sync(array_keys($addedAttributes));
 
-            $variation['sku'] = $product->sku;
-            $variation['auto_generate_sku'] = true;
+            $variation['sku'] = $product->sku ?? time();
+            foreach (array_keys($addedAttributes) as $attributeId) {
+                $attribute = $this->productAttributeRepository->findById($attributeId);
+                if ($attribute) {
+                    $variation['sku'] .= '-' . $attribute->slug;
+                }
+            }
 
-            $this->postSaveAllVersions([$variation['id'] => $variation], $product->getKey(), $this->httpResponse());
+            $this->postSaveAllVersions([$variation['id'] => $variation], $variationRepository, $product->id, $response);
         } elseif ($product->variations()->count() === 0) {
             $product->productAttributeSets()->detach();
         }
 
         if ($request->has('grouped_products')) {
-            GroupedProduct::createGroupedProducts($product->getKey(), array_map(function ($item) {
+            $groupedProductRepository->createGroupedProducts($product->id, array_map(function ($item) {
                 return [
                     'id' => $item,
                     'qty' => 1,
@@ -239,10 +242,9 @@ class ProductController extends BaseController
             }, array_filter(explode(',', $request->input('grouped_products', '')))));
         }
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setPreviousUrl(route('marketplace.vendor.products.index'))
-            ->withUpdatedSuccessMessage();
+            ->setMessage(trans('core/base::notices.update_success_message'));
     }
 
     protected function processRequestData(Request $request): Request
@@ -251,7 +253,7 @@ class ProductController extends BaseController
 
         $request->merge([
             'content' => $shortcodeCompiler->strip($request->input('content'), $shortcodeCompiler->whitelistShortcodes()),
-            'images' => array_filter((array) $request->input('images', [])),
+            'images' => json_decode($request->input('images')),
         ]);
 
         $except = [
@@ -266,11 +268,11 @@ class ProductController extends BaseController
         return $request;
     }
 
-    public function getRelationBoxes($id)
+    public function getRelationBoxes($id, BaseHttpResponse $response)
     {
         $product = null;
         if ($id) {
-            $product = Product::query()->find($id);
+            $product = $this->productRepository->findById($id);
         }
 
         $dataUrl = route(
@@ -278,62 +280,69 @@ class ProductController extends BaseController
             ['product_id' => $product ? $product->id : 0]
         );
 
-        return $this
-            ->httpResponse()
-            ->setData(view(
-                'plugins/ecommerce::products.partials.extras',
-                compact('product', 'dataUrl')
-            )->render());
+        return $response->setData(view(
+            'plugins/ecommerce::products.partials.extras',
+            compact('product', 'dataUrl')
+        )->render());
     }
 
     public function postAddVersion(
         ProductVersionRequest $request,
-        int|string $id
+        ProductVariationInterface $productVariation,
+        $id,
+        BaseHttpResponse $response
     ) {
         $request->merge([
-            'images' => array_filter((array) $request->input('images', [])),
+            'images' => json_decode($request->input('images', '[]')),
         ]);
 
-        return $this->basePostAddVersion($request, $id, $this->httpResponse());
+        return $this->basePostAddVersion($request, $productVariation, $id, $response);
     }
 
     public function postUpdateVersion(
         ProductVersionRequest $request,
-        $id
+        ProductVariationInterface $productVariation,
+        $id,
+        BaseHttpResponse $response
     ) {
         $request->merge([
-            'images' => array_filter((array) $request->input('images', [])),
+            'images' => json_decode($request->input('images', '[]')),
         ]);
 
-        return $this->basePostUpdateVersion($request, $id, $this->httpResponse());
+        return $this->basePostUpdateVersion($request, $productVariation, $id, $response);
     }
 
-    public function getVersionForm(int|string|null $id, Request $request)
-    {
+    public function getVersionForm(
+        $id,
+        Request $request,
+        ProductVariationInterface $productVariation,
+        BaseHttpResponse $response,
+        ProductAttributeSetInterface $productAttributeSetRepository,
+        ProductVariationItemInterface $productVariationItemRepository
+    ) {
         $product = null;
         $variation = null;
         $productVariationsInfo = [];
 
         if ($id) {
-            $variation = ProductVariation::query()->findOrFail($id);
-            $product = Product::query()->findOrFail($variation->product_id);
-            $productVariationsInfo = ProductVariationItem::getVariationsInfo([$id]);
+            $variation = $productVariation->findOrFail($id);
+            $product = $this->productRepository->findOrFail($variation->product_id);
+            $productVariationsInfo = $productVariationItemRepository->getVariationsInfo([$id]);
         }
 
         $productId = $variation ? $variation->configurable_product_id : $request->input('product_id');
 
         if ($productId) {
-            $productAttributeSets = ProductAttributeSet::getByProductId($productId);
+            $productAttributeSets = $productAttributeSetRepository->getByProductId($productId);
         } else {
-            $productAttributeSets = ProductAttributeSet::getAllWithSelected($productId);
+            $productAttributeSets = $productAttributeSetRepository->getAllWithSelected($productId);
         }
 
         $originalProduct = $product;
 
-        return $this
-            ->httpResponse()
+        return $response
             ->setData(
-                MarketplaceHelper::view('vendor-dashboard.products.product-variation-form', compact(
+                MarketplaceHelper::view('dashboard.products.product-variation-form', compact(
                     'productAttributeSets',
                     'product',
                     'productVariationsInfo',
@@ -342,98 +351,74 @@ class ProductController extends BaseController
             );
     }
 
-    protected function deleteVersionItem(int|string $variationId)
-    {
-        /**
-         * @var ProductVariation $variation
-         */
-        $variation = ProductVariation::query()->findOrFail($variationId);
-
-        $product = $variation->configurableProduct;
-
-        abort_if(! $product || $product->original_product->store_id != auth('customer')->user()->store?->id, 404);
-
-        return $this->baseDeleteVersionItem($variationId);
-    }
-
-    public function deleteVersions(
-        DeleteProductVariationsRequest $request
+    protected function deleteVersionItem(
+        ProductVariationInterface $productVariation,
+        ProductVariationItemInterface $productVariationItem,
+        $variationId
     ) {
-        $ids = (array) $request->input('ids');
+        $variation = $productVariation->findOrFail($variationId);
 
-        if (empty($ids)) {
-            return $this
-                ->httpResponse()
-                ->setError()
-                ->setMessage(trans('core/base::notices.no_select'));
+        $product = $variation->product()->first();
+
+        if (! $product || $product->original_product->store_id != auth('customer')->user()->store->id) {
+            abort(404);
         }
 
-        $variations = ProductVariation::query()->whereIn('id', $ids)->with('product')->get();
-
-        if ($variations->isEmpty() || $variations->count() != count($ids)) {
-            return $this
-                ->httpResponse()
-
-                ->setError()
-                ->setMessage(trans('core/base::notices.no_select'));
-        }
-
-        foreach ($variations as $variation) {
-            $product = $variation->product;
-
-            abort_if(! $product || $product->original_product->store_id != auth('customer')->user()->store?->id, 404);
-        }
-
-        return $this->baseDeleteVersions($request, $this->httpResponse());
+        return $this->baseDeleteVersionItem($productVariation, $productVariationItem, $variationId);
     }
 
-    public function getListProductForSearch(Request $request)
+    public function getListProductForSearch(Request $request, BaseHttpResponse $response)
     {
-        $availableProducts = Product::query()
-            ->where('status', BaseStatusEnum::PUBLISHED)
-            ->where('is_variation', 0)
-            ->where('id', '!=', $request->input('product_id', 0))
-            ->where('name', 'LIKE', '%' . $request->input('keyword') . '%')
-            ->where('store_id', auth('customer')->user()->store?->id)
-            ->select([
-                'id',
-                'name',
-                'images',
-                'image',
-                'price',
-            ])
-            ->simplePaginate(5);
+        $availableProducts = $this->productRepository
+            ->advancedGet([
+                'condition' => [
+                    'status' => BaseStatusEnum::PUBLISHED,
+                    ['is_variation', '<>', 1],
+                    ['id', '<>', $request->input('product_id', 0)],
+                    ['name', 'LIKE', '%' . $request->input('keyword') . '%'],
+                    'store_id' => auth('customer')->user()->store->id,
+                ],
+                'select' => [
+                    'id',
+                    'name',
+                    'images',
+                    'image',
+                    'price',
+                ],
+                'paginate' => [
+                    'per_page' => 5,
+                    'type' => 'simplePaginate',
+                    'current_paged' => $request->integer('page', 1),
+                ],
+            ]);
 
         $includeVariation = $request->input('include_variation', 0);
 
-        return $this
-            ->httpResponse()
-            ->setData(
-                view('plugins/ecommerce::products.partials.panel-search-data', compact(
-                    'availableProducts',
-                    'includeVariation'
-                ))->render()
-            );
+        return $response->setData(
+            view('plugins/ecommerce::products.partials.panel-search-data', compact(
+                'availableProducts',
+                'includeVariation'
+            ))->render()
+        );
     }
 
-    public function ajaxProductOptionInfo(Request $request)
-    {
-        $optionsValues = GlobalOption::query()->with(['values'])->findOrFail($request->input('id'));
+    public function ajaxProductOptionInfo(
+        Request $request,
+        BaseHttpResponse $response,
+        GlobalOptionInterface $globalOptionRepository
+    ): BaseHttpResponse {
+        $optionsValues = $globalOptionRepository->findOrFail($request->input('id'), ['values']);
 
-        return $this
-            ->httpResponse()
-            ->setData($optionsValues);
+        return $response->setData($optionsValues);
     }
 
     public function getProductVariations(int|string $id, ProductVariationTable $dataTable)
     {
-        /**
-         * @var Product $product
-         */
-        $product = Product::query()
+        $product = $this->productRepository
+            ->getModel()
             ->where([
                 'is_variation' => 0,
-                'store_id' => auth('customer')->user()->store?->id,
+                'store_id' => auth('customer')->user()->store->id,
             ])
             ->findOrFail($id);
 
@@ -446,13 +431,16 @@ class ProductController extends BaseController
         return $dataTable->renderTable();
     }
 
-    public function setDefaultProductVariation(int|string $id)
+    public function setDefaultProductVariation(int|string $id, ProductVariationInterface $variationRepository, BaseHttpResponse $response)
     {
-        $variation = ProductVariation::query()->findOrFail($id);
+        $variation = $variationRepository->findOrFail($id);
 
-        abort_if($variation->configurableProduct->store_id != auth('customer')->user()->store?->id, 404);
+        if ($variation->configurableProduct->store_id != auth('customer')->user()->store->id) {
+            abort(404);
+        }
 
-        ProductVariation::query()
+        $variationRepository
+            ->getModel()
             ->where('configurable_product_id', $variation->configurable_product_id)
             ->update(['is_default' => 0]);
 
@@ -461,52 +449,6 @@ class ProductController extends BaseController
             $variation->save();
         }
 
-        return $this
-            ->httpResponse()
-            ->withUpdatedSuccessMessage();
-    }
-
-    protected function uploadVideoMedia(ProductRequest $request)
-    {
-        $imageRules = [];
-
-        foreach ($request->allFiles() as $key => $file) {
-            if (! str_starts_with($key, 'video_media___')) {
-                continue;
-            }
-
-            $imageRules[$key] = ['nullable', new MediaImageRule()];
-        }
-
-        if ($imageRules) {
-            $request->validate($imageRules);
-        }
-
-        /**
-         * @var Customer $customer
-         */
-        $customer = auth('customer')->user();
-
-        $uploadFolder = $customer->upload_folder;
-
-        $videoMedias = $request->input('video_media');
-
-        foreach ($request->allFiles() as $key => $file) {
-            if (! str_starts_with($key, 'video_media___')) {
-                continue;
-            }
-
-            $result = RvMedia::handleUpload($file, 0, $uploadFolder);
-
-            if (! $result['error']) {
-                $key = str_replace('video_media___', '', $key);
-                $key = str_replace('_input', '', $key);
-                $key = str_replace('___', '.', $key);
-
-                Arr::set($videoMedias, $key, $result['data']->url);
-            }
-        }
-
-        return $videoMedias;
+        return $response->setMessage(trans('core/base::notices.update_success_message'));
     }
 }

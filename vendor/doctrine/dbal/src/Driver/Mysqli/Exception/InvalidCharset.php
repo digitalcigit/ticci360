@@ -11,7 +11,11 @@ use ReflectionProperty;
 
 use function sprintf;
 
-/** @internal */
+/**
+ * @internal
+ *
+ * @psalm-immutable
+ */
 final class InvalidCharset extends AbstractException
 {
     public static function fromCharset(mysqli $connection, string $charset): self
@@ -26,11 +30,12 @@ final class InvalidCharset extends AbstractException
     public static function upcast(mysqli_sql_exception $exception, string $charset): self
     {
         $p = new ReflectionProperty(mysqli_sql_exception::class, 'sqlstate');
+        $p->setAccessible(true);
 
         return new self(
             sprintf('Failed to set charset "%s": %s', $charset, $exception->getMessage()),
             $p->getValue($exception),
-            $exception->getCode(),
+            (int) $exception->getCode(),
             $exception,
         );
     }

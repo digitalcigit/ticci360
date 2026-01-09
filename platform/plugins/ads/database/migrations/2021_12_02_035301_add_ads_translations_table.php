@@ -8,12 +8,12 @@ return new class () extends Migration {
     public function up(): void
     {
         if (! Schema::hasTable('ads_translations')) {
-            Schema::create('ads_translations', function (Blueprint $table): void {
+            Schema::create('ads_translations', function (Blueprint $table) {
                 $table->string('lang_code');
                 $table->foreignId('ads_id');
-                $table->string('name')->nullable();
-                $table->string('image')->nullable();
-                $table->string('url')->nullable();
+                $table->string('name', 255)->nullable();
+                $table->string('image', 255)->nullable();
+                $table->string('url', 255)->nullable();
 
                 $table->primary(['lang_code', 'ads_id'], 'ads_translations_primary');
             });

@@ -21,15 +21,13 @@ class Footprinter implements FootprinterInterface
     {
         $this->request = $request;
 
-        $cookieName = 'botble_footprints_cookie';
-
-        if ($request->hasCookie($cookieName)) {
-            return $request->cookie($cookieName);
+        if ($request->hasCookie('botble_footprints_cookie')) {
+            return $request->cookie('botble_footprints_cookie');
         }
 
         // This will add the cookie to the response
         Cookie::queue(
-            $cookieName,
+            'botble_footprints_cookie',
             $footprint = $this->fingerprint(),
             604800,
             null,

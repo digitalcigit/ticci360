@@ -2,24 +2,28 @@
 
 namespace Yajra\DataTables\Html\Editor;
 
-use Yajra\DataTables\Html\Fluent;
+use Illuminate\Support\Fluent;
 
 /**
  * @see https://editor.datatables.net/reference/type/form-options
  */
 class FormOptions extends Fluent
 {
+    /**
+     * @param  array  $attributes
+     * @return static
+     */
     public static function make(array $attributes = []): static
     {
         return new static($attributes);
     }
 
     /**
+     * @param  int|string|null  $value
      * @return $this
-     *
      * @see https://editor.datatables.net/reference/type/form-options#focus
      */
-    public function focus(int|string|null $value = null): static
+    public function focus(int|string $value = null): static
     {
         $this->attributes['focus'] = $value;
 
@@ -27,8 +31,8 @@ class FormOptions extends Fluent
     }
 
     /**
+     * @param  bool  $value
      * @return $this
-     *
      * @see https://editor.datatables.net/reference/type/form-options#nest
      */
     public function nest(bool $value): static
@@ -39,8 +43,8 @@ class FormOptions extends Fluent
     }
 
     /**
+     * @param  string  $value
      * @return $this
-     *
      * @see https://editor.datatables.net/reference/type/form-options#onBackground
      */
     public function onBackground(string $value = 'blur'): static
@@ -51,8 +55,8 @@ class FormOptions extends Fluent
     }
 
     /**
+     * @param  string  $value
      * @return $this
-     *
      * @see https://editor.datatables.net/reference/type/form-options#onBlur
      */
     public function onBlur(string $value = 'close'): static
@@ -63,8 +67,8 @@ class FormOptions extends Fluent
     }
 
     /**
+     * @param  string  $value
      * @return $this
-     *
      * @see https://editor.datatables.net/reference/type/form-options#onComplete
      */
     public function onComplete(string $value = 'close'): static
@@ -75,8 +79,8 @@ class FormOptions extends Fluent
     }
 
     /**
+     * @param  string  $value
      * @return $this
-     *
      * @see https://editor.datatables.net/reference/type/form-options#onEsc
      */
     public function onEsc(string $value = 'close'): static
@@ -87,8 +91,8 @@ class FormOptions extends Fluent
     }
 
     /**
+     * @param  string  $value
      * @return $this
-     *
      * @see https://editor.datatables.net/reference/type/form-options#onFieldError
      */
     public function onFieldError(string $value = 'focus'): static
@@ -99,8 +103,8 @@ class FormOptions extends Fluent
     }
 
     /**
+     * @param  string  $value
      * @return $this
-     *
      * @see https://editor.datatables.net/reference/type/form-options#onReturn
      */
     public function onReturn(string $value = 'submit'): static
@@ -111,8 +115,8 @@ class FormOptions extends Fluent
     }
 
     /**
+     * @param  string  $value
      * @return $this
-     *
      * @see https://editor.datatables.net/reference/type/form-options#submit
      */
     public function submit(string $value = 'changed'): static
@@ -123,11 +127,11 @@ class FormOptions extends Fluent
     }
 
     /**
+     * @param  string  $value
      * @return $this
-     *
      * @see https://editor.datatables.net/reference/type/form-options#scope
      */
-    public function formScope(string $value = 'row'): static
+    public function scope(string $value = 'row'): static
     {
         $this->attributes['scope'] = $value;
 
@@ -135,8 +139,8 @@ class FormOptions extends Fluent
     }
 
     /**
+     * @param  array|string  $value
      * @return $this
-     *
      * @see https://editor.datatables.net/reference/type/form-options#buttons
      */
     public function buttons(array|string $value): static
@@ -145,10 +149,9 @@ class FormOptions extends Fluent
 
         return $this;
     }
-
     /**
+     * @param  string  $value
      * @return $this
-     *
      * @see https://editor.datatables.net/reference/type/form-options#drawType
      */
     public function drawType(string $value = ''): static
@@ -159,8 +162,8 @@ class FormOptions extends Fluent
     }
 
     /**
+     * @param  bool|string  $value
      * @return $this
-     *
      * @see https://editor.datatables.net/reference/type/form-options#message
      */
     public function message(bool|string $value = ''): static
@@ -171,8 +174,8 @@ class FormOptions extends Fluent
     }
 
     /**
+     * @param  int|string  $value
      * @return $this
-     *
      * @see https://editor.datatables.net/reference/type/form-options#submitTrigger
      */
     public function submitTrigger(int|string $value): static
@@ -183,8 +186,8 @@ class FormOptions extends Fluent
     }
 
     /**
+     * @param  string  $value
      * @return $this
-     *
      * @see https://editor.datatables.net/reference/type/form-options#submitHtml
      */
     public function submitHtml(string $value): static
@@ -195,8 +198,8 @@ class FormOptions extends Fluent
     }
 
     /**
+     * @param  bool|string  $value
      * @return $this
-     *
      * @see https://editor.datatables.net/reference/type/form-options#title
      */
     public function title(bool|string $value): static

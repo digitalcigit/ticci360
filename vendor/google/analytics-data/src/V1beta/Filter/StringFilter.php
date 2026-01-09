@@ -20,19 +20,19 @@ class StringFilter extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>.google.analytics.data.v1beta.Filter.StringFilter.MatchType match_type = 1;</code>
      */
-    protected $match_type = 0;
+    private $match_type = 0;
     /**
      * The string value used for the matching.
      *
      * Generated from protobuf field <code>string value = 2;</code>
      */
-    protected $value = '';
+    private $value = '';
     /**
      * If true, the string value is case sensitive.
      *
      * Generated from protobuf field <code>bool case_sensitive = 3;</code>
      */
-    protected $case_sensitive = false;
+    private $case_sensitive = false;
 
     /**
      * Constructor.

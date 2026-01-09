@@ -41,13 +41,13 @@ abstract class AbstractWidgetFactory
 
         $this->widgetName = $this->parseFullWidgetNameFromString(array_shift($params));
         $this->widgetFullParams = $params;
-        $this->widgetConfig = (array) array_shift($params);
+        $this->widgetConfig = (array)array_shift($params);
         $this->widgetParams = $params;
 
         $widgetClass = $this->widgetName;
 
         if (! class_exists($widgetClass, false)) {
-            throw new Exception(sprintf('Widget "%s" does not exists.', $widgetClass));
+            throw new Exception($widgetClass . ' is not exists');
         }
 
         if (! is_subclass_of($widgetClass, AbstractWidget::class)) {

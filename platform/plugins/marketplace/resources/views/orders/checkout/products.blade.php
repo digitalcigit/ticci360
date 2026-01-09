@@ -1,16 +1,15 @@
-<div class="bg-light py-2">
+<div class="bg-light p-2">
     <p class="font-weight-bold mb-0">{{ __('Product(s)') }}:</p>
 </div>
-
-<div class="checkout-products-marketplace shipping-method-wrapper">
+<div class="checkout-products-marketplace" id="shipping-method-wrapper">
     @foreach ($groupedProducts as $grouped)
         @php
             $cartItems = $grouped['products']->pluck('cartItem');
             $store = $grouped['store'];
-            if (! $store->exists) {
+            if (!$store->exists) {
                 $store->id = 0;
-                $store->name = get_ecommerce_setting('company_name_for_invoicing', get_ecommerce_setting('store_name')) ?: Theme::getSiteTitle();
-                $store->logo = theme_option('favicon') ?: Theme::getLogo();
+                $store->name = theme_option('site_title');
+                $store->logo = theme_option('logo');
             }
             $storeId = $store->id;
             $sessionData = Arr::get($sessionCheckoutData, 'marketplace.' . $storeId, []);
@@ -26,66 +25,52 @@
             $isAvailableShipping = Arr::get($sessionData, 'is_available_shipping', true);
 
             $orderAmount = max($rawTotal - $promotionDiscountAmount - $couponDiscountAmount, 0);
-            $orderAmount += (float) $shippingAmount;
+            $orderAmount += (float)$shippingAmount;
         @endphp
         <div class="mt-3 bg-light mb-3">
             <div class="p-2" style="background: antiquewhite;">
-                <img
-                    class="img-fluid rounded"
-                    src="{{ RvMedia::getImageUrl($store->logo_square ?: $store->logo, null, false, RvMedia::getDefaultImage()) }}"
+                <img src="{{ RvMedia::getImageUrl($store->logo, 'small', false, RvMedia::getDefaultImage()) }}"
                     alt="{{ $store->name }}"
-                    style="max-width: 30px; margin-inline-end: 3px;"
-                >
+                    class="img-fluid rounded"
+                    width="30">
                 <span class="font-weight-bold">{!! BaseHelper::clean($store->name) !!}</span>
-                @if ($store->id && EcommerceHelper::isReviewEnabled())
-                    <div class="d-flex align-items-center gap-2">
-                        @include(EcommerceHelper::viewPath('includes.rating-star'), ['avg' => $store->reviews()->avg('star')])
-                        <span class="small text-muted">
-                            @if (($reviewsCount = $store->reviews()->count()) === 1)
-                                ({{ __('1 Review') }})
-                            @else
-                                ({{ __(':count Reviews', ['count' => number_format($reviewsCount)]) }})
-                            @endif
-                        </span>
+                @if (EcommerceHelper::isReviewEnabled())
+                    <div class="rating_wrap">
+                        <div class="rating">
+                            <div class="product_rate" style="width: {{ 4 * 20 }}%"></div>
+                        </div>
                     </div>
                 @endif
             </div>
 
-            <div class="py-3">
-                @foreach ($grouped['products'] as $product)
-                    @include('plugins/ecommerce::orders.checkout.product', [
-                        'product' => $product,
-                        'cartItem' => $product->cartItem,
-                        'key' => $product->cartItem->rowId,
-                    ])
+            <div class="p-3">
+                @foreach($grouped['products'] as $product)
+                    @include('plugins/ecommerce::orders.checkout.product', ['product' => $product, 'cartItem' => $product->cartItem])
                 @endforeach
             </div>
 
             @if ($isAvailableShipping)
-                <div class="shipping-method-wrapper py-3" @style(['display: none' => (bool) get_ecommerce_setting('disable_shipping_options', false)])>
+                <div class="shipping-method-wrapper p-3">
                     @if (!empty($shipping))
                         <div class="payment-checkout-form">
-                            <h6>{{ __('Shipping method') }}:</h6>
+                            <div class="mx-0">
+                                <h6>{{ __('Shipping method') }}:</h6>
+                            </div>
 
-                            <input
-                                name="shipping_option[{{ $storeId }}]"
-                                type="hidden"
-                                value="{{ old("shipping_option.$storeId", $defaultShippingOption ?: array_key_first(Arr::first($shipping))) }}"
-                            >
-
+                            <input type="hidden" name="shipping_option[{{ $storeId }}]" value="{{ old("shipping_option.$storeId", $defaultShippingOption) }}">
                             <div id="shipping-method-{{ $storeId }}">
                                 <ul class="list-group list_payment_method">
                                     @foreach ($shipping as $shippingKey => $shippingItems)
-                                        @foreach ($shippingItems as $shippingOption => $shippingItem)
+                                        @foreach($shippingItems as $shippingOption => $shippingItem)
                                             @include('plugins/ecommerce::orders.partials.shipping-option', [
                                                 'shippingItem' => $shippingItem,
                                                 'attributes' => [
-                                                    'id' => "shipping-method-$storeId-$shippingKey-$shippingOption",
-                                                    'name' => "shipping_method[$storeId]",
+                                                    'id' => 'shipping-method-' . $storeId . '-' . $shippingKey . '-' . $shippingOption,
+                                                    'name' => 'shipping_method[' . $storeId . ']',
                                                     'class' => 'magic-radio shipping_method_input',
-                                                    'checked' => old("shipping_method.$storeId", $defaultShippingMethod) == $shippingKey && old("shipping_option.$storeId", $defaultShippingOption) == $shippingOption,
+                                                    'checked' => old('shipping_method.' . $storeId, $shippingKey) == $defaultShippingMethod && old('shipping_option.' . $storeId, $shippingOption) == $defaultShippingOption,
                                                     'disabled' => Arr::get($shippingItem, 'disabled'),
-                                                    'data-id' => $storeId,
+                                                    'data-id'=> $storeId,
                                                     'data-option' => $shippingOption,
                                                 ],
                                             ])
@@ -97,21 +82,18 @@
                     @else
                         <p>{{ __('No shipping methods available!') }}</p>
                     @endif
-
-                    <div class="payment-info-loading loading-spinner" style="display: none;"></div>
                 </div>
             @endif
 
-            <hr class="border-dark-subtle" />
-            @if (count($groupedProducts) > 1 && MarketplaceHelper::getSetting('display_order_total_info_for_each_store', false))
+            <hr>
+            @if (count($groupedProducts) > 1)
                 <div class="p-3">
                     <div class="row">
                         <div class="col-6">
                             <p>{{ __('Subtotal') }}:</p>
                         </div>
                         <div class="col-6 text-end">
-                            <p class="price-text sub-total-text text-end">
-                                {{ format_price(Cart::rawSubTotalByItems($cartItems)) }} </p>
+                            <p class="price-text sub-total-text text-end"> {{ format_price(Cart::rawSubTotalByItems($cartItems)) }} </p>
                         </div>
                     </div>
                     @if (EcommerceHelper::isTaxEnabled())
@@ -120,8 +102,7 @@
                                 <p>{{ __('Tax') }}:</p>
                             </div>
                             <div class="col-6 text-end">
-                                <p class="price-text tax-price-text">
-                                    {{ format_price(Cart::rawTaxByItems($cartItems)) }}</p>
+                                <p class="price-text tax-price-text">{{ format_price(Cart::rawTaxByItems($cartItems)) }}</p>
                             </div>
                         </div>
                     @endif
@@ -145,14 +126,10 @@
                             <div class="col-6 text-end">
                                 <p class="price-text">
                                     @if (Arr::get($shippingCurrent, 'price') && $isFreeShipping)
-                                        <span class="font-italic" style="text-decoration-line: line-through;">
-                                            {{ format_price(Arr::get($shippingCurrent, 'price')) }}
-                                        </span>
+                                        <span class="font-italic" style="text-decoration-line: line-through;">{{ format_price(Arr::get($shippingCurrent, 'price')) }}</span>
                                         <span class="font-weight-bold">{{ __('Free shipping') }}</span>
                                     @else
-                                        <span class="font-weight-bold">
-                                            {{ format_price(Arr::get($shippingCurrent, 'price')) }}
-                                        </span>
+                                        <span class="font-weight-bold">{{ format_price(Arr::get($shippingCurrent, 'price')) }}</span>
                                     @endif
                                 </p>
                             </div>

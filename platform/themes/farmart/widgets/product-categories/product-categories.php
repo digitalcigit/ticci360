@@ -1,8 +1,6 @@
 <?php
 
-use Botble\Ecommerce\Facades\ProductCategoryHelper;
 use Botble\Widget\AbstractWidget;
-use Illuminate\Support\Collection;
 
 class ProductCategoriesWidget extends AbstractWidget
 {
@@ -13,27 +11,5 @@ class ProductCategoriesWidget extends AbstractWidget
             'description' => __('List of product categories'),
             'categories' => [],
         ]);
-    }
-
-    protected function data(): array|Collection
-    {
-        $categoryIds = $this->getConfig('categories');
-
-        if (empty($categoryIds)) {
-            return [
-                'categories' => [],
-            ];
-        }
-
-        $categories = ProductCategoryHelper::getProductCategoriesWithUrl($categoryIds);
-
-        return [
-            'categories' => $categories,
-        ];
-    }
-
-    protected function requiredPlugins(): array
-    {
-        return ['ecommerce'];
     }
 }

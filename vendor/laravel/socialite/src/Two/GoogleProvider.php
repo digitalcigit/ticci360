@@ -56,22 +56,7 @@ class GoogleProvider extends AbstractProvider implements ProviderInterface
             ],
         ]);
 
-        return json_decode((string) $response->getBody(), true);
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function refreshToken($refreshToken)
-    {
-        $response = $this->getRefreshTokenResponse($refreshToken);
-
-        return new Token(
-            Arr::get($response, 'access_token'),
-            Arr::get($response, 'refresh_token', $refreshToken),
-            Arr::get($response, 'expires_in'),
-            explode($this->scopeSeparator, Arr::get($response, 'scope', ''))
-        );
+        return json_decode($response->getBody(), true);
     }
 
     /**

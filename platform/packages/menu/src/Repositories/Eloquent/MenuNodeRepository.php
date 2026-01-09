@@ -21,7 +21,7 @@ class MenuNodeRepository extends RepositoriesAbstract implements MenuNodeInterfa
             $data = $data->select($select);
         }
 
-        $data = $data->oldest('position')->get();
+        $data = $data->orderBy('position')->get();
 
         $this->resetModel();
 

@@ -7,9 +7,6 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Storage;
-
-use function Laravel\Prompts\{info, progress};
-
 use Symfony\Component\Console\Attribute\AsCommand;
 
 #[AsCommand('cms:cache:clear-expired', 'Remove all expired cache file/folder')]
@@ -29,10 +26,12 @@ class ClearExpiredCacheCommand extends Command
     {
         parent::__construct();
 
-        config(['filesystems.disks.fcache' => [
+        $cacheDisk = [
             'driver' => 'local',
             'root' => config('cache.stores.file.path'),
-        ]]);
+        ];
+
+        config(['filesystems.disks.fcache' => $cacheDisk]);
 
         $this->disk = Storage::disk('fcache');
     }
@@ -49,21 +48,11 @@ class ClearExpiredCacheCommand extends Command
     protected function deleteExpiredFiles(): void
     {
         $files = $this->disk->allFiles();
-
-        if (empty($files)) {
-            return;
-        }
-
-        $progress = progress(
-            label: 'Removing expired cache files',
-            steps: count($files),
-        );
-
-        $progress->start();
+        $this->output->progressStart(count($files));
 
         // Loop the files and get rid of any that have expired
         foreach ($files as $cacheFile) {
-            // Ignore files that named with dot(.) at the beginning e.g: .gitignore
+            // Ignore files that named with dot(.) at the begining e.g. .gitignore
             if (str_starts_with($cacheFile, '.')) {
                 continue;
             }
@@ -86,11 +75,10 @@ class ClearExpiredCacheCommand extends Command
                 $this->activeFileCount++;
                 $this->activeFileSize += $this->disk->size($cacheFile);
             }
-
-            $progress->advance();
+            $this->output->progressAdvance();
         }
 
-        $progress->finish();
+        $this->output->progressFinish();
     }
 
     protected function deleteEmptyFolders(): void
@@ -111,13 +99,13 @@ class ClearExpiredCacheCommand extends Command
         $activeFileSize = BaseHelper::humanFilesize($this->activeFileSize);
 
         if ($this->expiredFileCount) {
-            info("✔ $this->expiredFileCount expired cache files removed");
-            info("✔ $expiredFileSize disk cleared");
+            $this->info("✔ {$this->expiredFileCount} expired cache files removed");
+            $this->info("✔ {$expiredFileSize} disk cleared");
         } else {
-            info('✔ No expired cache file found!');
+            $this->info('✔ No expired cache file found!');
         }
 
-        info("✔ $this->activeFileCount non-expired cache files remaining");
-        info("✔ $activeFileSize disk space taken by non-expired cache files");
+        $this->line("✔ {$this->activeFileCount} non-expired cache files remaining");
+        $this->line("✔ {$activeFileSize} disk space taken by non-expired cache files");
     }
 }

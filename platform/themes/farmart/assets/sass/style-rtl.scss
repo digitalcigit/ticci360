@@ -1,6 +1,6 @@
 @import 'utils/variables';
 
-body[dir='rtl'] {
+body[dir="rtl"] {
     direction: rtl;
     text-align: right;
 }
@@ -27,7 +27,7 @@ body[dir='rtl'] {
             .input-group-text {
                 border-right: 1px solid $footer-border-color;
                 border-left: none;
-                padding-left: 0.75rem;
+                padding-left: .75rem;
                 padding-right: 1.5em;
             }
         }
@@ -137,7 +137,7 @@ body[dir='rtl'] {
 .cart--mini {
     .cart__content {
         right: auto;
-        left: 0 !important;
+        left: 0;
 
         .cart__items {
             &:before {
@@ -220,8 +220,7 @@ body[dir='rtl'] {
     }
 }
 
-.widget-header .link-text,
-.widget-blog {
+.widget-header .link-text, .widget-blog {
     .svg-icon {
         svg {
             transform: rotate(180deg);
@@ -300,14 +299,12 @@ body[dir='rtl'] {
 
 .text-swatch {
     li {
-        input[type='radio']:checked ~ span:before,
-        input[type='checkbox']:checked ~ span:before {
+        input[type=radio]:checked ~ span:before, input[type=checkbox]:checked ~ span:before {
             left: -16px;
             right: auto;
         }
 
-        input[type='radio']:checked ~ span:after,
-        input[type='checkbox']:checked ~ span:after {
+        input[type=radio]:checked ~ span:after, input[type=checkbox]:checked ~ span:after {
             left: -8px;
             right: auto;
         }
@@ -377,8 +374,7 @@ body[dir='rtl'] {
     }
 }
 
-.color-swatch,
-.text-swatch {
+.color-swatch, .text-swatch {
     li {
         &:first-child {
             margin-right: 0;
@@ -444,13 +440,6 @@ body[dir='rtl'] {
     }
 }
 
-i.icon-cart,
-i.icon-list {
-    &::before {
-        transform: rotate3d(0, 1, 0, 180deg);
-    }
-}
-
 #search-mobile {
     .search-inner-content {
         .close-search-panel {
@@ -490,35 +479,4 @@ i.icon-list {
 #back2top {
     right: auto;
     left: 30px;
-}
-
-.panel--sidebar {
-    left: auto;
-    right: 0;
-    transform: translateX(101%);
-
-    &.active {
-        transform: translateX(0);
-    }
-
-    &.panel--sidebar__right {
-        left: 0;
-        right: auto;
-        transform: translateX(-101%);
-
-        &.active {
-            transform: translateX(0);
-        }
-    }
-}
-
-.mini-cart-content,
-.panel--sidebar {
-    .panel__header {
-        .close-toggle--sidebar {
-            svg {
-                transform: rotate3d(0, 1, 0, 180deg);
-            }
-        }
-    }
 }

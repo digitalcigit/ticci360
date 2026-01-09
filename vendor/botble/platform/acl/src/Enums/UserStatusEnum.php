@@ -2,8 +2,8 @@
 
 namespace Botble\ACL\Enums;
 
-use Botble\Base\Facades\Html;
 use Botble\Base\Supports\Enum;
+use Botble\Base\Facades\Html;
 use Illuminate\Support\HtmlString;
 
 /**
@@ -20,8 +20,14 @@ class UserStatusEnum extends Enum
     public function toHtml(): HtmlString|string
     {
         return match ($this->value) {
-            self::ACTIVATED => Html::tag('span', self::ACTIVATED()->label(), ['class' => 'badge bg-info text-info-fg']),
-            self::DEACTIVATED => Html::tag('span', self::DEACTIVATED()->label(), ['class' => 'badge bg-warning text-warning-fg']),
+            self::ACTIVATED => Html::tag('span', self::ACTIVATED()->label(), ['class' => 'label-info status-label'])
+                ->toHtml(),
+            self::DEACTIVATED => Html::tag(
+                'span',
+                self::DEACTIVATED()->label(),
+                ['class' => 'label-warning status-label']
+            )
+                ->toHtml(),
             default => parent::toHtml(),
         };
     }

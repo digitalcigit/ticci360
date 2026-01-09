@@ -2,13 +2,10 @@
 
 namespace Botble\AuditLog\Listeners;
 
-use Botble\AuditLog\AuditLog;
 use Botble\AuditLog\Events\AuditHandlerEvent;
 use Botble\Base\Events\UpdatedContentEvent;
-use Botble\Base\Facades\BaseHelper;
 use Exception;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Str;
+use Botble\AuditLog\Facades\AuditLog;
 
 class UpdatedContentListener
 {
@@ -16,22 +13,16 @@ class UpdatedContentListener
     {
         try {
             if ($event->data->getKey()) {
-                $model = $event->screen;
-
-                if ($model === 'form') {
-                    $model = strtolower(Str::afterLast(get_class($event->data), '\\'));
-                }
-
                 event(new AuditHandlerEvent(
-                    $model,
-                    $model === 'user' && $event->data->getKey() == Auth::id() ? 'has updated his profile' : 'updated',
+                    $event->screen,
+                    'updated',
                     $event->data->getKey(),
-                    AuditLog::getReferenceName($model, $event->data),
+                    AuditLog::getReferenceName($event->screen, $event->data),
                     'primary'
                 ));
             }
         } catch (Exception $exception) {
-            BaseHelper::logError($exception);
+            info($exception->getMessage());
         }
     }
 }

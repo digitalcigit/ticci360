@@ -2,32 +2,35 @@
 
 namespace Botble\Faq\Providers;
 
+use Botble\Base\Facades\Assets;
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Facades\Html;
-use Botble\Base\Facades\MetaBox;
-use Botble\Base\Models\BaseModel;
-use Botble\Base\Supports\ServiceProvider;
 use Botble\Faq\Contracts\Faq as FaqContract;
 use Botble\Faq\FaqCollection;
 use Botble\Faq\FaqItem;
-use Botble\Faq\FaqSupport;
-use Botble\Faq\Models\Faq;
-use Illuminate\Database\Eloquent\Model;
+use Botble\Base\Facades\Html;
 use Illuminate\Support\Arr;
+use Illuminate\Support\ServiceProvider;
+use Botble\Base\Facades\MetaBox;
 
 class HookServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
-        add_action(BASE_ACTION_META_BOXES, function (string $context, array|string|Model|null $object = null): void {
-            if (
-                ! $object instanceof BaseModel
-                || $context != 'advanced'
-                || ! in_array($object::class, config('plugins.faq.general.schema_supported', []))
-                || ! setting('enable_faq_schema', 0)
-            ) {
+        add_action(BASE_ACTION_META_BOXES, function ($context, $object): void {
+            if (! $object || $context != 'advanced') {
                 return;
             }
+
+            if (! in_array(get_class($object), config('plugins.faq.general.schema_supported', []))) {
+                return;
+            }
+
+            if (! setting('enable_faq_schema', 0)) {
+                return;
+            }
+
+            Assets::addStylesDirectly(['vendor/core/plugins/faq/css/faq.css'])
+                ->addScriptsDirectly(['vendor/core/plugins/faq/js/faq.js']);
 
             MetaBox::addMetaBox(
                 'faq_schema_config_wrapper',
@@ -39,73 +42,74 @@ class HookServiceProvider extends ServiceProvider
                     ),
                 ]),
                 function () {
-                    return (new FaqSupport())->renderMetaBox(func_get_args()[0] ?? null);
+                    $value = [];
+
+                    $args = func_get_args();
+                    if ($args[0] && $args[0]->id) {
+                        $value = MetaBox::getMetaData($args[0], 'faq_schema_config', true);
+                    }
+
+                    $hasValue = ! empty($value);
+
+                    $value = json_encode((array)$value);
+
+                    return view('plugins/faq::schema-config-box', compact('value', 'hasValue'))->render();
                 },
-                $object::class,
+                get_class($object),
                 $context
             );
         }, 39, 2);
 
         add_action(BASE_ACTION_PUBLIC_RENDER_SINGLE, function ($screen, $object): void {
-            if (
-                ! in_array($object::class, config('plugins.faq.general.schema_supported', []))
-                || ! setting('enable_faq_schema', 0)
-            ) {
-                return;
-            }
+            add_filter(THEME_FRONT_HEADER, function ($html) use ($object): string|null {
+                if (! in_array(get_class($object), config('plugins.faq.general.schema_supported', []))) {
+                    return $html;
+                }
 
-            $faqs = (array) $object->getMetaData('faq_schema_config', true);
+                if (! setting('enable_faq_schema', 0)) {
+                    return $html;
+                }
 
-            if (is_plugin_active('faq')) {
-                $selectedExistingFaqs = $object->getMetaData('faq_ids', true);
+                $value = MetaBox::getMetaData($object, 'faq_schema_config', true);
 
-                if ($selectedExistingFaqs && is_array($selectedExistingFaqs)) {
-                    $selectedExistingFaqs = array_filter($selectedExistingFaqs);
+                if (! $value || ! is_array($value)) {
+                    return $html;
+                }
 
-                    if ($selectedExistingFaqs) {
-                        $selectedFaqs = Faq::query()
-                            ->wherePublished()
-                            ->whereIn('id', $selectedExistingFaqs)
-                            ->pluck('answer', 'question')
-                            ->all();
-
-                        foreach ($selectedFaqs as $question => $answer) {
-                            $faqs[] = [
-                                [
-                                    'key' => 'question',
-                                    'value' => $question,
-                                ],
-                                [
-                                    'key' => 'answer',
-                                    'value' => $answer,
-                                ],
-                            ];
-                        }
+                foreach ($value as $key => $item) {
+                    if (! $item[0]['value'] && ! $item[1]['value']) {
+                        Arr::forget($value, $key);
                     }
                 }
-            }
 
-            $faqs = array_filter($faqs);
+                $schemaItems = new FaqCollection();
 
-            if (empty($faqs)) {
-                return;
-            }
-
-            foreach ($faqs as $key => $item) {
-                if (! $item[0]['value'] && ! $item[1]['value']) {
-                    Arr::forget($value, $key);
+                foreach ($value as $item) {
+                    $schemaItems->push(
+                        new FaqItem(BaseHelper::clean($item[0]['value']), BaseHelper::clean($item[1]['value']))
+                    );
                 }
-            }
 
-            $schemaItems = new FaqCollection();
+                app(FaqContract::class)->registerSchema($schemaItems);
 
-            foreach ($faqs as $item) {
-                $schemaItems->push(
-                    new FaqItem(BaseHelper::clean($item[0]['value']), BaseHelper::clean($item[1]['value']))
-                );
-            }
-
-            app(FaqContract::class)->registerSchema($schemaItems);
+                return $html;
+            }, 39);
         }, 39, 2);
+
+        add_filter(BASE_FILTER_AFTER_SETTING_CONTENT, [$this, 'addSettings'], 59);
+
+        add_filter('cms_settings_validation_rules', [$this, 'addSettingRules'], 59);
+    }
+
+    public function addSettingRules(array $rules): array
+    {
+        return array_merge($rules, [
+            'enable_faq_schema' => 'nullable|in:0,1',
+        ]);
+    }
+
+    public function addSettings(string|null $data = null): string
+    {
+        return $data . view('plugins/faq::settings')->render();
     }
 }

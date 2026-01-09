@@ -2,66 +2,89 @@
 
 namespace Botble\Blog\Http\Controllers;
 
-use Botble\Base\Http\Actions\DeleteResourceAction;
+use Botble\ACL\Models\User;
+use Botble\Base\Events\BeforeUpdateContentEvent;
+use Botble\Base\Events\CreatedContentEvent;
+use Botble\Base\Events\DeletedContentEvent;
+use Botble\Base\Events\UpdatedContentEvent;
+use Botble\Base\Facades\PageTitle;
+use Botble\Base\Forms\FormBuilder;
 use Botble\Base\Http\Controllers\BaseController;
 use Botble\Base\Http\Responses\BaseHttpResponse;
-use Botble\Base\Supports\Breadcrumb;
+use Botble\Base\Traits\HasDeleteManyItemsTrait;
 use Botble\Blog\Forms\PostForm;
 use Botble\Blog\Http\Requests\PostRequest;
 use Botble\Blog\Models\Post;
+use Botble\Blog\Repositories\Interfaces\CategoryInterface;
+use Botble\Blog\Repositories\Interfaces\PostInterface;
+use Botble\Blog\Repositories\Interfaces\TagInterface;
 use Botble\Blog\Services\StoreCategoryService;
 use Botble\Blog\Services\StoreTagService;
 use Botble\Blog\Tables\PostTable;
+use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class PostController extends BaseController
 {
-    protected function breadcrumb(): Breadcrumb
-    {
-        return parent::breadcrumb()
-            ->add(trans('plugins/blog::base.menu_name'))
-            ->add(trans('plugins/blog::posts.menu_name'), route('posts.index'));
+    use HasDeleteManyItemsTrait;
+
+    public function __construct(
+        protected PostInterface $postRepository,
+        protected TagInterface $tagRepository,
+        protected CategoryInterface $categoryRepository
+    ) {
     }
 
     public function index(PostTable $dataTable)
     {
-        $this->pageTitle(trans('plugins/blog::posts.menu_name'));
+        PageTitle::setTitle(trans('plugins/blog::posts.menu_name'));
 
         return $dataTable->renderTable();
     }
 
-    public function create()
+    public function create(FormBuilder $formBuilder)
     {
-        $this->pageTitle(trans('plugins/blog::posts.create'));
+        PageTitle::setTitle(trans('plugins/blog::posts.create'));
 
-        return PostForm::create()->renderForm();
+        return $formBuilder->create(PostForm::class)->renderForm();
     }
 
     public function store(
         PostRequest $request,
         StoreTagService $tagService,
-        StoreCategoryService $categoryService
+        StoreCategoryService $categoryService,
+        BaseHttpResponse $response
     ) {
-        $form = PostForm::create()->setRequest($request)->save();
+        /**
+         * @var Post $post
+         */
+        $post = $this->postRepository->createOrUpdate(
+            array_merge($request->input(), [
+                'author_id' => Auth::id(),
+                'author_type' => User::class,
+            ])
+        );
 
-        $post = $form->getModel();
+        event(new CreatedContentEvent(POST_MODULE_SCREEN_NAME, $request, $post));
+
+        $request->request->remove('seo_meta');
 
         $tagService->execute($request, $post);
 
         $categoryService->execute($request, $post);
 
-        return $this
-            ->httpResponse()
-            ->setPreviousRoute('posts.index')
-            ->setNextRoute('posts.edit', $post->getKey())
-            ->withCreatedSuccessMessage();
+        return $response
+            ->setPreviousUrl(route('posts.index'))
+            ->setNextUrl(route('posts.edit', $post->id))
+            ->setMessage(trans('core/base::notices.create_success_message'));
     }
 
-    public function edit(Post $post)
+    public function edit(Post $post, FormBuilder $formBuilder)
     {
-        $this->pageTitle(trans('core/base::forms.edit_item', ['name' => $post->name]));
+        PageTitle::setTitle(trans('core/base::forms.edit_item', ['name' => $post->name]));
 
-        return PostForm::createFromModel($post)->renderForm();
+        return $formBuilder->create(PostForm::class, ['model' => $post])->renderForm();
     }
 
     public function update(
@@ -69,43 +92,61 @@ class PostController extends BaseController
         PostRequest $request,
         StoreTagService $tagService,
         StoreCategoryService $categoryService,
+        BaseHttpResponse $response
     ) {
-        $form = PostForm::createFromModel($post)
-            ->setRequest($request)
-            ->save();
+        event(new BeforeUpdateContentEvent($request, $post));
 
-        /**
-         * @var Post $post
-         */
-        $post = $form->getModel();
+        $post->fill($request->input());
+
+        $this->postRepository->createOrUpdate($post);
+
+        event(new UpdatedContentEvent(POST_MODULE_SCREEN_NAME, $request, $post));
 
         $tagService->execute($request, $post);
 
         $categoryService->execute($request, $post);
 
-        return $this
-            ->httpResponse()
-            ->setPreviousRoute('posts.index')
-            ->withUpdatedSuccessMessage();
+        return $response
+            ->setPreviousUrl(route('posts.index'))
+            ->setMessage(trans('core/base::notices.update_success_message'));
     }
 
-    public function destroy(Post $post): DeleteResourceAction
+    public function destroy(Post $post, Request $request, BaseHttpResponse $response)
     {
-        return DeleteResourceAction::make($post);
+        try {
+            $this->postRepository->delete($post);
+
+            event(new DeletedContentEvent(POST_MODULE_SCREEN_NAME, $request, $post));
+
+            return $response
+                ->setMessage(trans('core/base::notices.delete_success_message'));
+        } catch (Exception $exception) {
+            return $response
+                ->setError()
+                ->setMessage($exception->getMessage());
+        }
     }
 
-    public function getWidgetRecentPosts(Request $request): BaseHttpResponse
+    public function deletes(Request $request, BaseHttpResponse $response)
+    {
+        return $this->executeDeleteItems($request, $response, $this->postRepository, POST_MODULE_SCREEN_NAME);
+    }
+
+    public function getWidgetRecentPosts(Request $request, BaseHttpResponse $response)
     {
         $limit = $request->integer('paginate', 10);
         $limit = $limit > 0 ? $limit : 10;
 
-        $posts = Post::query()
-            ->with(['slugable'])->latest()
-            ->limit($limit)
-            ->get();
+        $posts = $this->postRepository->advancedGet([
+            'with' => ['slugable'],
+            'order_by' => ['created_at' => 'desc'],
+            'paginate' => [
+                'per_page' => $limit,
+                'current_paged' => $request->integer('page', 1),
+            ],
+        ]);
 
-        return $this
-            ->httpResponse()
-            ->setData(view('plugins/blog::widgets.posts', compact('posts', 'limit'))->render());
+        return $response
+            ->setData(view('plugins/blog::posts.widgets.posts', compact('posts', 'limit'))->render());
     }
 }

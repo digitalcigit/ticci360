@@ -2,8 +2,8 @@
 
 namespace Botble\Marketplace\Repositories\Eloquent;
 
-use Botble\Marketplace\Repositories\Interfaces\RevenueInterface;
 use Botble\Support\Repositories\Eloquent\RepositoriesAbstract;
+use Botble\Marketplace\Repositories\Interfaces\RevenueInterface;
 
 class RevenueRepository extends RepositoriesAbstract implements RevenueInterface
 {

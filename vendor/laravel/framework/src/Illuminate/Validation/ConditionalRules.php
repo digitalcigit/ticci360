@@ -16,14 +16,14 @@ class ConditionalRules
     /**
      * The rules to be added to the attribute.
      *
-     * @var \Illuminate\Contracts\Validation\ValidationRule|\Illuminate\Contracts\Validation\InvokableRule|\Illuminate\Contracts\Validation\Rule|\Closure|array|string
+     * @var array|string|\Closure
      */
     protected $rules;
 
     /**
      * The rules to be added to the attribute if the condition fails.
      *
-     * @var \Illuminate\Contracts\Validation\ValidationRule|\Illuminate\Contracts\Validation\InvokableRule|\Illuminate\Contracts\Validation\Rule|\Closure|array|string
+     * @var array|string|\Closure
      */
     protected $defaultRules;
 
@@ -31,8 +31,9 @@ class ConditionalRules
      * Create a new conditional rules instance.
      *
      * @param  callable|bool  $condition
-     * @param  \Illuminate\Contracts\Validation\ValidationRule|\Illuminate\Contracts\Validation\InvokableRule|\Illuminate\Contracts\Validation\Rule|\Closure|array|string  $rules
-     * @param  \Illuminate\Contracts\Validation\ValidationRule|\Illuminate\Contracts\Validation\InvokableRule|\Illuminate\Contracts\Validation\Rule|\Closure|array|string  $defaultRules
+     * @param  array|string|\Closure  $rules
+     * @param  array|string|\Closure  $defaultRules
+     * @return void
      */
     public function __construct($condition, $rules, $defaultRules = [])
     {
@@ -50,8 +51,8 @@ class ConditionalRules
     public function passes(array $data = [])
     {
         return is_callable($this->condition)
-            ? call_user_func($this->condition, new Fluent($data))
-            : $this->condition;
+                    ? call_user_func($this->condition, new Fluent($data))
+                    : $this->condition;
     }
 
     /**
@@ -63,8 +64,8 @@ class ConditionalRules
     public function rules(array $data = [])
     {
         return is_string($this->rules)
-            ? explode('|', $this->rules)
-            : value($this->rules, new Fluent($data));
+                    ? explode('|', $this->rules)
+                    : value($this->rules, new Fluent($data));
     }
 
     /**
@@ -76,7 +77,7 @@ class ConditionalRules
     public function defaultRules(array $data = [])
     {
         return is_string($this->defaultRules)
-            ? explode('|', $this->defaultRules)
-            : value($this->defaultRules, new Fluent($data));
+                    ? explode('|', $this->defaultRules)
+                    : value($this->defaultRules, new Fluent($data));
     }
 }

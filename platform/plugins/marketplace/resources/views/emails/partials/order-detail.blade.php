@@ -8,3 +8,4 @@
     @endif
     @include('plugins/ecommerce::emails.partials.order-detail')
 @endforeach
+

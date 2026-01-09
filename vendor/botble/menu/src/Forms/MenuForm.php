@@ -3,43 +3,55 @@
 namespace Botble\Menu\Forms;
 
 use Botble\Base\Facades\Assets;
-use Botble\Base\Forms\FieldOptions\NameFieldOption;
-use Botble\Base\Forms\FieldOptions\StatusFieldOption;
-use Botble\Base\Forms\Fields\SelectField;
-use Botble\Base\Forms\Fields\TextField;
+use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Base\Forms\FormAbstract;
 use Botble\Menu\Http\Requests\MenuRequest;
 use Botble\Menu\Models\Menu;
 
 class MenuForm extends FormAbstract
 {
-    public function setup(): void
+    public function buildForm(): void
     {
-        Assets::addStyles('jquery-nestable')
-            ->addScripts('jquery-nestable')
-            ->addScriptsDirectly('vendor/core/packages/menu/js/menu.js')
-            ->addStylesDirectly('vendor/core/packages/menu/css/menu.css');
+        Assets::addScriptsDirectly([
+            'vendor/core/packages/menu/libraries/jquery-nestable/jquery.nestable.js',
+            'vendor/core/packages/menu/js/menu.js',
+        ])
+            ->addStylesDirectly([
+                'vendor/core/packages/menu/libraries/jquery-nestable/jquery.nestable.css',
+                'vendor/core/packages/menu/css/menu.css',
+            ]);
+
+        $locations = [];
+
+        if ($this->getModel()) {
+            $locations = $this->getModel()->locations()->pluck('location')->all();
+        }
 
         $this
-            ->model(Menu::class)
+            ->setupModel(new Menu())
             ->setFormOption('class', 'form-save-menu')
+            ->withCustomFields()
             ->setValidatorClass(MenuRequest::class)
-            ->add('name', TextField::class, NameFieldOption::make()->required()->maxLength(120))
-            ->add('status', SelectField::class, StatusFieldOption::make())
+            ->add('name', 'text', [
+                'label' => trans('core/base::forms.name'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'placeholder' => trans('core/base::forms.name_placeholder'),
+                    'data-counter' => 120,
+                ],
+            ])
+            ->add('status', 'customSelect', [
+                'label' => trans('core/base::tables.status'),
+                'label_attr' => ['class' => 'control-label required'],
+                'choices' => BaseStatusEnum::labels(),
+            ])
             ->addMetaBoxes([
                 'structure' => [
                     'wrap' => false,
-                    'content' => function () {
-                        /**
-                         * @var Menu $menu
-                         */
-                        $menu = $this->getModel();
-
-                        return view('packages/menu::menu-structure', [
-                            'menu' => $menu,
-                            'locations' => $menu->getKey() ? $menu->locations()->pluck('location')->all() : [],
-                        ])->render();
-                    },
+                    'content' => view('packages/menu::menu-structure', [
+                        'menu' => $this->getModel(),
+                        'locations' => $locations,
+                    ])->render(),
                 ],
             ])
             ->setBreakFieldPoint('status');

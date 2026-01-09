@@ -6,6 +6,8 @@ use Botble\Media\Models\MediaFolder;
 use Botble\Media\Repositories\Interfaces\MediaFolderInterface;
 use Botble\Support\Repositories\Eloquent\RepositoriesAbstract;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Str;
+use Botble\Media\Facades\RvMedia;
 
 /**
  * @since 19/08/2015 07:45 AM
@@ -31,14 +33,33 @@ class MediaFolderRepository extends RepositoriesAbstract implements MediaFolderI
         return $this->advancedGet($params);
     }
 
-    public function createSlug(string $name, int|string|null $parentId): string
+    public function createSlug(string $name, int|string|null $parentId)
     {
-        return MediaFolder::createSlug($name, $parentId);
+        $slug = Str::slug($name, '-', ! RvMedia::turnOffAutomaticUrlTranslationIntoLatin() ? 'en' : false);
+        $index = 1;
+        $baseSlug = $slug;
+        while ($this->checkIfExists('slug', $slug, $parentId)) {
+            $slug = $baseSlug . '-' . $index++;
+        }
+
+        return $slug;
     }
 
-    public function createName(string $name, int|string|null $parentId): string
+    public function createName(string $name, int|string|null $parentId)
     {
-        return MediaFolder::createName($name, $parentId);
+        $newName = $name;
+        $index = 1;
+        $baseSlug = $newName;
+        while ($this->checkIfExists('name', $newName, $parentId)) {
+            $newName = $baseSlug . '-' . $index++;
+        }
+
+        return $newName;
+    }
+
+    protected function checkIfExists(string $key, string $value, int|string|null $parentId): bool
+    {
+        return $this->model->where($key, $value)->where('parent_id', $parentId)->withTrashed()->exists();
     }
 
     public function getBreadcrumbs(int|string|null $parentId, array $breadcrumbs = [])
@@ -71,7 +92,7 @@ class MediaFolderRepository extends RepositoriesAbstract implements MediaFolderI
         $data = $this->model
             ->select('media_folders.*')
             ->where($params['where'])
-            ->oldest('media_folders.name')
+            ->orderBy('media_folders.name')
             ->onlyTrashed();
 
         /**
@@ -79,7 +100,7 @@ class MediaFolderRepository extends RepositoriesAbstract implements MediaFolderI
          */
         if (! $parentId) {
             $data->leftJoin('media_folders as mf_parent', 'mf_parent.id', '=', 'media_folders.parent_id')
-                ->where(function ($query): void {
+                ->where(function ($query) {
                     /**
                      * @var Builder $query
                      */
@@ -128,9 +149,25 @@ class MediaFolderRepository extends RepositoriesAbstract implements MediaFolderI
         return $child;
     }
 
-    public function getFullPath(int|string|null $folderId, ?string $path = ''): ?string
+    public function getFullPath(int|string|null $folderId, string|null $path = '')
     {
-        return MediaFolder::getFullPath($folderId, $path);
+        if (! $folderId) {
+            return $path;
+        }
+
+        $folder = $this->getFirstByWithTrash(['id' => $folderId]);
+
+        if (empty($folder)) {
+            return $path;
+        }
+
+        $parent = $this->getFullPath($folder->parent_id, $path);
+
+        if (! $parent) {
+            return $folder->slug;
+        }
+
+        return rtrim($parent, '/') . '/' . $folder->slug;
     }
 
     public function restoreFolder(int|string|null $folderId)
@@ -145,7 +182,15 @@ class MediaFolderRepository extends RepositoriesAbstract implements MediaFolderI
 
     public function emptyTrash(): bool
     {
-        $this->model->onlyTrashed()->each(fn (MediaFolder $folder) => $folder->forceDelete());
+        $folders = $this->model->onlyTrashed();
+
+        $folders = $folders->get();
+        foreach ($folders as $folder) {
+            /**
+             * @var MediaFolder $folder
+             */
+            $folder->forceDelete();
+        }
 
         return true;
     }

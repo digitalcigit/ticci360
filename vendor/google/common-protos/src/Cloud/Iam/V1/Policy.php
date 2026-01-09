@@ -24,7 +24,6 @@ use Google\Protobuf\Internal\GPBUtil;
  * [IAM
  * documentation](https://cloud.google.com/iam/help/conditions/resource-policies).
  * **JSON example:**
- * ```
  *     {
  *       "bindings": [
  *         {
@@ -52,9 +51,7 @@ use Google\Protobuf\Internal\GPBUtil;
  *       "etag": "BwWWja0YfJA=",
  *       "version": 3
  *     }
- * ```
  * **YAML example:**
- * ```
  *     bindings:
  *     - members:
  *       - user:mike&#64;example.com
@@ -71,7 +68,6 @@ use Google\Protobuf\Internal\GPBUtil;
  *         expression: request.time < timestamp('2020-10-01T00:00:00.000Z')
  *     etag: BwWWja0YfJA=
  *     version: 3
- * ```
  * For a description of IAM and its features, see the
  * [IAM documentation](https://cloud.google.com/iam/docs/).
  *

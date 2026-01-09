@@ -13,14 +13,14 @@ return new class () extends Migration {
             DB::beginTransaction();
 
             $reviews = Review::query()
-                ->selectRaw('max(id) as id, product_id, customer_id')
+                ->selectRaw(DB::raw('max(id) as id, product_id, customer_id'))
                 ->groupBy('product_id', 'customer_id')
                 ->pluck('id')
                 ->all();
 
-            Review::query()->whereNotIn('id', $reviews)->delete();
+            Review::whereNotIn('id', $reviews)->delete();
 
-            Schema::table('ec_reviews', function (Blueprint $table): void {
+            Schema::table('ec_reviews', function (Blueprint $table) {
                 $table->unique(['product_id', 'customer_id']);
             });
 
@@ -32,7 +32,7 @@ return new class () extends Migration {
 
     public function down(): void
     {
-        Schema::table('ec_reviews', function (Blueprint $table): void {
+        Schema::table('ec_reviews', function (Blueprint $table) {
             $table->dropUnique(['product_id', 'customer_id']);
         });
     }

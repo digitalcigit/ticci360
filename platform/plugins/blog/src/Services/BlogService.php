@@ -3,12 +3,13 @@
 namespace Botble\Blog\Services;
 
 use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Base\Facades\AdminHelper;
 use Botble\Base\Supports\Helper;
 use Botble\Blog\Models\Category;
 use Botble\Blog\Models\Post;
 use Botble\Blog\Models\Tag;
+use Botble\Blog\Repositories\Interfaces\CategoryInterface;
 use Botble\Blog\Repositories\Interfaces\PostInterface;
+use Botble\Blog\Repositories\Interfaces\TagInterface;
 use Botble\Media\Facades\RvMedia;
 use Botble\SeoHelper\Facades\SeoHelper;
 use Botble\SeoHelper\SeoOpenGraph;
@@ -17,6 +18,7 @@ use Botble\Theme\Facades\AdminBar;
 use Botble\Theme\Facades\Theme;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Auth;
 
 class BlogService
 {
@@ -31,19 +33,22 @@ class BlogService
             'status' => BaseStatusEnum::PUBLISHED,
         ];
 
-        if (AdminHelper::isPreviewing()) {
+        if (Auth::check() && request()->input('preview')) {
             Arr::forget($condition, 'status');
         }
 
         switch ($slug->reference_type) {
             case Post::class:
-                /**
-                 * @var Post $post
-                 */
-                $post = Post::query()
-                    ->where($condition)
-                    ->with(['categories', 'tags', 'slugable', 'categories.slugable', 'tags.slugable'])
-                    ->firstOrFail();
+                $post = app(PostInterface::class)
+                    ->getFirstBy(
+                        $condition,
+                        ['*'],
+                        ['categories', 'tags', 'slugable', 'categories.slugable', 'tags.slugable']
+                    );
+
+                if (empty($post)) {
+                    abort(404);
+                }
 
                 Helper::handleViewCount($post, 'viewed_post');
 
@@ -66,7 +71,7 @@ class BlogService
                 if (function_exists('admin_bar')) {
                     AdminBar::registerLink(
                         trans('plugins/blog::posts.edit_this_post'),
-                        route('posts.edit', $post->getKey()),
+                        route('posts.edit', $post->id),
                         null,
                         'posts.edit'
                     );
@@ -76,9 +81,11 @@ class BlogService
                     shortcode()->getCompiler()->setEditLink(route('posts.edit', $post->id), 'posts.edit');
                 }
 
+                Theme::breadcrumb()->add(__('Home'), route('public.index'));
+
                 $category = $post->categories->sortByDesc('id')->first();
                 if ($category) {
-                    if ($category->parents->isNotEmpty()) {
+                    if ($category->parents->count()) {
                         foreach ($category->parents as $parentCategory) {
                             Theme::breadcrumb()->add($parentCategory->name, $parentCategory->url);
                         }
@@ -98,10 +105,12 @@ class BlogService
                     'slug' => $post->slug,
                 ];
             case Category::class:
-                $category = Category::query()
-                    ->where($condition)
-                    ->with(['slugable'])
-                    ->firstOrFail();
+                $category = app(CategoryInterface::class)
+                    ->getFirstBy($condition, ['*'], ['slugable']);
+
+                if (empty($category)) {
+                    abort(404);
+                }
 
                 SeoHelper::setTitle($category->name)
                     ->setDescription($category->description);
@@ -122,18 +131,21 @@ class BlogService
                 if (function_exists('admin_bar')) {
                     AdminBar::registerLink(
                         trans('plugins/blog::categories.edit_this_category'),
-                        route('categories.edit', $category->getKey()),
+                        route('categories.edit', $category->id),
                         null,
                         'categories.edit'
                     );
                 }
 
-                $allRelatedCategoryIds = array_merge([$category->getKey()], $category->activeChildren->pluck('id')->all());
+                $allRelatedCategoryIds = array_merge([$category->id], $category->activeChildren->pluck('id')->all());
 
                 $posts = app(PostInterface::class)
-                    ->getByCategory($allRelatedCategoryIds, (int) theme_option('number_of_posts_in_a_category', 12));
+                    ->getByCategory($allRelatedCategoryIds, (int)theme_option('number_of_posts_in_a_category', 12));
 
-                if ($category->parents->isNotEmpty()) {
+                Theme::breadcrumb()
+                    ->add(__('Home'), route('public.index'));
+
+                if ($category->parents->count()) {
                     foreach ($category->parents->reverse() as $parentCategory) {
                         Theme::breadcrumb()->add($parentCategory->name, $parentCategory->url);
                     }
@@ -150,10 +162,11 @@ class BlogService
                     'slug' => $category->slug,
                 ];
             case Tag::class:
-                $tag = Tag::query()
-                    ->where($condition)
-                    ->with(['slugable'])
-                    ->firstOrFail();
+                $tag = app(TagInterface::class)->getFirstBy($condition, ['*'], ['slugable']);
+
+                if (! $tag) {
+                    abort(404);
+                }
 
                 SeoHelper::setTitle($tag->name)
                     ->setDescription($tag->description);
@@ -171,15 +184,17 @@ class BlogService
                 if (function_exists('admin_bar')) {
                     AdminBar::registerLink(
                         trans('plugins/blog::tags.edit_this_tag'),
-                        route('tags.edit', $tag->getKey()),
+                        route('tags.edit', $tag->id),
                         null,
                         'tags.edit'
                     );
                 }
 
-                $posts = get_posts_by_tag($tag->getKey(), (int) theme_option('number_of_posts_in_a_tag', 12));
+                $posts = get_posts_by_tag($tag->id, (int)theme_option('number_of_posts_in_a_tag', 12));
 
-                Theme::breadcrumb()->add($tag->name, $tag->url);
+                Theme::breadcrumb()
+                    ->add(__('Home'), route('public.index'))
+                    ->add($tag->name, $tag->url);
 
                 do_action(BASE_ACTION_PUBLIC_RENDER_SINGLE, TAG_MODULE_SCREEN_NAME, $tag);
 

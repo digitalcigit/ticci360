@@ -27,7 +27,7 @@ class InListFilter extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>bool case_sensitive = 2;</code>
      */
-    protected $case_sensitive = false;
+    private $case_sensitive = false;
 
     /**
      * Constructor.

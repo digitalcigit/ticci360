@@ -4,18 +4,17 @@ namespace Botble\Ecommerce\Repositories\Interfaces;
 
 use Botble\Ecommerce\Models\Product;
 use Botble\Support\Repositories\Interfaces\RepositoryInterface;
-use Illuminate\Database\Eloquent\Collection;
 
 interface ProductInterface extends RepositoryInterface
 {
     /**
      * @deprecated
      */
-    public function getSearch(?string $keyword, int $paginate = 10);
+    public function getSearch(string|null $keyword, int $paginate = 10);
 
-    public function getRelatedProductAttributes(Product $product): Collection;
+    public function getRelatedProductAttributes($product);
 
-    public function getProducts(array $params, array $filters = []);
+    public function getProducts(array $params);
 
     public function getProductsWithCategory(array $params);
 
@@ -38,6 +37,8 @@ interface ProductInterface extends RepositoryInterface
     public function getProductsWishlist(int|string $customerId, array $params = []);
 
     public function getProductsRecentlyViewed(int|string $customerId, array $params = []);
+
+    public function saveProductOptions(array $options, Product $product);
 
     public function productsNeedToReviewByCustomer(int|string $customerId, int $limit = 12, array $orderIds = []);
 }

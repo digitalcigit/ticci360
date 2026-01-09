@@ -3,46 +3,43 @@
 namespace Botble\ACL\Services;
 
 use Botble\ACL\Models\User;
-use Botble\Base\Facades\BaseHelper;
+use Illuminate\Support\Facades\Auth;
+use Botble\ACL\Repositories\Interfaces\UserInterface;
 use Botble\Support\Services\ProduceServiceInterface;
 use Exception;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Http\Request;
 use Throwable;
 
 class ChangePasswordService implements ProduceServiceInterface
 {
-    public function execute(Request $request): bool|User
+    public function __construct(protected UserInterface $userRepository)
+    {
+    }
+
+    public function execute(Request $request): Exception|bool|User
     {
         $currentUser = $request->user();
 
         if (! $currentUser->isSuperUser()) {
             if (! Hash::check($request->input('old_password'), $currentUser->getAuthPassword())) {
-                throw new Exception(trans('core/acl::users.current_password_not_valid'));
+                return new Exception(trans('core/acl::users.current_password_not_valid'));
             }
         }
 
-        if (($userId = $request->input('id')) && $userId === $currentUser->getKey()) {
-            $user = $currentUser;
-        } else {
-            $user = User::query()->findOrFail($userId);
-        }
+        $user = $this->userRepository->findOrFail($request->input('id', $currentUser->getKey()));
 
         $password = $request->input('password');
 
         $user->password = Hash::make($password);
-        $user->save();
+        $this->userRepository->createOrUpdate($user);
 
-        /**
-         * @var User $user
-         */
-        if ($user->getKey() != $currentUser->getKey()) {
+        if ($user->id != $currentUser->getKey()) {
             try {
                 Auth::setUser($user);
                 Auth::logoutOtherDevices($password);
             } catch (Throwable $exception) {
-                BaseHelper::logError($exception);
+                info($exception->getMessage());
             }
         }
 

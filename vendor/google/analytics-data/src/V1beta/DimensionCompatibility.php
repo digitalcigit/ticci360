@@ -22,14 +22,14 @@ class DimensionCompatibility extends \Google\Protobuf\Internal\Message
      *
      * Generated from protobuf field <code>optional .google.analytics.data.v1beta.DimensionMetadata dimension_metadata = 1;</code>
      */
-    protected $dimension_metadata = null;
+    private $dimension_metadata = null;
     /**
      * The compatibility of this dimension. If the compatibility is COMPATIBLE,
      * this dimension can be successfully added to the report.
      *
      * Generated from protobuf field <code>optional .google.analytics.data.v1beta.Compatibility compatibility = 2;</code>
      */
-    protected $compatibility = null;
+    private $compatibility = null;
 
     /**
      * Constructor.

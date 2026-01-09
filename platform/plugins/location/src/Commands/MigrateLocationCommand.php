@@ -2,10 +2,10 @@
 
 namespace Botble\Location\Commands;
 
-use Botble\Location\Facades\Location;
 use Illuminate\Console\Command;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Botble\Location\Facades\Location;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputOption;
 
@@ -28,12 +28,10 @@ class MigrateLocationCommand extends Command
         }
 
         if ($error) {
-            $this->components->error('Not supported model');
-
-            return self::FAILURE;
+            $this->error('Not supported model');
+        } else {
+            $this->info('Migrate location successfully!');
         }
-
-        $this->components->info('Migrate location successfully!');
 
         return self::SUCCESS;
     }
@@ -43,7 +41,7 @@ class MigrateLocationCommand extends Command
         $model = new $className();
         Schema::connection($model->getConnectionName())->table(
             $model->getTable(),
-            function (Blueprint $table) use ($className): void {
+            function (Blueprint $table) use ($className) {
                 $table->location($className);
             }
         );

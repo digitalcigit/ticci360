@@ -2,35 +2,38 @@
 
 namespace Botble\Marketplace\Http\Controllers\Fronts;
 
-use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Http\Controllers\BaseController;
-use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Base\Enums\BaseStatusEnum;
+use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Ecommerce\Services\Products\GetProductService;
-use Botble\Marketplace\Facades\MarketplaceHelper;
-use Botble\Marketplace\Forms\ContactStoreForm;
-use Botble\Marketplace\Http\Requests\Fronts\CheckStoreUrlRequest;
+use Botble\Marketplace\Http\Requests\CheckStoreUrlRequest;
 use Botble\Marketplace\Models\Store;
-use Botble\Media\Facades\RvMedia;
-use Botble\SeoHelper\Facades\SeoHelper;
+use Botble\Marketplace\Repositories\Interfaces\StoreInterface;
 use Botble\SeoHelper\SeoOpenGraph;
-use Botble\Slug\Facades\SlugHelper;
+use Botble\Ecommerce\Facades\EcommerceHelper;
 use Botble\Theme\Facades\Theme;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use Botble\Media\Facades\RvMedia;
+use Botble\SeoHelper\Facades\SeoHelper;
+use Botble\Slug\Facades\SlugHelper;
 
-class PublicStoreController extends BaseController
+class PublicStoreController
 {
+    public function __construct(protected StoreInterface $storeRepository)
+    {
+    }
+
     public function getStores(Request $request)
     {
-        Theme::breadcrumb()
+        Theme::breadcrumb()->add(__('Home'), route('public.index'))
             ->add(__('Stores'), route('public.stores'));
 
         SeoHelper::setTitle(__('Stores'))->setDescription(__('Stores'));
 
-        $condition = [];
+        $condition = ['status' => BaseStatusEnum::PUBLISHED];
 
         $search = BaseHelper::stringify(BaseHelper::clean($request->input('q')));
         if ($search) {
@@ -39,7 +42,7 @@ class PublicStoreController extends BaseController
 
         $with = ['slugable'];
         if (EcommerceHelper::isReviewEnabled()) {
-            $with['reviews'] = function ($query): void {
+            $with['reviews'] = function ($query) {
                 $query->where([
                     'ec_products.status' => BaseStatusEnum::PUBLISHED,
                     'ec_reviews.status' => BaseStatusEnum::PUBLISHED,
@@ -47,31 +50,35 @@ class PublicStoreController extends BaseController
             };
         }
 
-        $stores = Store::query()
-            ->wherePublished()
-            ->where($condition)
-            ->with($with)
-            ->withCount([
-                'products' => function ($query): void {
-                    $query
-                        ->where('is_variation', 0)
-                        ->wherePublished();
+        $stores = $this->storeRepository->advancedGet([
+            'condition' => $condition,
+            'order_by' => ['created_at' => 'desc'],
+            'paginate' => [
+                'per_page' => 12,
+                'current_paged' => $request->integer('page'),
+            ],
+            'with' => $with,
+            'withCount' => [
+                'products' => function ($query) {
+                    $query->where(['status' => BaseStatusEnum::PUBLISHED]);
                 },
-            ])
-            ->orderByDesc('created_at')
-            ->paginate(12);
+            ],
+        ]);
 
-        return Theme::scope('marketplace.stores', compact('stores'), MarketplaceHelper::viewPath('stores', false))->render();
+        return Theme::scope('marketplace.stores', compact('stores'), 'plugins/marketplace::themes.stores')->render();
     }
 
     public function getStore(
         string $key,
         Request $request,
-        GetProductService $productService
+        GetProductService $productService,
+        BaseHttpResponse $response
     ) {
         $slug = SlugHelper::getSlug($key, SlugHelper::getPrefix(Store::class));
 
-        abort_unless($slug, 404);
+        if (! $slug) {
+            abort(404);
+        }
 
         $condition = [
             'mp_stores.id' => $slug->reference_id,
@@ -82,11 +89,11 @@ class PublicStoreController extends BaseController
             Arr::forget($condition, 'status');
         }
 
-        $store = Store::query()
-            ->wherePublished()
-            ->with(['slugable', 'metadata'])
-            ->where($condition)
-            ->firstOrFail();
+        $store = $this->storeRepository->getFirstBy($condition, ['*'], ['slugable', 'metadata']);
+
+        if (! $store) {
+            abort(404);
+        }
 
         if ($store->slugable->key !== $slug->key) {
             return redirect()->to($store->url);
@@ -95,7 +102,6 @@ class PublicStoreController extends BaseController
         SeoHelper::setTitle($store->name)->setDescription($store->description);
 
         $meta = new SeoOpenGraph();
-
         if ($store->logo) {
             $meta->setImage(RvMedia::getImageUrl($store->logo));
         }
@@ -106,19 +112,20 @@ class PublicStoreController extends BaseController
         SeoHelper::setSeoOpenGraph($meta);
 
         Theme::breadcrumb()
+            ->add(__('Home'), route('public.index'))
             ->add(__('Stores'), route('public.stores'))
             ->add($store->name, $store->url);
 
-        $with = EcommerceHelper::withProductEagerLoadingRelations();
+        $with = [
+            'slugable',
+            'variations',
+            'productLabels',
+            'variationAttributeSwatchesForProductList',
+            'store',
+            'store.slugable',
+        ];
 
-        $products = $productService->getProduct(
-            $request,
-            null,
-            null,
-            $with,
-            [],
-            ['is_variation' => 0, 'store_id' => $store->getKey()]
-        );
+        $products = $productService->getProduct($request, null, null, $with, [], ['store_id' => $store->id]);
 
         if ($request->ajax()) {
             $total = $products->total();
@@ -130,51 +137,36 @@ class PublicStoreController extends BaseController
             $view = Theme::getThemeNamespace('views.marketplace.stores.items');
 
             if (! view()->exists($view)) {
-                $view = MarketplaceHelper::viewPath('stores.items', false);
+                $view = 'plugins/marketplace::themes.stores.items';
             }
 
-            return $this
-                ->httpResponse()
+            return $response
                 ->setData(view($view, compact('products', 'store'))->render())
                 ->setMessage($message);
         }
 
-        if (function_exists('admin_bar')) {
-            admin_bar()
-                ->registerLink(
-                    trans('plugins/marketplace::store.edit_this_store'),
-                    route('marketplace.store.edit', $store->getKey()),
-                    null,
-                    'marketplace.store.edit'
-                );
-        }
-
-        $contactForm = ContactStoreForm::createFromArray(['id' => $store->getKey()]);
-
-        return Theme::scope(
-            'marketplace.store',
-            compact('store', 'products', 'contactForm'),
-            MarketplaceHelper::viewPath('store', false)
-        )->render();
+        return Theme::scope('marketplace.store', compact('store', 'products'), 'plugins/marketplace::themes.store')->render();
     }
 
-    public function checkStoreUrl(CheckStoreUrlRequest $request)
+    public function checkStoreUrl(CheckStoreUrlRequest $request, BaseHttpResponse $response)
     {
-        abort_unless($request->ajax(), 404);
+        if (! $request->ajax()) {
+            abort(404);
+        }
 
         $slug = $request->input('url');
         $slug = Str::slug($slug, '-', ! SlugHelper::turnOffAutomaticUrlTranslationIntoLatin() ? 'en' : false);
 
         $existing = SlugHelper::getSlug($slug, SlugHelper::getPrefix(Store::class));
 
-        $this->httpResponse()->setData(['slug' => $slug]);
+        $response->setData(['slug' => $slug]);
 
         if ($existing && $existing->reference_id != $request->input('reference_id')) {
-            return $this->httpResponse()
+            return $response
                 ->setError()
                 ->setMessage(__('Not Available'));
         }
 
-        return $this->httpResponse()->setMessage(__('Available'));
+        return $response->setMessage(__('Available'));
     }
 }

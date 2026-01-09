@@ -2,11 +2,9 @@
 
 namespace Botble\Newsletter\Repositories\Caches;
 
-use Botble\Newsletter\Repositories\Eloquent\NewsletterRepository;
+use Botble\Newsletter\Repositories\Interfaces\NewsletterInterface;
+use Botble\Support\Repositories\Caches\CacheAbstractDecorator;
 
-/**
- * @deprecated
- */
-class NewsletterCacheDecorator extends NewsletterRepository
+class NewsletterCacheDecorator extends CacheAbstractDecorator implements NewsletterInterface
 {
 }

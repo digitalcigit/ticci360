@@ -2,18 +2,13 @@
 
 namespace Botble\ACL\Commands;
 
-use Botble\ACL\Models\User;
+use Botble\ACL\Repositories\Interfaces\UserInterface;
 use Botble\ACL\Services\ActivateUserService;
 use Botble\Base\Commands\Traits\ValidateCommandInput;
 use Botble\Base\Supports\Helper;
 use Exception;
 use Illuminate\Console\Command;
-use Illuminate\Contracts\Auth\Authenticatable;
-
-use Illuminate\Validation\Rule;
-
-use function Laravel\Prompts\{password, text};
-
+use Illuminate\Support\Facades\Hash;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 #[AsCommand('cms:user:create', 'Create a super user')]
@@ -21,13 +16,24 @@ class UserCreateCommand extends Command
 {
     use ValidateCommandInput;
 
-    public function handle(ActivateUserService $activateUserService): int
+    public function handle(UserInterface $userRepository, ActivateUserService $activateUserService): int
     {
+        $this->components->info('Creating a super user...');
+
         try {
-            $user = $this->createUser();
+            $user = $userRepository->getModel();
+            $user->first_name = $this->askWithValidate('Enter first name', 'required|min:2|max:60');
+            $user->last_name = $this->askWithValidate('Enter last name', 'required|min:2|max:60');
+            $user->email = $this->askWithValidate('Enter email address', 'required|email|unique:users,email');
+            $user->username = $this->askWithValidate('Enter username', 'required|min:4|max:60|unique:users,username');
+            $user->password = Hash::make($this->askWithValidate('Enter password', 'required|min:6|max:60', true));
+            $user->super_user = 1;
+            $user->manage_supers = 1;
+
+            $userRepository->createOrUpdate($user);
 
             if ($activateUserService->activate($user)) {
-                $this->sendSuccessMessage($user);
+                $this->components->info('Super user is created.');
             }
 
             Helper::clearCache();
@@ -39,76 +45,5 @@ class UserCreateCommand extends Command
 
             return self::FAILURE;
         }
-    }
-
-    protected function getUserData(): array
-    {
-        return [
-            'first_name' => text(
-                label: 'First name',
-                required: true,
-                validate: $this->validate([
-                    'required',
-                    'min:2',
-                    'max:60',
-                ]),
-            ),
-            'last_name' => text(
-                label: 'Last name',
-                required: true,
-                validate: $this->validate([
-                    'required',
-                    'min:2',
-                    'max:60',
-                ]),
-            ),
-            'email' => text(
-                label: 'Email address',
-                required: true,
-                validate: $this->validate([
-                    'email',
-                    'max:60',
-                    Rule::unique((new User())->getTable(), 'email'),
-                ])
-            ),
-            'username' => text(
-                label: 'Username',
-                required: true,
-                validate: $this->validate([
-                    'min:4',
-                    'max:60',
-                    Rule::unique((new User())->getTable(), 'username'),
-                ])
-            ),
-            'password' => password(
-                label: 'Password',
-                required: true,
-                validate: $this->validate([
-                    'min:6',
-                    'max:60',
-                ])
-            ),
-        ];
-    }
-
-    protected function createUser(): User
-    {
-        /** @var User $user */
-        $user = User::query()->forceCreate([
-            ...$this->getUserData(),
-            'super_user' => true,
-            'manage_supers' => true,
-        ]);
-
-        return $user;
-    }
-
-    protected function sendSuccessMessage(Authenticatable $user): void
-    {
-        $this->components->info(sprintf(
-            'Super user %s has been created. You can login at %s',
-            $user->getAttribute('email') ?? $user->getAttribute('username'),
-            route('access.login')
-        ));
     }
 }

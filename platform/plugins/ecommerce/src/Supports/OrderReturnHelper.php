@@ -2,19 +2,19 @@
 
 namespace Botble\Ecommerce\Supports;
 
-use Botble\Base\Facades\EmailHandler;
-use Botble\Ecommerce\Enums\OrderReturnHistoryActionEnum;
 use Botble\Ecommerce\Enums\OrderReturnStatusEnum;
 use Botble\Ecommerce\Events\OrderReturnedEvent;
-use Botble\Ecommerce\Facades\OrderHelper as OrderHelperFacade;
 use Botble\Ecommerce\Models\Order;
-use Botble\Ecommerce\Models\OrderProduct;
 use Botble\Ecommerce\Models\OrderReturn;
-use Botble\Ecommerce\Models\OrderReturnItem;
-use Botble\Ecommerce\Models\Product;
+use Botble\Ecommerce\Repositories\Interfaces\OrderProductInterface;
+use Botble\Ecommerce\Repositories\Interfaces\OrderReturnInterface;
+use Botble\Ecommerce\Repositories\Interfaces\OrderReturnItemInterface;
+use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Botble\Base\Facades\EmailHandler;
 use Illuminate\Support\Facades\Log;
+use Botble\Ecommerce\Facades\OrderHelper as OrderHelperFacade;
 use Throwable;
 
 class OrderReturnHelper
@@ -22,28 +22,25 @@ class OrderReturnHelper
     public function returnOrder(Order $order, array $data): array
     {
         $orderReturnData = [
-            'order_id' => $order->getKey(),
+            'order_id' => $order->id,
             'store_id' => $order->store_id,
             'user_id' => $order->user_id,
+            'reason' => $data['reason'],
             'order_status' => $order->status,
             'return_status' => OrderReturnStatusEnum::PENDING,
         ];
 
-        if (! empty($data['reason'])) {
-            $orderReturnData['reason'] = $data['reason'];
-        }
-
         try {
             DB::beginTransaction();
 
-            $orderReturn = OrderReturn::query()->create($orderReturnData);
+            $orderReturn = app(OrderReturnInterface::class)->create($orderReturnData);
 
             $orderReturnItemData = [];
 
             $orderProductIds = [];
 
             foreach ($data['items'] as $returnItem) {
-                $orderProduct = OrderProduct::query()->find($returnItem['order_item_id']);
+                $orderProduct = app(OrderProductInterface::class)->findById($returnItem['order_item_id']);
                 if (! $orderProduct) {
                     continue;
                 }
@@ -64,15 +61,7 @@ class OrderReturnHelper
                 $orderProductIds[] = $orderProduct->product_id;
             }
 
-            OrderReturnItem::query()->insert($orderReturnItemData);
-
-            /**
-             * @var OrderReturn $orderReturn
-             */
-            $orderReturn->histories()->create([
-                'action' => OrderReturnHistoryActionEnum::CREATED,
-                'description' => __('Request return order with reason: :reason', ['reason' => $orderReturn->reason->label()]),
-            ]);
+            app(OrderReturnItemInterface::class)->insert($orderReturnItemData);
 
             event(new OrderReturnedEvent($orderReturn));
 
@@ -80,10 +69,12 @@ class OrderReturnHelper
             if ($mailer->templateEnabled('order-return-request')) {
                 $mailer = OrderHelperFacade::setEmailVariables($order);
 
-                $orderProducts = OrderProduct::query()
-                    ->where('order_id', $order->getKey())
-                    ->whereIn('product_id', $orderProductIds)
-                    ->get();
+                $orderProducts = app(OrderProductInterface::class)->advancedGet([
+                    'condition' => [
+                        'order_id' => $order->id,
+                        ['product_id', 'IN', $orderProductIds],
+                    ],
+                ]);
 
                 $order->dont_show_order_info_in_product_list = true;
 
@@ -116,18 +107,10 @@ class OrderReturnHelper
         }
     }
 
-    public function cancelReturnOrder(OrderReturn $orderReturn, ?string $reason = null): array
+    public function cancelReturnOrder(OrderReturn $orderReturn): array
     {
-        $orderReturn->update([
-            'return_status' => OrderReturnStatusEnum::CANCELED,
-        ]);
-
-        $orderReturn->histories()->create([
-            'user_id' => auth()->id(),
-            'action' => OrderReturnHistoryActionEnum::REJECTED,
-            'description' => __('Cancel return order with reason: :reason', ['reason' => $reason]),
-            'reason' => $reason,
-        ]);
+        $orderReturn->return_status = OrderReturnStatusEnum::CANCELED;
+        $orderReturn->save();
 
         return [true, $orderReturn];
     }
@@ -137,11 +120,12 @@ class OrderReturnHelper
         try {
             DB::beginTransaction();
 
-            $orderReturn->update($data);
+            $orderReturn->return_status = $data['return_status'];
+            $orderReturn->save();
 
             if ($orderReturn->return_status == OrderReturnStatusEnum::COMPLETED) {
                 foreach ($orderReturn->items as $item) {
-                    $product = Product::query()->find($item->product_id);
+                    $product = app(ProductInterface::class)->findById($item->product_id);
                     if ($product) {
                         $product->quantity += $item->qty;
                         $product->save();
@@ -158,28 +142,6 @@ class OrderReturnHelper
 
                 do_action(ACTION_AFTER_ORDER_RETURN_STATUS_COMPLETED, $orderReturn, $data);
             }
-
-            $orderReturn->histories()->create([
-                'user_id' => auth()->id(),
-                'action' => match ($orderReturn->return_status->getValue()) {
-                    OrderReturnStatusEnum::COMPLETED => OrderReturnHistoryActionEnum::MARK_AS_COMPLETED,
-                    OrderReturnStatusEnum::PROCESSING => OrderReturnHistoryActionEnum::APPROVED,
-                    default => OrderReturnHistoryActionEnum::REJECTED,
-                },
-                'description' => __('Update return order status to: :status', ['status' => $orderReturn->return_status->label()]),
-                'reason' => $data['description'] ?? null,
-            ]);
-
-            $customer = $orderReturn->customer;
-
-            EmailHandler::setModule(ECOMMERCE_MODULE_SCREEN_NAME)
-                ->setVariableValues([
-                    'customer_name' => $customer->name,
-                    'order_id' => $orderReturn->order->code,
-                    'description' => $data['description'] ?? null,
-                    'status' => $orderReturn->return_status->label(),
-                ])
-                ->sendUsingTemplate('order-return-status-updated', $customer->email);
 
             DB::commit();
 

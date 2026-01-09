@@ -7,18 +7,14 @@ use Illuminate\Support\Facades\Schema;
 return new class () extends Migration {
     public function up(): void
     {
-        if (Schema::hasColumn('payments', 'customer_type')) {
-            return;
-        }
-
-        Schema::table('payments', function (Blueprint $table): void {
-            $table->string('customer_type')->nullable();
+        Schema::table('payments', function (Blueprint $table) {
+            $table->string('customer_type', 255)->nullable();
         });
     }
 
     public function down(): void
     {
-        Schema::table('payments', function (Blueprint $table): void {
+        Schema::table('payments', function (Blueprint $table) {
             $table->dropColumn('customer_type');
         });
     }

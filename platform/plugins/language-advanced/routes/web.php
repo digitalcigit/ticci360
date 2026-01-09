@@ -1,18 +1,17 @@
 <?php
 
-use Botble\Base\Facades\AdminHelper;
+use Botble\Base\Facades\BaseHelper;
 use Botble\LanguageAdvanced\Http\Controllers\LanguageAdvancedController;
 use Illuminate\Support\Facades\Route;
 
-AdminHelper::registerRoutes(function (): void {
-    Route::group([
-        'controller' => LanguageAdvancedController::class,
-        'prefix' => 'language-advanced',
-    ], function (): void {
-        Route::post('save/{id}', [
-            'as' => 'language-advanced.save',
-            'uses' => 'save',
-            'permission' => false,
-        ])->wherePrimaryKey();
-    });
+Route::group([
+    'controller' => LanguageAdvancedController::class,
+    'prefix' => BaseHelper::getAdminPrefix() . '/language-advanced',
+    'middleware' => ['web', 'core', 'auth'],
+], function () {
+    Route::post('save/{id}', [
+        'as' => 'language-advanced.save',
+        'uses' => 'save',
+        'permission' => false,
+    ])->wherePrimaryKey();
 });

@@ -9,13 +9,16 @@ class Template
 {
     public static function registerPageTemplate(array $templates = []): void
     {
-        $validTemplates = array_filter($templates, function ($key) {
-            return in_array($key, self::getExistsTemplate());
-        }, ARRAY_FILTER_USE_KEY);
+        $validTemplates = [];
+        foreach ($templates as $key => $template) {
+            if (in_array($key, self::getExistsTemplate())) {
+                $validTemplates[$key] = $template;
+            }
+        }
 
         config([
             'packages.page.general.templates' => array_merge(
-                config('packages.page.general.templates', []),
+                config('packages.page.general.templates'),
                 $validTemplates
             ),
         ]);
@@ -23,20 +26,9 @@ class Template
 
     protected static function getExistsTemplate(): array
     {
-        $themes = [
-            Theme::getThemeName(),
-        ];
-
-        if (Theme::hasInheritTheme()) {
-            $themes[] = Theme::getInheritTheme();
-        }
-
-        foreach ($themes as $theme) {
-            $files = BaseHelper::scanFolder(theme_path($theme . DIRECTORY_SEPARATOR . config('packages.theme.general.containerDir.layout')));
-
-            foreach ($files as $key => $file) {
-                $files[$key] = str_replace('.blade.php', '', $file);
-            }
+        $files = BaseHelper::scanFolder(theme_path(Theme::getThemeName() . DIRECTORY_SEPARATOR . config('packages.theme.general.containerDir.layout')));
+        foreach ($files as $key => $file) {
+            $files[$key] = str_replace('.blade.php', '', $file);
         }
 
         return $files;
@@ -44,6 +36,6 @@ class Template
 
     public static function getPageTemplates(): array
     {
-        return (array) config('packages.page.general.templates', []);
+        return (array)config('packages.page.general.templates', []);
     }
 }

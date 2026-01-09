@@ -29,38 +29,40 @@ class CouchbaseCollectionAdapter extends AbstractAdapter
 {
     private const MAX_KEY_LENGTH = 250;
 
-    private MarshallerInterface $marshaller;
+    private $connection;
+    private $marshaller;
 
-    public function __construct(
-        private Collection $connection,
-        string $namespace = '',
-        int $defaultLifetime = 0,
-        ?MarshallerInterface $marshaller = null,
-    ) {
+    public function __construct(Collection $connection, string $namespace = '', int $defaultLifetime = 0, MarshallerInterface $marshaller = null)
+    {
         if (!static::isSupported()) {
-            throw new CacheException('Couchbase >= 3.0.5 < 4.0.0 is required.');
+            throw new CacheException('Couchbase >= 3.0.0 < 4.0.0 is required.');
         }
 
         $this->maxIdLength = static::MAX_KEY_LENGTH;
+
+        $this->connection = $connection;
 
         parent::__construct($namespace, $defaultLifetime);
         $this->enableVersioning();
         $this->marshaller = $marshaller ?? new DefaultMarshaller();
     }
 
-    public static function createConnection(#[\SensitiveParameter] array|string $dsn, array $options = []): Bucket|Collection
+    public static function createConnection(array|string $dsn, array $options = []): Bucket|Collection
     {
         if (\is_string($dsn)) {
             $dsn = [$dsn];
         }
 
         if (!static::isSupported()) {
-            throw new CacheException('Couchbase >= 3.0.5 < 4.0.0 is required.');
+            throw new CacheException('Couchbase >= 3.0.0 < 4.0.0 is required.');
         }
 
-        set_error_handler(static fn ($type, $msg, $file, $line) => throw new \ErrorException($msg, 0, $type, $file, $line));
+        set_error_handler(function ($type, $msg, $file, $line): bool { throw new \ErrorException($msg, 0, $type, $file, $line); });
 
-        $pathPattern = '/^(?:\/(?<bucketName>[^\/\?]+))(?:(?:\/(?<scopeName>[^\/]+))(?:\/(?<collectionName>[^\/\?]+)))?(?:\/)?$/';
+        $dsnPattern = '/^(?<protocol>couchbase(?:s)?)\:\/\/(?:(?<username>[^\:]+)\:(?<password>[^\@]{6,})@)?'
+            .'(?<host>[^\:]+(?:\:\d+)?)(?:\/(?<bucketName>[^\/\?]+))(?:(?:\/(?<scopeName>[^\/]+))'
+            .'(?:\/(?<collectionName>[^\/\?]+)))?(?:\/)?(?:\?(?<options>.*))?$/i';
+
         $newServers = [];
         $protocol = 'couchbase';
         try {
@@ -68,28 +70,28 @@ class CouchbaseCollectionAdapter extends AbstractAdapter
             $password = $options['password'] ?? '';
 
             foreach ($dsn as $server) {
-                if (!str_starts_with($server, 'couchbase:')) {
-                    throw new InvalidArgumentException('Invalid Couchbase DSN: it does not start with "couchbase:".');
+                if (0 !== strpos($server, 'couchbase:')) {
+                    throw new InvalidArgumentException(sprintf('Invalid Couchbase DSN: "%s" does not start with "couchbase:".', $server));
                 }
 
-                $params = parse_url($server);
+                preg_match($dsnPattern, $server, $matches);
 
-                $username = isset($params['user']) ? rawurldecode($params['user']) : $username;
-                $password = isset($params['pass']) ? rawurldecode($params['pass']) : $password;
-                $protocol = $params['scheme'] ?? $protocol;
+                $username = $matches['username'] ?: $username;
+                $password = $matches['password'] ?: $password;
+                $protocol = $matches['protocol'] ?: $protocol;
 
-                if (isset($params['query'])) {
-                    $optionsInDsn = self::getOptions($params['query']);
+                if (isset($matches['options'])) {
+                    $optionsInDsn = self::getOptions($matches['options']);
 
                     foreach ($optionsInDsn as $parameter => $value) {
                         $options[$parameter] = $value;
                     }
                 }
 
-                $newServers[] = $params['host'];
+                $newServers[] = $matches['host'];
             }
 
-            $option = isset($params['query']) ? '?'.$params['query'] : '';
+            $option = isset($matches['options']) ? '?'.$matches['options'] : '';
             $connectionString = $protocol.'://'.implode(',', $newServers).$option;
 
             $clusterOptions = new ClusterOptions();
@@ -97,7 +99,6 @@ class CouchbaseCollectionAdapter extends AbstractAdapter
 
             $client = new Cluster($connectionString, $clusterOptions);
 
-            preg_match($pathPattern, $params['path'] ?? '', $matches);
             $bucket = $client->bucket($matches['bucketName']);
             $collection = $bucket->defaultCollection();
             if (!empty($matches['scopeName'])) {
@@ -130,13 +131,16 @@ class CouchbaseCollectionAdapter extends AbstractAdapter
         return $results;
     }
 
+    /**
+     * {@inheritdoc}
+     */
     protected function doFetch(array $ids): array
     {
         $results = [];
         foreach ($ids as $id) {
             try {
                 $resultCouchbase = $this->connection->get($id);
-            } catch (DocumentNotFoundException) {
+            } catch (DocumentNotFoundException $exception) {
                 continue;
             }
 
@@ -148,16 +152,25 @@ class CouchbaseCollectionAdapter extends AbstractAdapter
         return $results;
     }
 
+    /**
+     * {@inheritdoc}
+     */
     protected function doHave($id): bool
     {
         return $this->connection->exists($id)->exists();
     }
 
+    /**
+     * {@inheritdoc}
+     */
     protected function doClear($namespace): bool
     {
         return false;
     }
 
+    /**
+     * {@inheritdoc}
+     */
     protected function doDelete(array $ids): bool
     {
         $idsErrors = [];
@@ -168,13 +181,16 @@ class CouchbaseCollectionAdapter extends AbstractAdapter
                 if (null === $result->mutationToken()) {
                     $idsErrors[] = $id;
                 }
-            } catch (DocumentNotFoundException) {
+            } catch (DocumentNotFoundException $exception) {
             }
         }
 
         return 0 === \count($idsErrors);
     }
 
+    /**
+     * {@inheritdoc}
+     */
     protected function doSave(array $values, $lifetime): array|bool
     {
         if (!$values = $this->marshaller->marshall($values, $failed)) {
@@ -188,7 +204,7 @@ class CouchbaseCollectionAdapter extends AbstractAdapter
         foreach ($values as $key => $value) {
             try {
                 $this->connection->upsert($key, $value, $upsertOptions);
-            } catch (\Exception) {
+            } catch (\Exception $exception) {
                 $ko[$key] = '';
             }
         }

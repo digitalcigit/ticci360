@@ -5,9 +5,6 @@ namespace Botble\Base\Supports;
 use Twig\Environment;
 use Twig\Extension\ExtensionInterface;
 
-/**
- * @mixin \Twig\Environment
- */
 class TwigCompiler
 {
     protected TwigLoader $loader;
@@ -39,10 +36,5 @@ class TwigCompiler
     public function getExtensions(): array
     {
         return $this->env->getExtensions();
-    }
-
-    public function __call(string $name, array $arguments)
-    {
-        return $this->env->{$name}(...$arguments);
     }
 }

@@ -43,7 +43,7 @@ abstract class Card extends Widget
         return 3;
     }
 
-    public function getContent(): ?string
+    public function getContent(): string|null
     {
         return null;
     }

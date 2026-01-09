@@ -2,31 +2,29 @@
 
 namespace Botble\Marketplace\Tables;
 
-use Botble\Ecommerce\Enums\DiscountTypeEnum;
-use Botble\Ecommerce\Models\Discount;
-use Botble\Marketplace\Tables\Traits\ForVendor;
+use Botble\Base\Facades\BaseHelper;
+use Botble\Ecommerce\Repositories\Interfaces\DiscountInterface;
 use Botble\Table\Abstracts\TableAbstract;
-use Botble\Table\Actions\DeleteAction;
-use Botble\Table\BulkActions\DeleteBulkAction;
-use Botble\Table\Columns\Column;
-use Botble\Table\Columns\DateColumn;
-use Botble\Table\Columns\IdColumn;
+use Illuminate\Contracts\Routing\UrlGenerator;
+use Illuminate\Contracts\View\Factory;
+use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\JsonResponse;
+use Botble\Marketplace\Facades\MarketplaceHelper;
+use Symfony\Component\HttpFoundation\Response;
+use Botble\Table\DataTables;
 
 class DiscountTable extends TableAbstract
 {
-    use ForVendor;
+    protected $hasCheckbox = false;
 
-    public function setup(): void
+    public function __construct(DataTables $table, UrlGenerator $urlGenerator, DiscountInterface $discountRepository)
     {
-        $this
-            ->model(Discount::class)
-            ->addActions([
-                DeleteAction::make()->route('marketplace.vendor.discounts.destroy'),
-            ]);
+        parent::__construct($table, $urlGenerator);
+
+        $this->repository = $discountRepository;
     }
 
     public function ajax(): JsonResponse
@@ -34,9 +32,10 @@ class DiscountTable extends TableAbstract
         $data = $this->table
             ->eloquent($this->query())
             ->editColumn('detail', function ($item) {
-                $isCoupon = $item->type === DiscountTypeEnum::COUPON;
-
-                return view('plugins/ecommerce::discounts.detail', compact('item', 'isCoupon'))->render();
+                return view('plugins/ecommerce::discounts.detail', compact('item'))->render();
+            })
+            ->editColumn('checkbox', function ($item) {
+                return $this->getCheckbox($item->id);
             })
             ->editColumn('total_used', function ($item) {
                 if ($item->type === 'promotion') {
@@ -48,6 +47,19 @@ class DiscountTable extends TableAbstract
                 }
 
                 return $item->total_used . '/' . $item->quantity;
+            })
+            ->editColumn('start_date', function ($item) {
+                return BaseHelper::formatDate($item->start_date);
+            })
+            ->editColumn('end_date', function ($item) {
+                return $item->end_date ?: '&mdash;';
+            })
+            ->addColumn('operations', function ($item) {
+                return view(MarketplaceHelper::viewPath('dashboard.table.actions'), [
+                    'edit' => '',
+                    'delete' => 'marketplace.vendor.discounts.destroy',
+                    'item' => $item,
+                ])->render();
             });
 
         return $this->toJson($data);
@@ -55,11 +67,11 @@ class DiscountTable extends TableAbstract
 
     public function query(): Relation|Builder|QueryBuilder
     {
-        $query = $this
+        $storeId = auth('customer')->user()->store->id;
+        $query = $this->repository
             ->getModel()
-            ->query()
             ->select(['*'])
-            ->where('store_id', auth('customer')->user()->store?->id);
+            ->where('store_id', $storeId);
 
         return $this->applyScopes($query);
     }
@@ -67,18 +79,28 @@ class DiscountTable extends TableAbstract
     public function columns(): array
     {
         return [
-            IdColumn::make(),
-            Column::make('detail')
-                ->name('code')
-                ->title(trans('plugins/ecommerce::discount.detail'))
-                ->alignStart(),
-            Column::make('total_used')
-                ->title(trans('plugins/ecommerce::discount.used'))
-                ->width(100),
-            DateColumn::make('start_date')
-                ->title(trans('plugins/ecommerce::discount.start_date')),
-            DateColumn::make('end_date')
-                ->title(trans('plugins/ecommerce::discount.end_date')),
+            'id' => [
+                'title' => trans('core/base::tables.id'),
+                'width' => '20px',
+                'class' => 'text-start',
+            ],
+            'detail' => [
+                'name' => 'code',
+                'title' => trans('plugins/ecommerce::discount.detail'),
+                'class' => 'text-start',
+            ],
+            'total_used' => [
+                'title' => trans('plugins/ecommerce::discount.used'),
+                'width' => '100px',
+            ],
+            'start_date' => [
+                'title' => trans('plugins/ecommerce::discount.start_date'),
+                'class' => 'text-center',
+            ],
+            'end_date' => [
+                'title' => trans('plugins/ecommerce::discount.end_date'),
+                'class' => 'text-center',
+            ],
         ];
     }
 
@@ -89,14 +111,17 @@ class DiscountTable extends TableAbstract
 
     public function bulkActions(): array
     {
-        return [
-            DeleteBulkAction::make()->beforeDispatch(function (Discount $discount, array $ids): void {
-                foreach ($ids as $id) {
-                    $discount = Discount::query()->findOrFail($id);
+        return $this->addDeleteAction(route('marketplace.vendor.discounts.deletes'), null, parent::bulkActions());
+    }
 
-                    abort_if($discount->store_id !== auth('customer')->user()->store?->id, 403);
-                }
-            }),
-        ];
+    public function renderTable($data = [], $mergeData = []): View|Factory|Response
+    {
+        if ($this->query()->count() === 0 &&
+            $this->request()->input('filter_table_id') !== $this->getOption('id') && ! $this->request()->ajax()
+        ) {
+            return view('plugins/ecommerce::discounts.intro');
+        }
+
+        return parent::renderTable($data, $mergeData);
     }
 }

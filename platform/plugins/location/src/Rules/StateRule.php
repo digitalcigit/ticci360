@@ -3,7 +3,7 @@
 namespace Botble\Location\Rules;
 
 use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Location\Models\State;
+use Botble\Location\Repositories\Interfaces\StateInterface;
 use Illuminate\Contracts\Validation\DataAwareRule;
 use Illuminate\Contracts\Validation\Rule;
 use Illuminate\Support\Arr;
@@ -12,7 +12,7 @@ class StateRule implements DataAwareRule, Rule
 {
     protected array $data = [];
 
-    public function __construct(protected ?string $countryKey = '')
+    public function __construct(protected string|null $countryKey = '')
     {
     }
 
@@ -30,18 +30,16 @@ class StateRule implements DataAwareRule, Rule
             'status' => BaseStatusEnum::PUBLISHED,
         ];
 
-        $query = State::query()->where($condition);
+        if ($this->countryKey) {
+            $countryId = Arr::get($this->data, $this->countryKey);
+            if (! $countryId) {
+                return false;
+            }
 
-        if ($this->countryKey && ($countryId = Arr::get($this->data, $this->countryKey))) {
-            $query = $query
-                ->whereHas('country', function ($query) use ($countryId): void {
-                    $query
-                        ->where('id', $countryId)
-                        ->orWhere('code', $countryId);
-                });
+            $condition['country_id'] = $countryId;
         }
 
-        return $query->exists();
+        return app(StateInterface::class)->getModel()->where($condition)->exists();
     }
 
     public function message(): string

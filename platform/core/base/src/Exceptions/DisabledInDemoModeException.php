@@ -2,11 +2,10 @@
 
 namespace Botble\Base\Exceptions;
 
-use Botble\Base\Contracts\Exceptions\IgnoringReport;
 use Symfony\Component\HttpFoundation\Exception\BadRequestException;
 use Throwable;
 
-class DisabledInDemoModeException extends BadRequestException implements IgnoringReport
+class DisabledInDemoModeException extends BadRequestException
 {
     public function __construct(string $message = '', int $code = 0, ?Throwable $previous = null)
     {

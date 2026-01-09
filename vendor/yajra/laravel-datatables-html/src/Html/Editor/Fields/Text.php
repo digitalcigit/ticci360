@@ -2,4 +2,6 @@
 
 namespace Yajra\DataTables\Html\Editor\Fields;
 
-class Text extends Field {}
+class Text extends Field
+{
+}

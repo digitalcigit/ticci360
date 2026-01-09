@@ -2,13 +2,12 @@
 
 namespace Botble\Ecommerce\Imports;
 
-use Botble\Base\Facades\BaseHelper;
 use Carbon\Carbon;
-use DateTime;
 use Exception;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
+use DateTime;
+use Illuminate\Database\Eloquent\Model;
 
 trait ImportTrait
 {
@@ -40,7 +39,7 @@ trait ImportTrait
 
     public function transformDate($value, $format = ''): string
     {
-        $format = $format ?: BaseHelper::getDateTimeFormat();
+        $format = $format ?: config('core.base.general.date_format.date_time');
 
         try {
             return Carbon::instance(Date::excelToDateTimeObject($value))->format($format);
@@ -54,7 +53,7 @@ trait ImportTrait
         try {
             $date = DateTime::createFromFormat('!' . $format, $value);
 
-            return $date ? $date->format(BaseHelper::getDateTimeFormat()) : $value;
+            return $date ? $date->format(config('core.base.general.date_format.date_time')) : $value;
         } catch (Exception) {
             return $default;
         }

@@ -1,21 +1,13 @@
 <?php
 
-use Botble\Base\Models\BaseQueryBuilder;
-use Botble\Base\Supports\RepositoryHelper;
-use Botble\Page\Models\Page;
+use Botble\Page\Repositories\Interfaces\PageInterface;
 use Botble\Page\Supports\Template;
 use Illuminate\Database\Eloquent\Collection;
 
 if (! function_exists('get_all_pages')) {
     function get_all_pages(bool $active = true): Collection
     {
-        $pages = Page::query()
-            ->when($active, function (BaseQueryBuilder $query): void {
-                $query->wherePublished();
-            })->latest()
-            ->with('slugable');
-
-        return RepositoryHelper::applyBeforeExecuteQuery($pages, new Page())->get();
+        return app(PageInterface::class)->getAllPages($active);
     }
 }
 

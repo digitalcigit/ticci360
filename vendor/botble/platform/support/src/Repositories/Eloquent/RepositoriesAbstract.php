@@ -12,9 +12,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Arr;
 
-/**
- * @deprecated
- */
 abstract class RepositoriesAbstract implements RepositoryInterface
 {
     protected BaseModel|BaseQueryBuilder|Builder|Model $originalModel;
@@ -93,7 +90,7 @@ abstract class RepositoriesAbstract implements RepositoryInterface
             $model = $model->getModel();
         }
 
-        throw (new ModelNotFoundException())->setModel($model::class, $id);
+        throw (new ModelNotFoundException())->setModel(get_class($model), $id);
     }
 
     public function all(array $with = [])
@@ -201,8 +198,6 @@ abstract class RepositoriesAbstract implements RepositoryInterface
 
     public function getFirstBy(array $condition = [], array $select = ['*'], array $with = [])
     {
-        $this->resetModel();
-
         $this->make($with);
 
         $this->applyConditions($condition);
@@ -216,7 +211,7 @@ abstract class RepositoriesAbstract implements RepositoryInterface
         return $this->applyBeforeExecuteQuery($data, true)->first();
     }
 
-    public function delete(Model $model): ?bool
+    public function delete(Model $model): bool|null
     {
         return $model->delete();
     }
@@ -256,7 +251,7 @@ abstract class RepositoriesAbstract implements RepositoryInterface
 
         $data = $this->model->get();
 
-        if ($data->isEmpty()) {
+        if (! $data->count()) {
             return false;
         }
 
@@ -291,9 +286,9 @@ abstract class RepositoriesAbstract implements RepositoryInterface
         $data = $this->applyBeforeExecuteQuery($data);
 
         if (! empty(Arr::get($args, 'paginate'))) {
-            return $data->paginate((int) $args['paginate']);
+            return $data->paginate((int)$args['paginate']);
         } elseif (! empty(Arr::get($args, 'limit'))) {
-            return $data->limit((int) $args['limit']);
+            return $data->limit((int)$args['limit']);
         }
 
         return $data->get();
@@ -348,7 +343,7 @@ abstract class RepositoriesAbstract implements RepositoryInterface
         if ($params['take'] == 1) {
             $result = $this->applyBeforeExecuteQuery($data, true)->first();
         } elseif ($params['take'] && $params['take'] > 0) {
-            $result = $this->applyBeforeExecuteQuery($data)->take((int) $params['take'])->get();
+            $result = $this->applyBeforeExecuteQuery($data)->take((int)$params['take'])->get();
         } elseif ($params['paginate']['per_page']) {
             $paginateType = 'paginate';
 
@@ -358,15 +353,15 @@ abstract class RepositoriesAbstract implements RepositoryInterface
 
             $originalModel = $this->originalModel instanceof BaseQueryBuilder ? $this->originalModel->getModel() : $this->originalModel;
 
-            $perPage = (int) Arr::get($params, 'paginate.per_page') ?: 10;
-            $pageName = Arr::get($params, 'paginate.page_name', 'page');
-            $currentPage = (int) Arr::get($params, 'paginate.current_paged', 1) ?: 1;
+            $perPage = (int)Arr::get($params, 'paginate.per_page') ?: 10;
+
+            $currentPage = (int)Arr::get($params, 'paginate.current_paged', 1) ?: 1;
 
             $result = $this->applyBeforeExecuteQuery($data)
                 ->$paginateType(
                     $perPage > 0 ? $perPage : 10,
                     [$originalModel->getTable() . '.' . $originalModel->getKeyName()],
-                    $pageName,
+                    'page',
                     $currentPage > 0 ? $currentPage : 1
                 );
         } else {
@@ -384,8 +379,6 @@ abstract class RepositoriesAbstract implements RepositoryInterface
         if (! empty($item)) {
             $item->forceDelete();
         }
-
-        $this->resetModel();
     }
 
     public function restoreBy(array $condition = [])
@@ -396,8 +389,6 @@ abstract class RepositoriesAbstract implements RepositoryInterface
         if (! empty($item)) {
             $item->restore();
         }
-
-        $this->resetModel();
     }
 
     public function getFirstByWithTrash(array $condition = [], array $select = [])

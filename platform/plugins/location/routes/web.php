@@ -1,15 +1,17 @@
 <?php
 
-use Botble\Base\Facades\AdminHelper;
-use Botble\Location\Http\Controllers\ExportLocationController;
-use Botble\Location\Http\Controllers\ImportLocationController;
-use Botble\Theme\Facades\Theme;
+use Botble\Base\Facades\BaseHelper;
 use Illuminate\Support\Facades\Route;
 
-Route::group(['namespace' => 'Botble\Location\Http\Controllers'], function (): void {
-    AdminHelper::registerRoutes(function (): void {
-        Route::group(['prefix' => 'countries', 'as' => 'country.'], function (): void {
+Route::group(['namespace' => 'Botble\Location\Http\Controllers', 'middleware' => ['web', 'core']], function () {
+    Route::group(['prefix' => BaseHelper::getAdminPrefix(), 'middleware' => 'auth'], function () {
+        Route::group(['prefix' => 'countries', 'as' => 'country.'], function () {
             Route::resource('', 'CountryController')->parameters(['' => 'country']);
+            Route::delete('items/destroy', [
+                'as' => 'deletes',
+                'uses' => 'CountryController@deletes',
+                'permission' => 'country.destroy',
+            ]);
 
             Route::get('list', [
                 'as' => 'list',
@@ -18,8 +20,13 @@ Route::group(['namespace' => 'Botble\Location\Http\Controllers'], function (): v
             ]);
         });
 
-        Route::group(['prefix' => 'states', 'as' => 'state.'], function (): void {
+        Route::group(['prefix' => 'states', 'as' => 'state.'], function () {
             Route::resource('', 'StateController')->parameters(['' => 'state']);
+            Route::delete('items/destroy', [
+                'as' => 'deletes',
+                'uses' => 'StateController@deletes',
+                'permission' => 'state.destroy',
+            ]);
 
             Route::get('list', [
                 'as' => 'list',
@@ -28,8 +35,13 @@ Route::group(['namespace' => 'Botble\Location\Http\Controllers'], function (): v
             ]);
         });
 
-        Route::group(['prefix' => 'cities', 'as' => 'city.'], function (): void {
+        Route::group(['prefix' => 'cities', 'as' => 'city.'], function () {
             Route::resource('', 'CityController')->parameters(['' => 'city']);
+            Route::delete('items/destroy', [
+                'as' => 'deletes',
+                'uses' => 'CityController@deletes',
+                'permission' => 'city.destroy',
+            ]);
 
             Route::get('list', [
                 'as' => 'list',
@@ -38,24 +50,53 @@ Route::group(['namespace' => 'Botble\Location\Http\Controllers'], function (): v
             ]);
         });
 
-        Route::group(['prefix' => 'locations/bulk-import', 'as' => 'location.bulk-import.', 'permission' => 'location.bulk-import.index'], function (): void {
-            Route::get('/', [ImportLocationController::class, 'index'])->name('index');
-            Route::post('/', [ImportLocationController::class, 'import'])->name('store');
-            Route::post('validate', [ImportLocationController::class, 'validateData'])->name('validate');
-            Route::post('download-example', [ImportLocationController::class, 'downloadExample'])->name('download-example');
-            Route::post('import-location-data', [ImportLocationController::class, 'importLocationData'])->name('import-location-data');
+        Route::group(['prefix' => 'locations/bulk-import', 'as' => 'location.bulk-import.'], function () {
+            Route::get('/', [
+                'as' => 'index',
+                'uses' => 'BulkImportController@index',
+            ]);
+
+            Route::post('/', [
+                'as' => 'index.post',
+                'uses' => 'BulkImportController@postImport',
+                'permission' => 'location.bulk-import.index',
+            ]);
+
+            Route::post('/download-template', [
+                'as' => 'download-template',
+                'uses' => 'BulkImportController@downloadTemplate',
+                'permission' => 'location.bulk-import.index',
+            ]);
+
+            Route::get('ajax/available-remote-locations', [
+                'as' => 'available-remote-locations',
+                'uses' => 'BulkImportController@ajaxGetAvailableRemoteLocations',
+                'permission' => 'location.bulk-import.index',
+            ]);
+
+            Route::post('/import-location-data/{country}', [
+                'as' => 'import-location-data',
+                'uses' => 'BulkImportController@importLocationData',
+                'permission' => 'location.bulk-import.index',
+            ]);
         });
 
-        Route::group(['prefix' => 'locations/export', 'as' => 'location.export.', 'permission' => 'location.export.index'], function (): void {
-            Route::get('/', [ExportLocationController::class, 'index'])->name('index');
-            Route::post('/', [ExportLocationController::class, 'store'])->name('process');
+        Route::group(['prefix' => 'locations/export', 'as' => 'location.export.'], function () {
+            Route::get('/', [
+                'as' => 'index',
+                'uses' => 'ExportController@index',
+            ]);
+
+            Route::post('/', [
+                'as' => 'process',
+                'uses' => 'ExportController@export',
+                'permission' => 'location.export.index',
+            ]);
         });
     });
 
-    Theme::registerRoutes(function (): void {
-        Route::get('ajax/states-by-country', 'StateController@ajaxGetStates')
-            ->name('ajax.states-by-country');
-        Route::get('ajax/cities-by-state', 'CityController@ajaxGetCities')
-            ->name('ajax.cities-by-state');
-    });
+    Route::get('ajax/states-by-country', 'StateController@ajaxGetStates')
+        ->name('ajax.states-by-country');
+    Route::get('ajax/cities-by-state', 'CityController@ajaxGetCities')
+        ->name('ajax.cities-by-state');
 });

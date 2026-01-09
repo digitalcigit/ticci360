@@ -20,6 +20,17 @@ class JobMakeCommand extends GeneratorCommand
     protected $name = 'make:job';
 
     /**
+     * The name of the console command.
+     *
+     * This name is used to identify the command during lazy loading.
+     *
+     * @var string|null
+     *
+     * @deprecated
+     */
+    protected static $defaultName = 'make:job';
+
+    /**
      * The console command description.
      *
      * @var string
@@ -41,8 +52,8 @@ class JobMakeCommand extends GeneratorCommand
     protected function getStub()
     {
         return $this->option('sync')
-            ? $this->resolveStubPath('/stubs/job.stub')
-            : $this->resolveStubPath('/stubs/job.queued.stub');
+                        ? $this->resolveStubPath('/stubs/job.stub')
+                        : $this->resolveStubPath('/stubs/job.queued.stub');
     }
 
     /**
@@ -54,8 +65,8 @@ class JobMakeCommand extends GeneratorCommand
     protected function resolveStubPath($stub)
     {
         return file_exists($customPath = $this->laravel->basePath(trim($stub, '/')))
-            ? $customPath
-            : __DIR__.$stub;
+                        ? $customPath
+                        : __DIR__.$stub;
     }
 
     /**

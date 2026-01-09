@@ -4,157 +4,167 @@ namespace Botble\PluginManagement\Http\Controllers;
 
 use Botble\Base\Facades\Assets;
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Http\Controllers\BaseController;
+use Botble\Base\Facades\PageTitle;
 use Botble\Base\Http\Responses\BaseHttpResponse;
-use Botble\Base\Supports\Breadcrumb;
-use Botble\PluginManagement\Enums\PluginFilterStatus;
-use Botble\PluginManagement\Events\RenderingPluginListingPage;
 use Botble\PluginManagement\Services\MarketplaceService;
 use Botble\PluginManagement\Services\PluginService;
 use Exception;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\File;
 
-class PluginManagementController extends BaseController
+class PluginManagementController extends Controller
 {
     public function __construct(protected PluginService $pluginService)
     {
-    }
-
-    protected function breadcrumb(): Breadcrumb
-    {
-        return parent::breadcrumb()
-            ->add(trans('packages/plugin-management::plugin.plugins'), route('plugins.index'))
-            ->add(trans('packages/plugin-management::plugin.installed_plugins'), route('plugins.index'));
+        if (! config('packages.plugin-management.general.enable_plugin_manager', true)) {
+            abort(404);
+        }
     }
 
     public function index(): View
     {
-        $this->pageTitle(trans('packages/plugin-management::plugin.installed_plugins'));
+        PageTitle::setTitle(trans('packages/plugin-management::plugin.plugins'));
 
-        Assets::addScriptsDirectly('vendor/core/packages/plugin-management/js/plugin.js');
+        Assets::addScriptsDirectly('vendor/core/packages/plugin-management/js/plugin.js')
+            ->addStylesDirectly('vendor/core/packages/plugin-management/css/plugin.css');
 
-        RenderingPluginListingPage::dispatch();
+        $list = [];
 
         if (File::exists(plugin_path('.DS_Store'))) {
             File::delete(plugin_path('.DS_Store'));
         }
 
-        $plugins = collect();
+        $plugins = BaseHelper::scanFolder(plugin_path());
 
-        if (! empty($pluginsPath = BaseHelper::scanFolder(plugin_path()))) {
+        if (! empty($plugins)) {
             $installed = get_active_plugins();
-
-            foreach ($pluginsPath as $path) {
-                $pluginPath = plugin_path($path);
-
-                if (File::exists($dsStore = "$pluginPath/.DS_Store")) {
-                    File::delete($dsStore);
+            foreach ($plugins as $plugin) {
+                if (File::exists(plugin_path($plugin . '/.DS_Store'))) {
+                    File::delete(plugin_path($plugin . '/.DS_Store'));
                 }
 
-                if (
-                    ! File::isDirectory($pluginPath)
-                    || ! File::exists($pluginJson = "$pluginPath/plugin.json")
-                ) {
+                $pluginPath = plugin_path($plugin);
+
+                if (! File::isDirectory($pluginPath) || ! File::exists($pluginPath . '/plugin.json')) {
                     continue;
                 }
 
-                $manifest = BaseHelper::getFileData($pluginJson);
-
-                if (! empty($manifest)) {
-                    $manifest = [
-                        ...$manifest,
-                        'status' => in_array($path, $installed),
-                        'path' => $path,
-                        'image' => null,
-                    ];
-
-                    $screenshot = "vendor/core/plugins/$path/screenshot.png";
-
-                    if (File::exists(public_path($screenshot))) {
-                        $manifest['image'] = asset($screenshot);
-                    } elseif (File::exists($pluginPath . '/screenshot.png')) {
-                        $manifest['image'] = 'data:image/png;base64,' . base64_encode(File::get($pluginPath . '/screenshot.png'));
+                $content = BaseHelper::getFileData($pluginPath . '/plugin.json');
+                if (! empty($content)) {
+                    if (! in_array($plugin, $installed)) {
+                        $content['status'] = 0;
+                    } else {
+                        $content['status'] = 1;
                     }
 
-                    $plugins->push((object) $manifest);
+                    $content['path'] = $plugin;
+                    $content['image'] = null;
+
+                    $screenshot = 'vendor/core/plugins/' . $plugin . '/screenshot.png';
+
+                    if (File::exists(public_path($screenshot))) {
+                        $content['image'] = asset($screenshot);
+                    } elseif (File::exists($pluginPath . '/screenshot.png')) {
+                        $content['image'] = 'data:image/png;base64,' . base64_encode(File::get($pluginPath . '/screenshot.png'));
+                    }
+
+                    $list[] = (object) $content;
                 }
             }
-
-            $plugins = collect($plugins)->sortByDesc('status');
         }
 
-        $filterStatuses = PluginFilterStatus::labels();
-
-        return view('packages/plugin-management::index', compact('plugins', 'filterStatuses'));
+        return view('packages/plugin-management::index', compact('list'));
     }
 
-    public function update(Request $request): BaseHttpResponse
+    public function update(Request $request, BaseHttpResponse $response): BaseHttpResponse
     {
-        $plugin = $request->input('name');
+        $plugin = strtolower($request->input('name'));
 
         if (! $this->pluginService->validatePlugin($plugin)) {
-            return $this
-                ->httpResponse()
+            return $response
                 ->setError()
                 ->setMessage(trans('packages/plugin-management::plugin.invalid_plugin'));
         }
 
         try {
             $activatedPlugins = get_active_plugins();
-
-            if ($status = (! in_array($plugin, $activatedPlugins))) {
+            if (! in_array($plugin, $activatedPlugins)) {
                 $result = $this->pluginService->activate($plugin);
+
+                $migrator = app('migrator');
+                $migrator->run(database_path('migrations'));
+
+                $paths = [
+                    core_path(),
+                    package_path(),
+                ];
+
+                foreach ($paths as $path) {
+                    foreach (BaseHelper::scanFolder($path) as $module) {
+                        if ($path == plugin_path() && ! is_plugin_active($module)) {
+                            continue;
+                        }
+
+                        $modulePath = $path . '/' . $module;
+
+                        if (! File::isDirectory($modulePath)) {
+                            continue;
+                        }
+
+                        if (File::isDirectory($modulePath . '/database/migrations')) {
+                            $migrator->run($modulePath . '/database/migrations');
+                        }
+                    }
+                }
             } else {
                 $result = $this->pluginService->deactivate($plugin);
             }
 
             if ($result['error']) {
-                return $this
-                    ->httpResponse()
-                    ->setError()
-                    ->setMessage($result['message']);
+                return $response->setError()->setMessage($result['message']);
             }
 
-            return $this
-                ->httpResponse()
-                ->setData(['status' => $status ? 'activated' : 'deactivated'])
-                ->setMessage(trans('packages/plugin-management::plugin.update_plugin_status_success'));
+            return $response->setMessage(trans('packages/plugin-management::plugin.update_plugin_status_success'));
         } catch (Exception $exception) {
-            return $this
-                ->httpResponse()
+            return $response
                 ->setError()
                 ->setMessage($exception->getMessage());
         }
     }
 
-    public function destroy(string $plugin): BaseHttpResponse
+    public function destroy(string $plugin, BaseHttpResponse $response): BaseHttpResponse
     {
+        $plugin = strtolower($plugin);
+
+        if (! $this->pluginService->validatePlugin($plugin)) {
+            return $response
+                ->setError()
+                ->setMessage(trans('packages/plugin-management::plugin.invalid_plugin'));
+        }
+
         try {
             $result = $this->pluginService->remove($plugin);
 
             if ($result['error']) {
-                return $this
-                    ->httpResponse()
-                    ->setError()
-                    ->setMessage($result['message']);
+                return $response->setError()->setMessage($result['message']);
             }
 
-            return $this
-                ->httpResponse()
-                ->setMessage(trans('packages/plugin-management::plugin.remove_plugin_success'));
+            return $response->setMessage(trans('packages/plugin-management::plugin.remove_plugin_success'));
         } catch (Exception $exception) {
-            return $this
-                ->httpResponse()
+            return $response
                 ->setError()
                 ->setMessage($exception->getMessage());
         }
     }
 
-    public function checkRequirement(Request $request, MarketplaceService $marketplaceService): BaseHttpResponse
-    {
-        $name = $request->input('name');
+    public function checkRequirement(
+        Request $request,
+        BaseHttpResponse $response,
+        MarketplaceService $marketplaceService
+    ): BaseHttpResponse {
+        $name = strtolower($request->input('name'));
 
         $requiredPlugins = $this->pluginService->getDependencies($name);
 
@@ -168,16 +178,14 @@ class PluginManagementController extends BaseController
             $existingPluginsOnMarketplace = collect($data)->pluck('id')->all();
 
             if (empty($existingPluginsOnMarketplace)) {
-                return $this
-                    ->httpResponse()
+                return $response
                     ->setError()
                     ->setMessage(trans('packages/plugin-management::plugin.missing_required_plugins', [
                         'plugins' => implode(',', $requiredPlugins),
                     ]));
             }
 
-            return $this
-                ->httpResponse()
+            return $response
                 ->setError()
                 ->setData([
                     'pluginName' => $content['id'],
@@ -189,6 +197,6 @@ class PluginManagementController extends BaseController
                 ]));
         }
 
-        return $this->httpResponse();
+        return $response;
     }
 }

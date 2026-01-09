@@ -1,7 +1,7 @@
 <?php
 
-use Botble\Base\Facades\MetaBox;
 use Illuminate\Database\Eloquent\Model;
+use Botble\Base\Facades\MetaBox;
 
 if (! function_exists('add_meta_box')) {
     /**
@@ -11,7 +11,7 @@ if (! function_exists('add_meta_box')) {
         string $id,
         string $title,
         callable $callback,
-        ?string $screen = null,
+        string|null $screen = null,
         string $context = 'advanced',
         string $priority = 'default',
         $callbackArgs = null
@@ -38,7 +38,7 @@ if (! function_exists('get_meta')) {
     /**
      * @deprecated since 5.7
      */
-    function get_meta($object, string $key, array $select = ['meta_value']): ?Model
+    function get_meta($object, string $key, array $select = ['meta_value']): Model|null
     {
         return MetaBox::getMeta($object, $key, $select);
     }

@@ -16,12 +16,8 @@ use Symfony\Component\Cache\Exception\InvalidArgumentException;
 use Symfony\Component\Cache\Marshaller\DefaultMarshaller;
 use Symfony\Component\Cache\Marshaller\MarshallerInterface;
 
-trigger_deprecation('symfony/cache', '7.1', 'The "%s" class is deprecated, use "%s" instead.', CouchbaseBucketAdapter::class, CouchbaseCollectionAdapter::class);
-
 /**
  * @author Antonio Jose Cerezo Aranda <aj.cerezo@gmail.com>
- *
- * @deprecated since Symfony 7.1, use {@see CouchbaseCollectionAdapter} instead
  */
 class CouchbaseBucketAdapter extends AbstractAdapter
 {
@@ -40,26 +36,25 @@ class CouchbaseBucketAdapter extends AbstractAdapter
         'durabilityTimeout',
     ];
 
-    private MarshallerInterface $marshaller;
+    private $bucket;
+    private $marshaller;
 
-    public function __construct(
-        private \CouchbaseBucket $bucket,
-        string $namespace = '',
-        int $defaultLifetime = 0,
-        ?MarshallerInterface $marshaller = null,
-    ) {
+    public function __construct(\CouchbaseBucket $bucket, string $namespace = '', int $defaultLifetime = 0, MarshallerInterface $marshaller = null)
+    {
         if (!static::isSupported()) {
             throw new CacheException('Couchbase >= 2.6.0 < 3.0.0 is required.');
         }
 
         $this->maxIdLength = static::MAX_KEY_LENGTH;
 
+        $this->bucket = $bucket;
+
         parent::__construct($namespace, $defaultLifetime);
         $this->enableVersioning();
         $this->marshaller = $marshaller ?? new DefaultMarshaller();
     }
 
-    public static function createConnection(#[\SensitiveParameter] array|string $servers, array $options = []): \CouchbaseBucket
+    public static function createConnection(array|string $servers, array $options = []): \CouchbaseBucket
     {
         if (\is_string($servers)) {
             $servers = [$servers];
@@ -69,7 +64,7 @@ class CouchbaseBucketAdapter extends AbstractAdapter
             throw new CacheException('Couchbase >= 2.6.0 < 3.0.0 is required.');
         }
 
-        set_error_handler(static fn ($type, $msg, $file, $line) => throw new \ErrorException($msg, 0, $type, $file, $line));
+        set_error_handler(function ($type, $msg, $file, $line) { throw new \ErrorException($msg, 0, $type, $file, $line); });
 
         $dsnPattern = '/^(?<protocol>couchbase(?:s)?)\:\/\/(?:(?<username>[^\:]+)\:(?<password>[^\@]{6,})@)?'
             .'(?<host>[^\:]+(?:\:\d+)?)(?:\/(?<bucketName>[^\?]+))(?:\?(?<options>.*))?$/i';
@@ -82,8 +77,8 @@ class CouchbaseBucketAdapter extends AbstractAdapter
             $password = $options['password'];
 
             foreach ($servers as $dsn) {
-                if (!str_starts_with($dsn, 'couchbase:')) {
-                    throw new InvalidArgumentException('Invalid Couchbase DSN: it does not start with "couchbase:".');
+                if (0 !== strpos($dsn, 'couchbase:')) {
+                    throw new InvalidArgumentException(sprintf('Invalid Couchbase DSN: "%s" does not start with "couchbase:".', $dsn));
                 }
 
                 preg_match($dsnPattern, $dsn, $matches);
@@ -112,7 +107,7 @@ class CouchbaseBucketAdapter extends AbstractAdapter
 
             unset($options['username'], $options['password']);
             foreach ($options as $option => $value) {
-                if ($value) {
+                if (!empty($value)) {
                     $bucket->$option = $value;
                 }
             }
@@ -146,21 +141,24 @@ class CouchbaseBucketAdapter extends AbstractAdapter
 
     private static function initOptions(array $options): array
     {
-        $options['username'] ??= '';
-        $options['password'] ??= '';
-        $options['operationTimeout'] ??= 0;
-        $options['configTimeout'] ??= 0;
-        $options['configNodeTimeout'] ??= 0;
-        $options['n1qlTimeout'] ??= 0;
-        $options['httpTimeout'] ??= 0;
-        $options['configDelay'] ??= 0;
-        $options['htconfigIdleTimeout'] ??= 0;
-        $options['durabilityInterval'] ??= 0;
-        $options['durabilityTimeout'] ??= 0;
+        $options['username'] = $options['username'] ?? '';
+        $options['password'] = $options['password'] ?? '';
+        $options['operationTimeout'] = $options['operationTimeout'] ?? 0;
+        $options['configTimeout'] = $options['configTimeout'] ?? 0;
+        $options['configNodeTimeout'] = $options['configNodeTimeout'] ?? 0;
+        $options['n1qlTimeout'] = $options['n1qlTimeout'] ?? 0;
+        $options['httpTimeout'] = $options['httpTimeout'] ?? 0;
+        $options['configDelay'] = $options['configDelay'] ?? 0;
+        $options['htconfigIdleTimeout'] = $options['htconfigIdleTimeout'] ?? 0;
+        $options['durabilityInterval'] = $options['durabilityInterval'] ?? 0;
+        $options['durabilityTimeout'] = $options['durabilityTimeout'] ?? 0;
 
         return $options;
     }
 
+    /**
+     * {@inheritdoc}
+     */
     protected function doFetch(array $ids): iterable
     {
         $resultsCouchbase = $this->bucket->get($ids);
@@ -176,11 +174,17 @@ class CouchbaseBucketAdapter extends AbstractAdapter
         return $results;
     }
 
+    /**
+     * {@inheritdoc}
+     */
     protected function doHave(string $id): bool
     {
         return false !== $this->bucket->get($id);
     }
 
+    /**
+     * {@inheritdoc}
+     */
     protected function doClear(string $namespace): bool
     {
         if ('' === $namespace) {
@@ -192,6 +196,9 @@ class CouchbaseBucketAdapter extends AbstractAdapter
         return false;
     }
 
+    /**
+     * {@inheritdoc}
+     */
     protected function doDelete(array $ids): bool
     {
         $results = $this->bucket->remove(array_values($ids));
@@ -206,6 +213,9 @@ class CouchbaseBucketAdapter extends AbstractAdapter
         return 0 === \count($results);
     }
 
+    /**
+     * {@inheritdoc}
+     */
     protected function doSave(array $values, int $lifetime): array|bool
     {
         if (!$values = $this->marshaller->marshall($values, $failed)) {

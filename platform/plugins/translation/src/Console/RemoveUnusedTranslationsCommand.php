@@ -3,8 +3,9 @@
 namespace Botble\Translation\Console;
 
 use Botble\Translation\Manager;
-use Illuminate\Console\Command;
+use Botble\Translation\Models\Translation;
 use Illuminate\Support\Facades\File;
+use Illuminate\Console\Command;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 #[AsCommand('cms:translations:remove-unused-translations', 'Remove unused translations')]
@@ -12,7 +13,7 @@ class RemoveUnusedTranslationsCommand extends Command
 {
     public function handle(Manager $manager): int
     {
-        $this->components->info('Remove unused translations in <comment>lang</comment> folder...');
+        $this->components->info('Remove unused translations in resource/lang...');
 
         foreach (File::directories(lang_path('vendor/packages')) as $package) {
             if (! File::isDirectory(package_path(File::basename($package)))) {
@@ -29,10 +30,26 @@ class RemoveUnusedTranslationsCommand extends Command
         $manager->removeUnusedThemeTranslations();
 
         $this->components->info('Importing...');
+        $manager->importTranslations();
 
-        $manager->publishLocales();
+        $groups = Translation::groupBy('group')->pluck('group');
 
-        $this->components->info('Done!');
+        $counter = 0;
+        foreach ($groups as $group) {
+            $keys = Translation::where('group', $group)
+                ->where('locale', 'en')
+                ->pluck('key');
+
+            $counter += Translation::where('locale', '!=', 'en')
+                ->where('group', $group)
+                ->whereNotIn('key', $keys)
+                ->delete();
+        }
+
+        $manager->exportAllTranslations();
+
+        $this->components->info('Exporting...');
+        $this->components->info('Done! Deleted ' . $counter . ' items!');
 
         return self::SUCCESS;
     }

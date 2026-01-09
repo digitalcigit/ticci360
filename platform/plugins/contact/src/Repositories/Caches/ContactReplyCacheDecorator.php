@@ -2,11 +2,9 @@
 
 namespace Botble\Contact\Repositories\Caches;
 
-use Botble\Contact\Repositories\Eloquent\ContactReplyRepository;
+use Botble\Contact\Repositories\Interfaces\ContactReplyInterface;
+use Botble\Support\Repositories\Caches\CacheAbstractDecorator;
 
-/**
- * @deprecated
- */
-class ContactReplyCacheDecorator extends ContactReplyRepository
+class ContactReplyCacheDecorator extends CacheAbstractDecorator implements ContactReplyInterface
 {
 }

@@ -56,6 +56,7 @@ class DurationLimiterBuilder
      *
      * @param  \Illuminate\Redis\Connections\Connection  $connection
      * @param  string  $name
+     * @return void
      */
     public function __construct($connection, $name)
     {
@@ -124,7 +125,7 @@ class DurationLimiterBuilder
      *
      * @throws \Illuminate\Contracts\Redis\LimiterTimeoutException
      */
-    public function then(callable $callback, ?callable $failure = null)
+    public function then(callable $callback, callable $failure = null)
     {
         try {
             return (new DurationLimiter(

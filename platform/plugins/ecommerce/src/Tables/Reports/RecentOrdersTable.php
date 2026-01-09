@@ -3,51 +3,75 @@
 namespace Botble\Ecommerce\Tables\Reports;
 
 use Botble\Base\Facades\BaseHelper;
-use Botble\Ecommerce\Facades\EcommerceHelper;
-use Botble\Ecommerce\Models\Order;
-use Botble\Ecommerce\Tables\Formatters\PriceFormatter;
+use Botble\Ecommerce\Repositories\Interfaces\OrderInterface;
 use Botble\Table\Abstracts\TableAbstract;
-use Botble\Table\Columns\Column;
-use Botble\Table\Columns\CreatedAtColumn;
-use Botble\Table\Columns\LinkableColumn;
-use Botble\Table\Columns\StatusColumn;
+use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Base\Facades\Html;
+use Illuminate\Contracts\Routing\UrlGenerator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
+use Botble\Table\DataTables;
 
 class RecentOrdersTable extends TableAbstract
 {
-    public function setup(): void
-    {
-        $this->model(Order::class);
+    protected string $type = self::TABLE_TYPE_SIMPLE;
 
-        $this->type = self::TABLE_TYPE_SIMPLE;
-        $this->defaultSortColumn = 0;
-        $this->view = $this->simpleTableView();
+    protected int $defaultSortColumn = 0;
+
+    protected $view = 'core/table::simple-table';
+
+    public function __construct(DataTables $table, UrlGenerator $urlGenerator, OrderInterface $orderRepository)
+    {
+        parent::__construct($table, $urlGenerator);
+
+        $this->repository = $orderRepository;
     }
 
     public function ajax(): JsonResponse
     {
         $data = $this->table
             ->eloquent($this->query())
-            ->editColumn('payment_status', function (Order $item) {
+            ->editColumn('checkbox', function ($item) {
+                return $this->getCheckbox($item->id);
+            })
+            ->editColumn('id', function ($item) {
+                if (! Auth::user()->hasPermission('orders.edit')) {
+                    return $item->code;
+                }
+
+                return Html::link(route('orders.edit', $item->id), $item->code);
+            })
+            ->editColumn('status', function ($item) {
+                return BaseHelper::clean($item->status->toHtml());
+            })
+            ->editColumn('payment_status', function ($item) {
                 if (! is_plugin_active('payment')) {
                     return '&mdash;';
                 }
 
-                return BaseHelper::clean($item->payment->status->toHtml() ?: '&mdash;');
+                return BaseHelper::clean($item->payment->status->label() ?: '&mdash;');
             })
-            ->editColumn('payment_method', function (Order $item) {
+            ->editColumn('payment_method', function ($item) {
                 if (! is_plugin_active('payment')) {
                     return '&mdash;';
                 }
 
                 return BaseHelper::clean($item->payment->payment_channel->label() ?: '&mdash;');
             })
-            ->formatColumn('amount', PriceFormatter::class)
-            ->editColumn('user_id', function (Order $item) {
+            ->editColumn('amount', function ($item) {
+                return format_price($item->amount);
+            })
+            ->editColumn('shipping_amount', function ($item) {
+                return format_price($item->shipping_amount);
+            })
+            ->editColumn('user_id', function ($item) {
                 return BaseHelper::clean($item->user->name ?: $item->address->name);
+            })
+            ->editColumn('created_at', function ($item) {
+                return BaseHelper::formatDate($item->created_at);
             });
 
         return $this->toJson($data);
@@ -63,8 +87,7 @@ class RecentOrdersTable extends TableAbstract
             $with[] = 'payment';
         }
 
-        $query = $this->getModel()
-            ->query()
+        $query = $this->repository->getModel()
             ->select([
                 'id',
                 'status',
@@ -73,12 +96,14 @@ class RecentOrdersTable extends TableAbstract
                 'created_at',
                 'amount',
                 'tax_amount',
+                'shipping_amount',
                 'payment_id',
             ])
             ->with($with)
-            ->where('is_finished', true)
+            ->where('is_finished', 1)
             ->whereDate('created_at', '>=', $startDate)
-            ->whereDate('created_at', '<=', $endDate)->latest()
+            ->whereDate('created_at', '<=', $endDate)
+            ->orderBy('created_at', 'desc')
             ->limit(10);
 
         return $this->applyScopes($query);
@@ -87,25 +112,45 @@ class RecentOrdersTable extends TableAbstract
     public function columns(): array
     {
         return [
-            LinkableColumn::make('code')
-                ->route('orders.edit')
-                ->title(trans('core/base::tables.id'))
-                ->alignCenter()
-                ->width(20),
-            Column::make('user_id')
-                ->title(trans('plugins/ecommerce::order.customer_label'))
-                ->alignStart(),
-            Column::formatted('amount')
-                ->title(trans('plugins/ecommerce::order.amount')),
-            Column::make('payment_method')
-                ->name('payment_id')
-                ->title(trans('plugins/ecommerce::order.payment_method'))
-                ->alignStart(),
-            Column::make('payment_status')
-                ->name('payment_id')
-                ->title(trans('plugins/ecommerce::order.payment_status_label')),
-            StatusColumn::make(),
-            CreatedAtColumn::make(),
+            'id' => [
+                'title' => trans('core/base::tables.id'),
+                'width' => '20px',
+                'class' => 'text-start no-sort',
+                'orderable' => false,
+            ],
+            'user_id' => [
+                'title' => trans('plugins/ecommerce::order.customer_label'),
+                'class' => 'text-start',
+                'orderable' => false,
+            ],
+            'amount' => [
+                'title' => trans('plugins/ecommerce::order.amount'),
+                'class' => 'text-center',
+                'orderable' => false,
+            ],
+            'payment_method' => [
+                'name' => 'payment_id',
+                'title' => trans('plugins/ecommerce::order.payment_method'),
+                'class' => 'text-center',
+                'orderable' => false,
+            ],
+            'payment_status' => [
+                'name' => 'payment_id',
+                'title' => trans('plugins/ecommerce::order.payment_status_label'),
+                'class' => 'text-center',
+                'orderable' => false,
+            ],
+            'status' => [
+                'title' => trans('core/base::tables.status'),
+                'class' => 'text-center',
+                'orderable' => false,
+            ],
+            'created_at' => [
+                'title' => trans('core/base::tables.created_at'),
+                'width' => '100px',
+                'class' => 'text-start',
+                'orderable' => false,
+            ],
         ];
     }
 }

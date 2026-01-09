@@ -5,16 +5,11 @@ namespace Botble\Ecommerce\Models;
 use Botble\Base\Casts\SafeContent;
 use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Base\Models\BaseModel;
-use Botble\Base\Models\Concerns\HasSlug;
-use Botble\Ecommerce\Enums\DiscountTargetEnum;
-use Botble\Ecommerce\Enums\DiscountTypeEnum;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class ProductCollection extends BaseModel
 {
-    use HasSlug;
-
     protected $table = 'ec_product_collections';
 
     protected $fillable = [
@@ -31,13 +26,11 @@ class ProductCollection extends BaseModel
         'name' => SafeContent::class,
     ];
 
-    protected static function booted(): void
+    protected static function boot(): void
     {
-        self::saving(function (self $model): void {
-            $model->slug = self::createSlug($model->slug ?: $model->name, $model->getKey());
-        });
+        parent::boot();
 
-        static::deleted(function (ProductCollection $collection): void {
+        self::deleting(function (ProductCollection $collection) {
             $collection->discounts()->detach();
         });
     }
@@ -63,9 +56,9 @@ class ProductCollection extends BaseModel
     {
         return $this
             ->belongsToMany(Discount::class, 'ec_discount_product_collections', 'product_collection_id')
-            ->where('type', DiscountTypeEnum::PROMOTION)
+            ->where('type', 'promotion')
             ->where('start_date', '<=', Carbon::now())
-            ->where('target', DiscountTargetEnum::PRODUCT_COLLECTIONS)
+            ->where('target', 'group-products')
             ->where(function ($query) {
                 return $query
                     ->whereNull('end_date')

@@ -44,7 +44,7 @@ abstract class ForwardingCall
     /**
      * @var AbstractCall|ForwardingCall
      */
-    protected object $innerCall;
+    protected $innerCall;
 
     /**
      * ForwardingCall constructor.

@@ -6,7 +6,8 @@
         'selected' => PaymentMethods::getSelectedMethod(),
         'default' => PaymentMethods::getDefaultMethod(),
         'selecting' => PaymentMethods::getSelectingMethod(),
-    ]) !!}
+     ]) !!}
 
     {!! PaymentMethods::render() !!}
 </ul>
+

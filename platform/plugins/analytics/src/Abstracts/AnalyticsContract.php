@@ -3,6 +3,7 @@
 namespace Botble\Analytics\Abstracts;
 
 use Botble\Analytics\Period;
+use Google\Service\Analytics\GaData;
 use Illuminate\Support\Collection;
 
 interface AnalyticsContract
@@ -13,5 +14,5 @@ interface AnalyticsContract
 
     public function fetchTopBrowsers(Period $period, int $maxResults = 10): Collection;
 
-    public function performQuery(Period $period, string|array $metrics, string|array $dimensions = []): Collection;
+    public function performQuery(Period $period, string $metrics, array $others = []): Collection|array|GaData|null;
 }

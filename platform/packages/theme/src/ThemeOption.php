@@ -3,22 +3,15 @@
 namespace Botble\Theme;
 
 use Botble\Base\Facades\BaseHelper;
+use Exception;
 use Botble\Base\Facades\Form;
+use Illuminate\Support\Arr;
 use Botble\Language\Facades\Language;
 use Botble\Setting\Facades\Setting;
-use Botble\Theme\ThemeOption\ThemeOptionField;
-use Botble\Theme\ThemeOption\ThemeOptionSection;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\App;
-use Illuminate\Support\Traits\Conditionable;
-use Illuminate\Support\Traits\Tappable;
-use Throwable;
 
 class ThemeOption
 {
-    use Conditionable;
-    use Tappable;
-
     public array $fields = [];
 
     public array $sections = [];
@@ -77,7 +70,7 @@ class ThemeOption
                 if (Arr::get($field, 'section_id') == $sectionId) {
                     $priority = $field['priority'];
                     while (isset($fields[$priority])) {
-                        $priority++;
+                        echo $priority++;
                     }
                     $fields[$priority] = $field;
                 }
@@ -89,7 +82,7 @@ class ThemeOption
         return $fields;
     }
 
-    public function getSection(string $id = ''): array|bool
+    public function getSection(string $id = ''): bool
     {
         $this->checkOptName();
 
@@ -146,9 +139,6 @@ class ThemeOption
         return [];
     }
 
-    /**
-     * @param  \Botble\Theme\ThemeOption\ThemeOptionSection[]|array  $sections
-     */
     public function setSections(array $sections = []): self
     {
         $this->checkOptName();
@@ -161,13 +151,9 @@ class ThemeOption
         return $this;
     }
 
-    public function setSection(ThemeOptionSection|array $section = []): self
+    public function setSection(array $section = []): self
     {
         $this->checkOptName();
-
-        if ($section instanceof ThemeOptionSection) {
-            $section = $section->toArray();
-        }
 
         if (empty($section)) {
             return $this;
@@ -227,17 +213,10 @@ class ThemeOption
         return $priority;
     }
 
-    /**
-     * @param  \Botble\Theme\ThemeOption\ThemeOptionField[]|array  $fields
-     */
     public function processFieldsArray(string $sectionId = '', array $fields = []): void
     {
         if (! empty($this->optName) && ! empty($sectionId) && is_array($fields) && ! empty($fields)) {
             foreach ($fields as $field) {
-                if ($field instanceof ThemeOptionField) {
-                    $field = $field->toArray();
-                }
-
                 if (! is_array($field)) {
                     continue;
                 }
@@ -248,13 +227,9 @@ class ThemeOption
         }
     }
 
-    public function setField(ThemeOptionField|array $field = []): self
+    public function setField(array $field = []): self
     {
         $this->checkOptName();
-
-        if ($field instanceof ThemeOptionField) {
-            $field = $field->toArray();
-        }
 
         if (! empty($this->optName) && is_array($field) && ! empty($field)) {
             if (! isset($field['priority'])) {
@@ -396,7 +371,7 @@ class ThemeOption
         return $this;
     }
 
-    public function getArg(string $key = ''): ?string
+    public function getArg(string $key = ''): string|null
     {
         $this->checkOptName();
 
@@ -409,7 +384,7 @@ class ThemeOption
 
     public function setOption(string $key, array|string|null $value = ''): self
     {
-        $option = Arr::get($this->fields, $this->optName . '.' . $key);
+        $option = Arr::get($this->fields[$this->optName], $key);
 
         if ($option && Arr::get($option, 'clean_tags', true)) {
             $value = BaseHelper::clean($value);
@@ -424,16 +399,7 @@ class ThemeOption
         return $this;
     }
 
-    public function setOptions(array $options): self
-    {
-        foreach ($options as $key => $option) {
-            $this->setOption($key, $option);
-        }
-
-        return $this;
-    }
-
-    public function getOptionKey(string $key, ?string $locale = '', ?string $theme = null): string
+    public function getOptionKey(string $key, string|null $locale = '', string $theme = null): string
     {
         if (! $theme) {
             $theme = setting('theme');
@@ -453,7 +419,7 @@ class ThemeOption
         return $this->optName . '-' . $theme . $locale . '-' . $key;
     }
 
-    protected function getCurrentLocaleCode(): ?string
+    protected function getCurrentLocaleCode(): string|null
     {
         if (! defined('LANGUAGE_MODULE_SCREEN_NAME')) {
             return null;
@@ -464,22 +430,16 @@ class ThemeOption
         return $currentLocale && $currentLocale != Language::getDefaultLocaleCode() ? '-' . $currentLocale : null;
     }
 
-    public function renderField(array $field): ?string
+    public function renderField(array $field): string|null
     {
         try {
-            $attributes = Arr::get($field, 'attributes');
-
-            $name = $attributes['name'] ?? $field['id'] ?? null;
-
-            $attributes['name'] = $name;
-
-            if (Arr::get($field, 'type') !== 'hidden' && $this->hasOption($name)) {
-                $attributes['value'] = $this->getOption($name);
+            if ($this->hasOption($field['attributes']['name'])) {
+                $field['attributes']['value'] = $this->getOption($field['attributes']['name']);
             }
 
-            return call_user_func_array([Form::class, $field['type']], array_values($attributes));
-        } catch (Throwable $exception) {
-            BaseHelper::logError($exception);
+            return call_user_func_array([Form::class, $field['type']], array_values($field['attributes']));
+        } catch (Exception $exception) {
+            info($exception->getMessage());
 
             return null;
         }
@@ -490,7 +450,7 @@ class ThemeOption
         return setting()->has($this->getOptionKey($key, $this->getCurrentLocaleCode()));
     }
 
-    public function getOption(string $key = '', bool|string|null|array $default = ''): ?string
+    public function getOption(string $key = '', string|null|array $default = ''): string|null
     {
         if (is_array($default)) {
             $default = json_encode($default);
@@ -507,14 +467,6 @@ class ThemeOption
         }
 
         return $value;
-    }
-
-    public function getOptions(): array
-    {
-        return Setting::newQuery()
-            ->where('key', 'like', $this->getOptionKey('%'))
-            ->pluck('value', 'key')
-            ->all();
     }
 
     public function saveOptions(): bool
@@ -536,18 +488,5 @@ class ThemeOption
         }
 
         return false;
-    }
-
-    public function prepareFromArray(array $options, ?string $locale = null, ?string $defaultLocale = null): array
-    {
-        return collect($options)
-            ->mapWithKeys(function (string|array|bool|null $value, string $key) use ($locale, $defaultLocale) {
-                if (is_array($value)) {
-                    $value = json_encode($value);
-                }
-
-                return [$this->getOptionKey($key, $locale != $defaultLocale ? $locale : null) => $value];
-            })
-            ->all();
     }
 }

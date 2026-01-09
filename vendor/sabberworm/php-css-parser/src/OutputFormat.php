@@ -3,7 +3,7 @@
 namespace Sabberworm\CSS;
 
 /**
- * Extending this class is deprecated in version 8.8.0; it will be made `final` in version 9.0.0.
+ * Class OutputFormat
  *
  * @method OutputFormat setSemicolonAfterLastRule(bool $bSemicolonAfterLastRule) Set whether semicolons are added after
  *     last rule.
@@ -14,17 +14,13 @@ class OutputFormat
      * Value format: `"` means double-quote, `'` means single-quote
      *
      * @var string
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $sStringQuotingType = '"';
 
     /**
      * Output RGB colors in hash notation if possible
      *
-     * @var bool
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
+     * @var string
      */
     public $bRGBHashNotation = true;
 
@@ -34,8 +30,6 @@ class OutputFormat
      * Semicolon after the last rule of a declaration block can be omitted. To do that, set this false.
      *
      * @var bool
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $bSemicolonAfterLastRule = true;
 
@@ -44,52 +38,36 @@ class OutputFormat
      * Note that these strings are not sanity-checked: the value should only consist of whitespace
      * Any newline character will be indented according to the current level.
      * The triples (After, Before, Between) can be set using a wildcard (e.g. `$oFormat->set('Space*Rules', "\n");`)
-     *
-     * @var string
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $sSpaceAfterRuleName = ' ';
 
     /**
      * @var string
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $sSpaceBeforeRules = '';
 
     /**
      * @var string
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $sSpaceAfterRules = '';
 
     /**
      * @var string
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $sSpaceBetweenRules = '';
 
     /**
      * @var string
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $sSpaceBeforeBlocks = '';
 
     /**
      * @var string
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $sSpaceAfterBlocks = '';
 
     /**
      * @var string
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $sSpaceBetweenBlocks = "\n";
 
@@ -97,15 +75,11 @@ class OutputFormat
      * Content injected in and around at-rule blocks.
      *
      * @var string
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $sBeforeAtRuleBlock = '';
 
     /**
      * @var string
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $sAfterAtRuleBlock = '';
 
@@ -113,64 +87,28 @@ class OutputFormat
      * This is what’s printed before and after the comma if a declaration block contains multiple selectors.
      *
      * @var string
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $sSpaceBeforeSelectorSeparator = '';
 
     /**
      * @var string
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $sSpaceAfterSelectorSeparator = ' ';
 
     /**
-     * This is what’s inserted before the separator in value lists, by default.
+     * This is what’s printed after the comma of value lists
      *
-     * `array` is deprecated in version 8.8.0, and will be removed in version 9.0.0.
-     * To set the spacing for specific separators, use {@see $aSpaceBeforeListArgumentSeparators} instead.
-     *
-     * @var string|array<non-empty-string, string>
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
+     * @var string
      */
     public $sSpaceBeforeListArgumentSeparator = '';
 
     /**
-     * Keys are separators (e.g. `,`).  Values are the space sequence to insert, or an empty string.
-     *
-     * @var array<non-empty-string, string>
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
-     */
-    public $aSpaceBeforeListArgumentSeparators = [];
-
-    /**
-     * This is what’s inserted after the separator in value lists, by default.
-     *
-     * `array` is deprecated in version 8.8.0, and will be removed in version 9.0.0.
-     * To set the spacing for specific separators, use {@see $aSpaceAfterListArgumentSeparators} instead.
-     *
-     * @var string|array<non-empty-string, string>
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
+     * @var string
      */
     public $sSpaceAfterListArgumentSeparator = '';
 
     /**
-     * Keys are separators (e.g. `,`).  Values are the space sequence to insert, or an empty string.
-     *
-     * @var array<non-empty-string, string>
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
-     */
-    public $aSpaceAfterListArgumentSeparators = [];
-
-    /**
      * @var string
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $sSpaceBeforeOpeningBrace = ' ';
 
@@ -178,22 +116,16 @@ class OutputFormat
      * Content injected in and around declaration blocks.
      *
      * @var string
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $sBeforeDeclarationBlock = '';
 
     /**
      * @var string
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $sAfterDeclarationBlockSelectors = '';
 
     /**
      * @var string
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $sAfterDeclarationBlock = '';
 
@@ -201,8 +133,6 @@ class OutputFormat
      * Indentation character(s) per level. Only applicable if newlines are used in any of the spacing settings.
      *
      * @var string
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $sIndentation = "\t";
 
@@ -210,19 +140,8 @@ class OutputFormat
      * Output exceptions.
      *
      * @var bool
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
      */
     public $bIgnoreExceptions = false;
-
-    /**
-     * Render comments for lists and RuleSets
-     *
-     * @var bool
-     *
-     * @internal since 8.8.0, will be made private in 9.0.0
-     */
-    public $bRenderComments = false;
 
     /**
      * @var OutputFormatter|null
@@ -239,9 +158,6 @@ class OutputFormat
      */
     private $iIndentationLevel = 0;
 
-    /**
-     * @internal since V8.8.0. Use the factory methods `create()`, `createCompact()`, or `createPretty()` instead.
-     */
     public function __construct()
     {
     }
@@ -250,8 +166,6 @@ class OutputFormat
      * @param string $sName
      *
      * @return string|null
-     *
-     * @deprecated since 8.8.0, will be removed in 9.0.0. Use specific getters instead.
      */
     public function get($sName)
     {
@@ -270,8 +184,6 @@ class OutputFormat
      * @param mixed $mValue
      *
      * @return self|false
-     *
-     * @deprecated since 8.8.0, will be removed in 9.0.0. Use specific setters instead.
      */
     public function set($aNames, $mValue)
     {
@@ -318,7 +230,6 @@ class OutputFormat
         } elseif (strpos($sMethodName, 'get') === 0) {
             return $this->get(substr($sMethodName, 3));
         } elseif (method_exists(OutputFormatter::class, $sMethodName)) {
-            // @deprecated since 8.8.0, will be removed in 9.0.0. Call the method on the formatter directly instead.
             return call_user_func_array([$this->getFormatter(), $sMethodName], $aArguments);
         } else {
             throw new \Exception('Unknown OutputFormat method called: ' . $sMethodName);
@@ -347,8 +258,6 @@ class OutputFormat
 
     /**
      * @return OutputFormat
-     *
-     * @internal since V8.8.0
      */
     public function nextLevel()
     {
@@ -370,22 +279,17 @@ class OutputFormat
 
     /**
      * @return OutputFormatter
-     *
-     * @internal since 8.8.0
      */
     public function getFormatter()
     {
         if ($this->oFormatter === null) {
             $this->oFormatter = new OutputFormatter($this);
         }
-
         return $this->oFormatter;
     }
 
     /**
      * @return int
-     *
-     * @deprecated #869 since version V8.8.0, will be removed in V9.0.0. Use `getIndentationLevel()` instead.
      */
     public function level()
     {
@@ -410,12 +314,8 @@ class OutputFormat
     public static function createCompact()
     {
         $format = self::create();
-        $format->set('Space*Rules', "")
-            ->set('Space*Blocks', "")
-            ->setSpaceAfterRuleName('')
-            ->setSpaceBeforeOpeningBrace('')
-            ->setSpaceAfterSelectorSeparator('')
-            ->setRenderComments(false);
+        $format->set('Space*Rules', "")->set('Space*Blocks', "")->setSpaceAfterRuleName('')
+            ->setSpaceBeforeOpeningBrace('')->setSpaceAfterSelectorSeparator('');
         return $format;
     }
 
@@ -427,11 +327,8 @@ class OutputFormat
     public static function createPretty()
     {
         $format = self::create();
-        $format->set('Space*Rules', "\n")
-            ->set('Space*Blocks', "\n")
-            ->setSpaceBetweenBlocks("\n\n")
-            ->set('SpaceAfterListArgumentSeparators', [',' => ' '])
-            ->setRenderComments(true);
+        $format->set('Space*Rules', "\n")->set('Space*Blocks', "\n")
+            ->setSpaceBetweenBlocks("\n\n")->set('SpaceAfterListArgumentSeparator', ['default' => '', ',' => ' ']);
         return $format;
     }
 }

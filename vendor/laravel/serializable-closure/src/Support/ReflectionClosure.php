@@ -508,9 +508,11 @@ class ReflectionClosure extends ReflectionFunction
                     break;
                 case 'id_name':
                     switch ($token[0]) {
-                        case $token[0] === ':' && ! in_array($context, ['instanceof', 'new'], true):
+                        // named arguments...
+                        case ':':
                             if ($lastState === 'closure' && $context === 'root') {
-                                $state = 'closure';
+                                $state = 'ignore_next';
+                                $lastState = 'closure';
                                 $code .= $id_start.$token;
                             }
 
@@ -641,11 +643,6 @@ class ReflectionClosure extends ReflectionFunction
                     break;
                 case 'anonymous':
                     switch ($token[0]) {
-                        case T_NAME_QUALIFIED:
-                            [$id_start, $id_start_ci, $id_name] = $this->parseNameQualified($token[1]);
-                            $state = 'id_name';
-                            $lastState = 'anonymous';
-                            break 2;
                         case T_NS_SEPARATOR:
                         case T_STRING:
                             $id_start = $token[1];
@@ -654,7 +651,7 @@ class ReflectionClosure extends ReflectionFunction
                             $state = 'id_name';
                             $context = 'extends';
                             $lastState = 'anonymous';
-                            break;
+                        break;
                         case '{':
                             $state = 'closure';
                             if (! $inside_structure) {
@@ -680,25 +677,27 @@ class ReflectionClosure extends ReflectionFunction
         $this->isBindingRequired = $isUsingThisObject;
         $this->isScopeRequired = $isUsingScope;
 
-        $attributesCode = array_map(function ($attribute) {
-            $arguments = $attribute->getArguments();
+        if (PHP_VERSION_ID >= 80100) {
+            $attributesCode = array_map(function ($attribute) {
+                $arguments = $attribute->getArguments();
 
-            $name = $attribute->getName();
-            $arguments = implode(', ', array_map(function ($argument, $key) {
-                $argument = sprintf("'%s'", str_replace("'", "\\'", $argument));
+                $name = $attribute->getName();
+                $arguments = implode(', ', array_map(function ($argument, $key) {
+                    $argument = sprintf("'%s'", str_replace("'", "\\'", $argument));
 
-                if (is_string($key)) {
-                    $argument = sprintf('%s: %s', $key, $argument);
-                }
+                    if (is_string($key)) {
+                        $argument = sprintf('%s: %s', $key, $argument);
+                    }
 
-                return $argument;
-            }, $arguments, array_keys($arguments)));
+                    return $argument;
+                }, $arguments, array_keys($arguments)));
 
-            return "#[$name($arguments)]";
-        }, $this->getAttributes());
+                return "#[$name($arguments)]";
+            }, $this->getAttributes());
 
-        if (! empty($attributesCode)) {
-            $code = implode("\n", array_merge($attributesCode, [$code]));
+            if (! empty($attributesCode)) {
+                $code = implode("\n", array_merge($attributesCode, [$code]));
+            }
         }
 
         $this->code = $code;
@@ -713,7 +712,25 @@ class ReflectionClosure extends ReflectionFunction
      */
     protected static function getBuiltinTypes()
     {
-        return ['array', 'callable', 'string', 'int', 'bool', 'float', 'iterable', 'void', 'object', 'mixed', 'false', 'null', 'never'];
+        // PHP 8.1
+        if (PHP_VERSION_ID >= 80100) {
+            return ['array', 'callable', 'string', 'int', 'bool', 'float', 'iterable', 'void', 'object', 'mixed', 'false', 'null', 'never'];
+        }
+
+        // PHP 8
+        if (\PHP_MAJOR_VERSION === 8) {
+            return ['array', 'callable', 'string', 'int', 'bool', 'float', 'iterable', 'void', 'object', 'mixed', 'false', 'null'];
+        }
+
+        // PHP 7
+        switch (\PHP_MINOR_VERSION) {
+            case 0:
+                return ['array', 'callable', 'string', 'int', 'bool', 'float'];
+            case 1:
+                return ['array', 'callable', 'string', 'int', 'bool', 'float', 'iterable', 'void'];
+            default:
+                return ['array', 'callable', 'string', 'int', 'bool', 'float', 'iterable', 'void', 'object'];
+        }
     }
 
     /**
@@ -786,7 +803,7 @@ class ReflectionClosure extends ReflectionFunction
     }
 
     /**
-     * The hash of the current file name.
+     * The the hash of the current file name.
      *
      * @return string
      */
@@ -865,18 +882,13 @@ class ReflectionClosure extends ReflectionFunction
      */
     protected function getClasses()
     {
-        $line = $this->getStartLine();
+        $key = $this->getHashedFileName();
 
-        foreach ($this->getStructures() as $struct) {
-            if ($struct['type'] === 'namespace' &&
-                $struct['start'] <= $line &&
-                $struct['end'] >= $line
-            ) {
-                return $struct['classes'];
-            }
+        if (! isset(static::$classes[$key])) {
+            $this->fetchItems();
         }
 
-        return [];
+        return static::$classes[$key];
     }
 
     /**
@@ -950,36 +962,14 @@ class ReflectionClosure extends ReflectionFunction
         $alias = '';
         $isFunc = $isConst = false;
 
-        $startLine = $lastKnownLine = 0;
+        $startLine = $endLine = 0;
         $structType = $structName = '';
         $structIgnore = false;
 
-        $namespace = '';
-        $namespaceStartLine = 0;
-        $namespaceBraced = false;
-        $namespaceClasses = [];
-
         foreach ($tokens as $token) {
-            if (is_array($token)) {
-                $lastKnownLine = $token[2];
-            }
-
             switch ($state) {
                 case 'start':
                     switch ($token[0]) {
-                        case T_NAMESPACE:
-                            $structures[] = [
-                                'type' => 'namespace',
-                                'name' => $namespace,
-                                'start' => $namespaceStartLine,
-                                'end' => $token[2] - 1,
-                                'classes' => $namespaceClasses,
-                            ];
-                            $namespace = '';
-                            $namespaceClasses = [];
-                            $state = 'namespace';
-                            $namespaceStartLine = $token[2];
-                            break;
                         case T_CLASS:
                         case T_INTERFACE:
                         case T_TRAIT:
@@ -1004,33 +994,6 @@ class ReflectionClosure extends ReflectionFunction
                         case T_OBJECT_OPERATOR:
                         case T_DOUBLE_COLON:
                             $state = 'invoke';
-                            break;
-                        case '}':
-                            if ($namespaceBraced) {
-                                $structures[] = [
-                                    'type' => 'namespace',
-                                    'name' => $namespace,
-                                    'start' => $namespaceStartLine,
-                                    'end' => $lastKnownLine,
-                                    'classes' => $namespaceClasses,
-                                ];
-                                $namespaceBraced = false;
-                                $namespace = '';
-                                $namespaceClasses = [];
-                            }
-                            break;
-                    }
-                    break;
-                case 'namespace':
-                    switch ($token[0]) {
-                        case T_STRING:
-                        case T_NAME_QUALIFIED:
-                            $namespace = $token[1];
-                            break;
-                        case ';':
-                        case '{':
-                            $state = 'start';
-                            $namespaceBraced = $token[0] === '{';
                             break;
                     }
                     break;
@@ -1076,7 +1039,6 @@ class ReflectionClosure extends ReflectionFunction
                                     $constants[$alias] = $name;
                                 } else {
                                     $classes[strtolower($alias)] = $name;
-                                    $namespaceClasses[strtolower($alias)] = $name;
                                 }
                             }
                             $name = $alias = '';
@@ -1116,7 +1078,6 @@ class ReflectionClosure extends ReflectionFunction
                                     $constants[$alias] = $prefix.$name;
                                 } else {
                                     $classes[strtolower($alias)] = $prefix.$name;
-                                    $namespaceClasses[strtolower($alias)] = $prefix.$name;
                                 }
                             }
                             $name = $alias = '';
@@ -1171,28 +1132,24 @@ class ReflectionClosure extends ReflectionFunction
                             if (--$open == 0) {
                                 if (! $structIgnore) {
                                     $structures[] = [
-                                        'type' => $structType,
-                                        'name' => $structName,
+                                        'type'  => $structType,
+                                        'name'  => $structName,
                                         'start' => $startLine,
-                                        'end' => $lastKnownLine,
+                                        'end'   => $endLine,
                                     ];
                                 }
                                 $structIgnore = false;
                                 $state = 'start';
                             }
                             break;
+                        default:
+                            if (is_array($token)) {
+                                $endLine = $token[2];
+                            }
                     }
                     break;
             }
         }
-
-        $structures[] = [
-            'type' => 'namespace',
-            'name' => $namespace,
-            'start' => $namespaceStartLine,
-            'end' => PHP_INT_MAX,
-            'classes' => $namespaceClasses,
-        ];
 
         static::$classes[$key] = $classes;
         static::$functions[$key] = $functions;
@@ -1207,19 +1164,14 @@ class ReflectionClosure extends ReflectionFunction
      */
     protected function getClosureNamespaceName()
     {
-        $startLine = $this->getStartLine();
-        $endLine = $this->getEndLine();
+        $ns = $this->getNamespaceName();
 
-        foreach ($this->getStructures() as $struct) {
-            if ($struct['type'] === 'namespace' &&
-                $struct['start'] <= $startLine &&
-                $struct['end'] >= $endLine
-            ) {
-                return $struct['name'];
-            }
+        // First class callables...
+        if ($this->getName() !== '{closure}' && empty($ns) && ! is_null($this->getClosureScopeClass())) {
+            $ns = $this->getClosureScopeClass()->getNamespaceName();
         }
 
-        return '';
+        return $ns;
     }
 
     /**

@@ -3,17 +3,12 @@
 namespace Botble\Api\Providers;
 
 use Botble\Api\Facades\ApiHelper;
-use Botble\Api\Commands\GenerateDocumentationCommand;
 use Botble\Api\Http\Middleware\ForceJsonResponseMiddleware;
-use Botble\Api\Models\PersonalAccessToken;
-use Botble\Base\Facades\PanelSectionManager;
-use Botble\Base\PanelSections\PanelSectionItem;
-use Botble\Base\Supports\ServiceProvider;
+use Botble\Base\Facades\DashboardMenu;
 use Botble\Base\Traits\LoadAndPublishDataTrait;
-use Botble\Setting\PanelSections\SettingCommonPanelSection;
 use Illuminate\Foundation\AliasLoader;
 use Illuminate\Routing\Events\RouteMatched;
-use Laravel\Sanctum\Sanctum;
+use Illuminate\Support\ServiceProvider;
 
 class ApiServiceProvider extends ServiceProvider
 {
@@ -21,14 +16,6 @@ class ApiServiceProvider extends ServiceProvider
 
     public function register(): void
     {
-        $this->app['config']->set([
-            'scribe.routes.0.match.prefixes' => ['api/*'],
-            'scribe.routes.0.apply.headers' => [
-                'Authorization' => 'Bearer {token}',
-                'Api-Version' => 'v1',
-            ],
-        ]);
-
         if (class_exists('ApiHelper')) {
             AliasLoader::getInstance()->alias('ApiHelper', ApiHelper::class);
         }
@@ -36,10 +23,6 @@ class ApiServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        if (version_compare('7.2.0', get_core_version(), '>')) {
-            return;
-        }
-
         $this
             ->setNamespace('packages/api')
             ->loadRoutes()
@@ -52,52 +35,30 @@ class ApiServiceProvider extends ServiceProvider
             $this->loadRoutes(['api']);
         }
 
-        Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
-
         $this->app['events']->listen(RouteMatched::class, function () {
             if (ApiHelper::enabled()) {
                 $this->app['router']->pushMiddlewareToGroup('api', ForceJsonResponseMiddleware::class);
             }
-        });
 
-        PanelSectionManager::beforeRendering(function () {
-            PanelSectionManager::default()
-                ->registerItem(
-                    SettingCommonPanelSection::class,
-                    fn () => PanelSectionItem::make('settings.common.api')
-                        ->setTitle(trans('packages/api::api.settings'))
-                        ->withDescription(trans('packages/api::api.settings_description'))
-                        ->withIcon('ti ti-api')
-                        ->withPriority(110)
-                        ->withRoute('api.settings')
-                );
-        });
-
-        if ($this->app->runningInConsole()) {
-            $this->commands([
-                GenerateDocumentationCommand::class,
+            DashboardMenu::registerItem([
+                'id' => 'cms-packages-api',
+                'priority' => 9999,
+                'parent_id' => 'cms-core-settings',
+                'name' => 'packages/api::api.settings',
+                'icon' => null,
+                'url' => route('api.settings'),
+                'permissions' => ['api.settings'],
             ]);
-        }
+        });
 
         $this->app->booted(function () {
-            add_filter('core_acl_role_permissions', function (array $permissions) {
-                $apiPermissions = $this->app['config']->get('packages.api.permissions', []);
-
-                if (! $apiPermissions) {
-                    return $permissions;
-                }
-
-                foreach ($apiPermissions as $permission) {
-                    $permissions[$permission['flag']] = $permission;
-                }
-
-                return $permissions;
-            }, 120);
+            config([
+                'scribe.routes.0.match.prefixes' => ['api/*'],
+                'scribe.routes.0.apply.headers' => [
+                    'Authorization' => 'Bearer {token}',
+                    'Api-Version' => 'v1',
+                ],
+            ]);
         });
-    }
-
-    protected function getPath(string|null $path = null): string
-    {
-        return __DIR__ . '/../..' . ($path ? '/' . ltrim($path, '/') : '');
     }
 }

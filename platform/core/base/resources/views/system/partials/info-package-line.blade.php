@@ -1,4 +1,1 @@
-{{ $item->name }}: <x-core::badge
-    color="primary"
-    :label="$item->version"
-/></span>
+{{ $item['name'] }} : <span class="label ld-version-tag">{{ $item['version'] }}</span>

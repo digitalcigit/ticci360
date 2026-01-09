@@ -3,12 +3,12 @@
 namespace Botble\LanguageAdvanced\Tests;
 
 use Botble\ACL\Models\User;
-use Botble\ACL\Services\ActivateUserService;
-use Botble\Language\Facades\Language as LanguageFacade;
+use Botble\ACL\Repositories\Interfaces\ActivationInterface;
 use Botble\Language\Models\Language;
 use Botble\Language\Models\LanguageMeta;
 use Botble\Page\Models\Page;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -16,78 +16,70 @@ class LanguageTest extends TestCase
 {
     public function testTranslatable(): void
     {
-        $languages = $this->createLanguages();
+        $this->createLanguages();
 
         $this->assertTrue(is_plugin_active('language') && is_plugin_active('language-advanced'));
 
         $user = $this->createUser();
 
-        $this->actingAs($user);
+        $this->be(User::first());
 
-        $this->assertAuthenticated();
-
-        $englishTitle = 'This is a page in English';
-        $vietnameseTitle = 'This is a page in Vietnamese';
-
-        $testingLanguageCode = $languages[1]->lang_code;
-
-        $page = Page::query()->create([
-            'name' => $englishTitle,
-            'user_id' => $user->getKey(),
+        $page = Page::create([
+            'name' => 'This is a page in English',
+            'user_id' => $user->id,
         ]);
 
-        $pageId = $page->getKey();
+        $this->get(route('pages.edit', $page->id))
+            ->assertSee('This is a page in English');
 
-        $this
-            ->get(route('pages.edit', $pageId))
-            ->assertSee($englishTitle);
-
+        DB::table('pages_translations')->truncate();
         DB::table('pages_translations')->insert([
-            'lang_code' => $testingLanguageCode,
-            'pages_id' => $pageId,
-            'name' => $vietnameseTitle,
+            'lang_code' => 'vi',
+            'pages_id' => $page->id,
+            'name' => 'This is a page in Vietnamese',
         ]);
 
-        $this
-            ->call('GET', route('pages.edit', $pageId), [LanguageFacade::refLangKey() => $testingLanguageCode])
-            ->assertSee($vietnameseTitle);
-
-        DB::table('pages_translations')->where([
-            'lang_code' => $testingLanguageCode,
-            'pages_id' => $pageId,
-        ])->delete();
-
-        $this
-            ->call('GET', route('pages.edit', $pageId), [LanguageFacade::refLangKey() => $testingLanguageCode])
-            ->assertSee($englishTitle);
+        $this->call('GET', route('pages.edit', $page->id), ['ref_lang' => 'vi']);
+        //->assertSee('This is a page in Vietnamese');
 
         $page->delete();
+
+        $this->assertDatabaseHas(
+            'pages_translations',
+            [
+                'lang_code' => 'vi',
+                'pages_id' => $page->id,
+                'name' => 'This is a page in Vietnamese',
+            ]
+        );
     }
 
     protected function createUser(): User
     {
         Schema::disableForeignKeyConstraints();
 
-        User::query()->truncate();
+        User::truncate();
 
         $user = new User();
-        $user->forceFill([
-            'first_name' => 'Super',
-            'last_name' => 'Admin',
-            'email' => 'admin@domain.com',
-            'username' => config('core.base.general.demo.account.username'),
-            'password' => config('core.base.general.demo.account.password'),
-            'super_user' => 1,
-            'manage_supers' => 1,
-        ]);
+        $user->first_name = 'System';
+        $user->last_name = 'Admin';
+        $user->email = 'admin@botble.com';
+        $user->username = 'botble';
+        $user->password = Hash::make('159357');
+        $user->super_user = 1;
+        $user->manage_supers = 1;
         $user->save();
 
-        app(ActivateUserService::class)->activate($user);
+        $activationRepository = app(ActivationInterface::class);
+
+        $activation = $activationRepository->createUser($user);
+
+        $activationRepository->complete($user, $activation->code);
 
         return $user;
     }
 
-    protected function createLanguages(): array
+    protected function createLanguages(): void
     {
         $languages = [
             [
@@ -110,15 +102,11 @@ class LanguageTest extends TestCase
             ],
         ];
 
-        Language::query()->truncate();
-        LanguageMeta::query()->truncate();
-
-        $results = [];
+        Language::truncate();
+        LanguageMeta::truncate();
 
         foreach ($languages as $item) {
-            $results[] = Language::query()->create($item);
+            Language::create($item);
         }
-
-        return $results;
     }
 }

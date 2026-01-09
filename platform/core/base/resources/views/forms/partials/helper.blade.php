@@ -1,9 +1,6 @@
-<div
-    class="help-ts"
-    v-pre
->
-    @if (!$icon)
-        <x-core::icon name="info-circle" class="me-1" />
+<div class="help-ts">
+    @if(! $icon)
+        <i class="fa fa-info-circle"></i>
     @else
         {!! $icon !!}
     @endif

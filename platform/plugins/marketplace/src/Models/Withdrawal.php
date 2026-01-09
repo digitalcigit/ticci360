@@ -4,7 +4,6 @@ namespace Botble\Marketplace\Models;
 
 use Botble\Base\Models\BaseModel;
 use Botble\Ecommerce\Models\Customer;
-use Botble\Marketplace\Enums\PayoutPaymentMethodsEnum;
 use Botble\Marketplace\Enums\WithdrawalStatusEnum;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Arr;
@@ -31,7 +30,6 @@ class Withdrawal extends BaseModel
 
     protected $casts = [
         'status' => WithdrawalStatusEnum::class,
-        'payment_channel' => PayoutPaymentMethodsEnum::class,
         'images' => 'array',
         'bank_info' => 'array',
     ];
@@ -71,7 +69,7 @@ class Withdrawal extends BaseModel
             return $withdrawal;
         });
 
-        static::deleted(function (Withdrawal $withdrawal): void {
+        static::deleting(function (Withdrawal $withdrawal) {
             if (in_array($withdrawal->status, [WithdrawalStatusEnum::PROCESSING, WithdrawalStatusEnum::PENDING])) {
                 $vendor = $withdrawal->customer;
 

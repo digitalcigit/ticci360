@@ -3,78 +3,115 @@
 namespace Botble\ACL\Forms;
 
 use Botble\ACL\Http\Requests\CreateUserRequest;
-use Botble\ACL\Models\Role;
 use Botble\ACL\Models\User;
-use Botble\Base\Forms\FieldOptions\EmailFieldOption;
-use Botble\Base\Forms\FieldOptions\SelectFieldOption;
-use Botble\Base\Forms\FieldOptions\TextFieldOption;
-use Botble\Base\Forms\Fields\SelectField;
-use Botble\Base\Forms\Fields\TextField;
+use Botble\ACL\Repositories\Interfaces\RoleInterface;
 use Botble\Base\Forms\FormAbstract;
 
 class UserForm extends FormAbstract
 {
-    public function setup(): void
+    public function __construct(protected RoleInterface $roleRepository)
     {
-        $roles = Role::query()->pluck('name', 'id');
+        parent::__construct();
+    }
 
-        $defaultRole = $roles->where('is_default', 1)->first();
+    public function buildForm(): void
+    {
+        $roles = $this->roleRepository->pluck('name', 'id');
+
+        $defaultRole = $this->roleRepository->getFirstBy(['is_default' => 1]);
 
         $this
-            ->model(User::class)
+            ->setupModel(new User())
             ->setValidatorClass(CreateUserRequest::class)
-            ->columns()
-            ->add(
-                'first_name',
-                TextField::class,
-                TextFieldOption::make()
-                    ->label(trans('core/acl::users.info.first_name'))
-                    ->required()
-                    ->maxLength(30)
-            )
-            ->add(
-                'last_name',
-                TextField::class,
-                TextFieldOption::make()
-                    ->label(trans('core/acl::users.info.last_name'))
-                    ->required()
-                    ->maxLength(30)
-            )
-            ->add(
-                'username',
-                TextField::class,
-                TextFieldOption::make()
-                    ->label(trans('core/acl::users.username'))
-                    ->required()
-                    ->maxLength(30)
-            )
-            ->add('email', TextField::class, EmailFieldOption::make()->required())
-            ->add(
-                'password',
-                'password',
-                TextFieldOption::make()
-                    ->label(trans('core/acl::users.password'))
-                    ->required()
-                    ->maxLength(60)
-                    ->colspan(2)
-            )
-            ->add(
-                'password_confirmation',
-                'password',
-                TextFieldOption::make()
-                    ->label(trans('core/acl::users.password_confirmation'))
-                    ->required()
-                    ->maxLength(60)
-                    ->colspan(2)
-            )
-            ->add(
-                'role_id',
-                SelectField::class,
-                SelectFieldOption::make()
-                    ->label(trans('core/acl::users.role'))
-                    ->choices(['' => trans('core/acl::users.select_role')] + $roles->all())
-                    ->when($defaultRole, fn (SelectFieldOption $option) => $option->selected($defaultRole->id))
-            )
+            ->withCustomFields()
+            ->add('rowOpen1', 'html', [
+                'html' => '<div class="row">',
+            ])
+            ->add('first_name', 'text', [
+                'label' => trans('core/acl::users.info.first_name'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'data-counter' => 30,
+                ],
+                'wrapper' => [
+                    'class' => $this->formHelper->getConfig('defaults.wrapper_class') . ' col-md-6',
+                ],
+            ])
+            ->add('last_name', 'text', [
+                'label' => trans('core/acl::users.info.last_name'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'data-counter' => 30,
+                ],
+                'wrapper' => [
+                    'class' => $this->formHelper->getConfig('defaults.wrapper_class') . ' col-md-6',
+                ],
+            ])
+            ->add('rowClose1', 'html', [
+                'html' => '</div>',
+            ])
+            ->add('rowOpen2', 'html', [
+                'html' => '<div class="row">',
+            ])
+            ->add('username', 'text', [
+                'label' => trans('core/acl::users.username'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'data-counter' => 30,
+                ],
+                'wrapper' => [
+                    'class' => $this->formHelper->getConfig('defaults.wrapper_class') . ' col-md-6',
+                ],
+            ])
+            ->add('email', 'text', [
+                'label' => trans('core/acl::users.email'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'placeholder' => trans('core/acl::users.email_placeholder'),
+                    'data-counter' => 60,
+                ],
+                'wrapper' => [
+                    'class' => $this->formHelper->getConfig('defaults.wrapper_class') . ' col-md-6',
+                ],
+            ])
+            ->add('rowClose2', 'html', [
+                'html' => '</div>',
+            ])
+            ->add('rowOpen3', 'html', [
+                'html' => '<div class="row">',
+            ])
+            ->add('password', 'password', [
+                'label' => trans('core/acl::users.password'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'data-counter' => 60,
+                ],
+                'wrapper' => [
+                    'class' => $this->formHelper->getConfig('defaults.wrapper_class') . ' col-md-6',
+                ],
+            ])
+            ->add('password_confirmation', 'password', [
+                'label' => trans('core/acl::users.password_confirmation'),
+                'label_attr' => ['class' => 'control-label required'],
+                'attr' => [
+                    'data-counter' => 60,
+                ],
+                'wrapper' => [
+                    'class' => $this->formHelper->getConfig('defaults.wrapper_class') . ' col-md-6',
+                ],
+            ])
+            ->add('rowClose3', 'html', [
+                'html' => '</div>',
+            ])
+            ->add('role_id', 'customSelect', [
+                'label' => trans('core/acl::users.role'),
+                'label_attr' => ['class' => 'control-label'],
+                'attr' => [
+                    'class' => 'form-control roles-list',
+                ],
+                'choices' => ['' => trans('core/acl::users.select_role')] + $roles,
+                'default_value' => $defaultRole ? $defaultRole->id : null,
+            ])
             ->setBreakFieldPoint('role_id');
     }
 }

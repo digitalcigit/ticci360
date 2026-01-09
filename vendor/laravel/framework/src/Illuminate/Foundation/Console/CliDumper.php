@@ -48,6 +48,7 @@ class CliDumper extends BaseCliDumper
      * @param  \Symfony\Component\Console\Output\OutputInterface  $output
      * @param  string  $basePath
      * @param  string  $compiledViewPath
+     * @return void
      */
     public function __construct($output, $basePath, $compiledViewPath)
     {
@@ -56,8 +57,6 @@ class CliDumper extends BaseCliDumper
         $this->basePath = $basePath;
         $this->output = $output;
         $this->compiledViewPath = $compiledViewPath;
-
-        $this->setColors($this->supportsColors());
     }
 
     /**
@@ -95,7 +94,7 @@ class CliDumper extends BaseCliDumper
         $output = (string) $this->dump($data, true);
         $lines = explode("\n", $output);
 
-        $lines[array_key_last($lines) - 1] .= $this->getDumpSourceContent();
+        $lines[0] .= $this->getDumpSourceContent();
 
         $this->output->write(implode("\n", $lines));
 

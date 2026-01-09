@@ -2,12 +2,12 @@
 
 namespace Botble\Theme;
 
-use Botble\Base\Facades\Html;
-use Botble\Theme\Facades\Theme as ThemeFacade;
+use Botble\Theme\Contracts\Theme as ThemeContract;
 use Exception;
+use Botble\Base\Facades\Html;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Str;
+use Botble\Theme\Facades\Theme as ThemeFacade;
 
 class AssetContainer
 {
@@ -21,12 +21,12 @@ class AssetContainer
     {
     }
 
-    public function originUrl(?string $uri): string
+    public function originUrl(string|null $uri): string
     {
         return $this->configAssetUrl($uri);
     }
 
-    protected function configAssetUrl(?string $path): string
+    protected function configAssetUrl(string|null $path): string
     {
         return asset($path);
     }
@@ -34,28 +34,16 @@ class AssetContainer
     /**
      * Return asset path with current theme path.
      */
-    public function url(?string $uri): string
+    public function url(string|null $uri): string
     {
         // If path is full, so we just return.
         if (preg_match('#^http|//:#', $uri)) {
             return $uri;
         }
 
-        $uri = ltrim($uri, '/');
-
         $path = $this->getCurrentPath() . $uri;
-        $filePath = public_path($path);
-        $pathExtension = File::extension($path);
 
-        if (Str::contains($pathExtension, '?')) {
-            $filePath = str_replace($pathExtension, Str::before($pathExtension, '?'), $filePath);
-        }
-
-        if (File::exists($filePath)) {
-            return $this->configAssetUrl($path);
-        }
-
-        return $this->configAssetUrl($this->getInheritPath() . $uri);
+        return $this->configAssetUrl($path);
     }
 
     /**
@@ -63,31 +51,7 @@ class AssetContainer
      */
     public function getCurrentPath(): string
     {
-        $path = Asset::$path;
-
-        return $this->isInheritTheme() ? $this->getInheritPath() : $path;
-    }
-
-    public function getInheritPath(): string
-    {
-        $path = Asset::$path;
-        $inheritTheme = ThemeFacade::getInheritTheme();
-        $theme = ThemeFacade::getThemeName();
-
-        if (! $inheritTheme || $inheritTheme === $theme) {
-            return $path;
-        }
-
-        return str_replace(
-            '//',
-            '/',
-            str_replace($theme, $inheritTheme, $path)
-        );
-    }
-
-    public function isInheritTheme(): bool
-    {
-        return Asset::$isInheritTheme;
+        return Asset::$path;
     }
 
     /**
@@ -113,7 +77,7 @@ class AssetContainer
         string|array $source,
         array $dependencies = [],
         array $attributes = [],
-        ?string $version = null
+        string|null $version = null
     ): self {
         if (is_array($source)) {
             foreach ($source as $path) {
@@ -160,7 +124,7 @@ class AssetContainer
         string|array $source,
         array $dependencies = [],
         array $attributes = [],
-        ?string $version = null
+        string|null $version = null
     ): self {
         return $this
             ->usePath()
@@ -306,28 +270,21 @@ class AssetContainer
      */
     protected function evaluatePath(string $source): string
     {
-        $currentTheme = $this->isInheritTheme()
-            ? ThemeFacade::getInheritTheme()
-            : ThemeFacade::getThemeName();
+        static $theme;
 
-        $isLocal = ! Str::startsWith($source, ['http://', 'https://']);
+        // Make theme to use few features.
+        if (! $theme) {
+            $theme = app(ThemeContract::class);
+        }
+
+        $currentTheme = ThemeFacade::getThemeName();
 
         // Switch path to another theme.
-        if (! is_bool($this->usePath) && ThemeFacade::exists($this->usePath)) {
+        if (! is_bool($this->usePath) && $theme->exists($this->usePath)) {
             $source = str_replace($currentTheme, $this->usePath, $source);
         }
 
-        // If this is a child theme, and the file (local) does not exist in the child theme, use the parent theme.
-        if (
-            ThemeFacade::hasInheritTheme()
-            && ! $this->isInheritTheme()
-            && $isLocal
-            && ! File::exists(public_path($source))
-        ) {
-            $source = str_replace($currentTheme, ThemeFacade::getInheritTheme(), $source);
-        }
-
-        $publicThemeName = $this->isInheritTheme() ? $currentTheme : ThemeFacade::getPublicThemeName();
+        $publicThemeName = ThemeFacade::getPublicThemeName();
 
         if ($publicThemeName != $currentTheme) {
             $source = str_replace($currentTheme, $publicThemeName, $source);
@@ -357,10 +314,6 @@ class AssetContainer
 
             // Reset using path.
             $this->usePath(false);
-        }
-
-        if ($name === 'jquery') {
-            $attributes['data-pagespeed-no-defer'] = true;
         }
 
         $this->register('script', $name, $source, $dependencies, $attributes);
@@ -483,7 +436,7 @@ class AssetContainer
     /**
      * Get the HTML link to a registered asset.
      */
-    protected function asset(string $group, string $name): ?string
+    protected function asset(string $group, string $name): string|null
     {
         if (! isset($this->assets[$group][$name])) {
             return '';
@@ -520,7 +473,7 @@ class AssetContainer
     /**
      * Render asset as HTML.
      */
-    public function html(string $group, string $source, array $attributes): ?string
+    public function html(string $group, string $source, array $attributes): string|null
     {
         switch ($group) {
             case 'script':
@@ -564,7 +517,7 @@ class AssetContainer
     /**
      * Build a single attribute element.
      */
-    protected function attributeElement(string $key, ?string $value): ?string
+    protected function attributeElement(string $key, string|null $value): string|null
     {
         if (is_numeric($key)) {
             return $value;
@@ -589,11 +542,6 @@ class AssetContainer
         }
 
         return $assets;
-    }
-
-    public function getAllAssets(): array
-    {
-        return $this->assets;
     }
 
     protected function assetUrl(string $group, string $name): string
