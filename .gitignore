@@ -41,3 +41,8 @@ storage/framework/laravel-excel/
 /.env.testing
 composer.phar
 *.disabled
+composer.phar
+*.disabled
+vendor/
+.env
+public/storage
