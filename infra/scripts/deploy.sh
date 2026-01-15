@@ -48,15 +48,15 @@ docker compose -f "$COMPOSE_FILE" exec -T app php artisan storage:link
 
 # 4. Update Nginx Config (if changed)
 log_info "Updating Central Nginx configuration..."
-sudo docker cp "$PROJECT_ROOT/infra/nginx/sites-available/ticci.conf" "$CENTRAL_NGINX:/etc/nginx/sites-available/ticci.conf"
+docker cp "$PROJECT_ROOT/infra/nginx/sites-available/ticci.conf" "$CENTRAL_NGINX:/etc/nginx/sites-available/ticci.conf"
 
 # Ensure symlink exists
-sudo docker exec "$CENTRAL_NGINX" ln -sf /etc/nginx/sites-available/ticci.conf /etc/nginx/sites-enabled/ticci.conf
+docker exec "$CENTRAL_NGINX" ln -sf /etc/nginx/sites-available/ticci.conf /etc/nginx/sites-enabled/ticci.conf
 
 # Reload Nginx
 log_info "Reloading Central Nginx..."
-sudo docker exec "$CENTRAL_NGINX" nginx -t
-sudo docker exec "$CENTRAL_NGINX" nginx -s reload
+docker exec "$CENTRAL_NGINX" nginx -t
+docker exec "$CENTRAL_NGINX" nginx -s reload
 
 log_info "Deployment Completed Successfully! 🚀"
 log_info "Check status at: https://www.tic.ci and https://api.tic.ci"
