@@ -1,52 +1,90 @@
-# For more information: https://laravel.com/docs/sail
-version: '3'
+version: '3.8'
+
 services:
-    laravel.test:
-        build:
-            context: ./vendor/laravel/sail/runtimes/8.1
-            dockerfile: Dockerfile
-            args:
-                WWWGROUP: '${WWWGROUP}'
-        image: sail-8.1/app
-        extra_hosts:
-            - 'host.docker.internal:host-gateway'
-        ports:
-            - '${APP_PORT:-80}:80'
-            - '${VITE_PORT:-5173}:${VITE_PORT:-5173}'
-        environment:
-            WWWUSER: '${WWWUSER}'
-            LARAVEL_SAIL: 1
-            XDEBUG_MODE: '${SAIL_XDEBUG_MODE:-off}'
-            XDEBUG_CONFIG: '${SAIL_XDEBUG_CONFIG:-client_host=host.docker.internal}'
-        volumes:
-            - '.:/var/www/html'
-        networks:
-            - sail
-        depends_on:
-            - mysql
-    mysql:
-        image: 'mysql/mysql-server:8.0'
-        ports:
-            - '${FORWARD_DB_PORT:-3306}:3306'
-        environment:
-            MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
-            MYSQL_ROOT_HOST: "%"
-            MYSQL_DATABASE: '${DB_DATABASE}'
-            MYSQL_USER: '${DB_USERNAME}'
-            MYSQL_PASSWORD: '${DB_PASSWORD}'
-            MYSQL_ALLOW_EMPTY_PASSWORD: 1
-        volumes:
-            - 'sail-mysql:/var/lib/mysql'
-            - './vendor/laravel/sail/database/mysql/create-testing-database.sh:/docker-entrypoint-initdb.d/10-create-testing-database.sh'
-        networks:
-            - sail
-        healthcheck:
-            test: ["CMD", "mysqladmin", "ping", "-p${DB_PASSWORD}"]
-            retries: 3
-            timeout: 5s
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ticci_app:latest
+    container_name: ticci_app
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./:/var/www
+    networks:
+      - ticci_net
+
+  showroom:
+    build:
+      context: .
+      dockerfile: apps/showroom/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.tic.ci/api/v1}
+        NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL:-https://www.tic.ci}
+    image: ticci_showroom:latest
+    container_name: ticci_showroom
+    restart: unless-stopped
+    ports:
+      - "3005:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://api.tic.ci/api/v1}
+      - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL:-https://www.tic.ci}
+    depends_on:
+      - app
+      - redis
+    networks:
+      - ticci_net
+
+  web:
+    image: nginx:alpine
+    container_name: ticci_web
+    restart: unless-stopped
+    ports:
+      - "8081:80" # Exposed locally for debugging
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - app
+    networks:
+      - ticci_net
+      - digitalcloud_network
+
+  db:
+    image: mysql:8.4
+    container_name: ticci_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_USER: ${DB_USERNAME}
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - ticci_net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-p${DB_PASSWORD}"]
+      retries: 3
+      timeout: 5s
+
+  redis:
+    image: redis:alpine
+    container_name: ticci_redis
+    restart: unless-stopped
+    networks:
+      - ticci_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      retries: 3
+      timeout: 5s
+
 networks:
-    sail:
-        driver: bridge
+  ticci_net:
+    driver: bridge
+  digitalcloud_network:
+    external: true
+
 volumes:
-    sail-mysql:
-        driver: local
+  db_data:

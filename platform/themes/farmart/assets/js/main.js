@@ -200,9 +200,11 @@ MartApp.isRTL = $('body').prop('dir') === 'rtl';
                             $modal
                                 .find('.product-modal-content')
                                 .html(res.data)
-                            MartApp.productGallery(true, $modal.find('.product-modal-content .product-gallery'))
-                            MartApp.lightBox()
-                            MartApp.lazyLoad($modal[0])
+                            setTimeout(() => {
+                                MartApp.productGallery(true, $modal.find('.product-modal-content .product-gallery'))
+                                MartApp.lightBox()
+                                MartApp.lazyLoad($modal[0])
+                            }, 1000);
                         }
                     },
                     error: () => {

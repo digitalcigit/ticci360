@@ -26,5 +26,29 @@ class Handler extends ExceptionHandler
         $this->reportable(function (Throwable $e) {
             //
         });
+
+        $this->renderable(function (Throwable $e, $request) {
+            if ($request->is('api/*')) {
+                $code = method_exists($e, 'getStatusCode') ? $e->getStatusCode() : 500;
+                // Use default code 500 if getStatusCode returns 0 or non-standard code for HTTP
+                if ($code < 100 || $code > 599) {
+                    $code = 500;
+                }
+
+                return response()->json([
+                    'data' => null,
+                    'meta' => [
+                        'success' => false,
+                        'message' => $e->getMessage(),
+                        'timestamp' => now()->toIso8601String(),
+                        'debug' => config('app.debug') ? [
+                            'file' => $e->getFile(),
+                            'line' => $e->getLine(),
+                            'trace' => $e->getTrace(),
+                        ] : null,
+                    ],
+                ], $code);
+            }
+        });
     }
 }

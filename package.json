@@ -2,6 +2,7 @@
     "private": true,
     "workspaces": {
         "packages": [
+            "apps/*",
             "platform/core/*",
             "platform/packages/*",
             "platform/plugins/*",

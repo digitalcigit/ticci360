@@ -1,1 +1,2039 @@
-(()=>{"use strict";var e=e||{};window.MartApp=e,e.$iconChevronLeft='<span class="slick-prev-arrow svg-icon"><svg><use href="#svg-icon-chevron-left" xlink:href="#svg-icon-chevron-left"></use></svg></span>',e.$iconChevronRight='<span class="slick-next-arrow svg-icon"><svg><use href="#svg-icon-chevron-right" xlink:href="#svg-icon-chevron-right"></use></svg></span>',window._scrollBar=new ScrollBarHelper,e.isRTL="rtl"===$("body").prop("dir"),function(t){t.ajaxSetup({headers:{"X-CSRF-TOKEN":t('meta[name="csrf-token"]').attr("content")}}),t((function(){!function(){t(".form--quick-search .form-group--icon").show();var e=t(".product-category-label .text");t(document).on("change",".product-category-select",(function(){e.text(t.trim(t(this).find("option:selected").text()))})),e.text(t.trim(t(".product-category-select option:selected").text())),t(document).ready((function(){t(".preloader").addClass("fade-in")}))}(),t(".menu-item-has-children > a > .sub-toggle").on("click",(function(e){e.preventDefault(),t(this).closest(".menu-item-has-children").toggleClass("active")})),t(".mega-menu__column > a > .sub-toggle").on("click",(function(e){e.preventDefault(),t(this).closest(".mega-menu__column").toggleClass("active")})),t(".toggle--sidebar").on("click",(function(e){e.preventDefault();var a=t(this).attr("href");t(this).toggleClass("active"),t(this).siblings("a").removeClass("active"),t(a).toggleClass("active"),t(a).siblings(".panel--sidebar").removeClass("active"),_scrollBar.hide()})),t(document).on("click",".close-toggle--sidebar",(function(e){var a;e.preventDefault(),t(this).data("toggle-closest")&&(a=t(this).closest(t(this).data("toggle-closest"))),a&&a.length||(a=t(this).closest(".panel--sidebar")),a.removeClass("active"),_scrollBar.reset()})),t("body").on("click",(function(e){t(e.target).siblings(".panel--sidebar").hasClass("active")&&(t(".panel--sidebar").removeClass("active"),_scrollBar.reset())}))})),e.init=function(){e.$body=t(document.body),e.$toastLive=t("#toast-notifications"),e.$toastLive.length&&(e.toast=new bootstrap.Toast(e.$toastLive)),e.formSearch="#products-filter-form",e.$formSearch=t(e.formSearch),e.productListing=".products-listing",e.$productListing=t(e.productListing),this.lazyLoad(null,!0),this.productQuickView(),this.slickSlides(),this.productQuantity(),this.addProductToWishlist(),this.addProductToCompare(),this.addProductToCart(),this.applyCouponCode(),this.productGallery(),this.lightBox(),this.handleTabBootstrap(),this.toggleViewProducts(),this.filterSlider(),this.toolbarOrderingProducts(),this.productsFilter(),this.searchProducts(),this.ajaxUpdateCart(),this.removeCartItem(),this.removeWishlistItem(),this.removeCompareItem(),this.submitReviewProduct(),this.vendorRegisterForm(),this.customerDashboard(),this.newsletterForm(),this.contactSellerForm(),this.stickyAddToCart(),this.backToTop(),this.stickyHeader(),this.recentlyViewedProducts(),e.$body.on("click",".catalog-sidebar .backdrop, #cart-mobile .backdrop",(function(e){e.preventDefault(),t(this).parent().removeClass("active"),_scrollBar.reset()})),e.$body.on("click",".sidebar-filter-mobile",(function(a){a.preventDefault(),e.toggleSidebarFilterProducts("open",t(a.currentTarget).data("toggle"))})),e.$body.on("submit",".products-filter-form-vendor",(function(t){return!e.$formSearch.length||(e.$formSearch.trigger("submit"),!1)}))},e.toggleSidebarFilterProducts=function(){var e=arguments.length>0&&void 0!==arguments[0]?arguments[0]:"close",a=t('[data-toggle-target="'+(arguments.length>1&&void 0!==arguments[1]?arguments[1]:"product-categories-primary-sidebar")+'"]');"close"===e?(a.removeClass("active"),_scrollBar.reset()):(a.addClass("active"),_scrollBar.hide())},e.productQuickView=function(){var a=t("#product-quick-view-modal");e.$body.on("click",".product-quick-view-button .quick-view",(function(o){o.preventDefault();var r=t(o.currentTarget);r.addClass("loading"),a.removeClass("loaded").addClass("loading"),a.modal("show"),a.find(".product-modal-content").html(""),t.ajax({url:r.data("url"),type:"GET",success:function(t){t.error||(a.find(".product-modal-content").html(t.data),e.productGallery(!0,a.find(".product-modal-content .product-gallery")),e.lightBox(),e.lazyLoad(a[0]))},error:function(){},complete:function(){a.addClass("loaded").removeClass("loading"),r.removeClass("loading")}})}))},e.productGallery=function(a,o){if(o&&o.length||(o=t(".product-gallery")),o.length){var r=o.find(".product-gallery__wrapper"),n=o.find(".product-gallery__variants");a&&(r.length&&r.hasClass("slick-initialized")&&r.slick("unslick"),n.length&&n.hasClass("slick-initialized")&&n.slick("unslick")),r.not(".slick-initialized").slick({rtl:e.isRTL,slidesToShow:1,slidesToScroll:1,infinite:!1,asNavFor:n,dots:!1,prevArrow:e.$iconChevronLeft,nextArrow:e.$iconChevronRight,lazyLoad:"ondemand"}),n.not(".slick-initialized").slick({rtl:e.isRTL,slidesToShow:8,slidesToScroll:1,infinite:!1,focusOnSelect:!0,asNavFor:r,vertical:!0,prevArrow:'<span class="slick-prev-arrow svg-icon"><svg><use href="#svg-icon-arrow-up" xlink:href="#svg-icon-arrow-up"></use></svg></span>',nextArrow:'<span class="slick-next-arrow svg-icon"><svg><use href="#svg-icon-chevron-down" xlink:href="#svg-icon-chevron-down"></use></svg></span>',responsive:[{breakpoint:768,settings:{slidesToShow:6,vertical:!1}},{breakpoint:480,settings:{slidesToShow:3,vertical:!1}}]})}},e.lightBox=function(){t(".product-gallery--with-images").lightGallery({selector:".item a",thumbnail:!0,share:!1,fullScreen:!1,autoplay:!1,autoplayControls:!1,actualSize:!1});var e=t(".review-images-total.review-images");e.length&&e.map((function(e,a){t(a).data("lightGallery")||t(a).lightGallery({selector:"a",thumbnail:!0,share:!1,fullScreen:!1,autoplay:!1,autoplayControls:!1,actualSize:!1})}))},e.slickSlide=function(a){var o=t(a);if(o.length&&o.not(".slick-initialized")){var r=o.data("slick")||{};r.appendArrows&&(r.appendArrows=o.parent().find(r.appendArrows)),r=Object.assign(r,{rtl:e.isRTL,prevArrow:e.$iconChevronLeft,nextArrow:e.$iconChevronRight}),o.slick(r)}},e.slickSlides=function(){t(".slick-slides-carousel").not(".slick-initialized").map((function(t,a){e.slickSlide(a)}))},e.lazyLoad=function(t){arguments.length>1&&void 0!==arguments[1]&&arguments[1]?e.lazyLoadInstance=new LazyLoad({elements_selector:".lazyload",callback_error:function(e){e.setAttribute("src",siteConfig.img_placeholder)}}):new LazyLoad({container:t,elements_selector:".lazyload",callback_error:function(e){e.setAttribute("src",siteConfig.img_placeholder)}})},e.productQuantity=function(){e.$body.on("click",".quantity .increase, .quantity .decrease",(function(a){a.preventDefault();var o=t(this),r=o.closest(".product-button").find(".quantity_button"),n=o.closest(".quantity").siblings(".box-price").find(".price-current"),i=n.html(),s=o.siblings(".qty"),c=parseInt(s.attr("step"),10),l=parseInt(s.val(),10),d=parseInt(s.attr("min"),10),u=parseInt(s.attr("max"),10);if(d=d||1,u=u||l+1,o.hasClass("decrease")&&l>d){s.val(l-c),s.trigger("change");var f=+r.attr("data-quantity");f-=1,r.attr("data-quantity",f);var p=(1*i-i/l).toFixed(2);n.html(p)}if(o.hasClass("increase")&&l<u){s.val(l+c),s.trigger("change");var m=+r.attr("data-quantity");m+=1,r.attr("data-quantity",m);var h=(1*i+i/l).toFixed(2);n.html(h)}e.processUpdateCart(o)})),e.$body.on("keyup",".quantity .qty",(function(a){a.preventDefault();var o=t(this),r=o.closest(".product-button").find(".quantity_button"),n=o.closest(".quantity").siblings(".box-price").find(".price-current"),i=n.data("current"),s=parseInt(o.val(),10),c=parseInt(o.attr("min"),10),l=parseInt(o.attr("max"),10);if(s<=(l||s+1)&&s>=(c||1)){r.attr("data-quantity",s);var d=(i*s).toFixed(2);n.html(d)}e.processUpdateCart(o)}))},e.addProductToWishlist=function(){e.$body.on("click",".wishlist-button .wishlist",(function(a){a.preventDefault();var o=t(a.currentTarget);o.addClass("loading"),t.ajax({url:o.data("url"),method:"POST",success:function(a){var r;if(a.error)return e.showError(a.message),!1;e.showSuccess(a.message),t(".btn-wishlist .header-item-counter").text(a.data.count),null!==(r=a.data)&&void 0!==r&&r.added?t('.wishlist-button .wishlist[data-url="'+o.data("url")+'"]').addClass("added-to-wishlist"):t('.wishlist-button .wishlist[data-url="'+o.data("url")+'"]').removeClass("added-to-wishlist")},error:function(t){e.showError(t.message)},complete:function(){o.removeClass("loading")}})}))},e.addProductToCompare=function(){e.$body.on("click",".compare-button .compare",(function(a){a.preventDefault();var o=t(a.currentTarget);o.addClass("loading"),t.ajax({url:o.data("url"),method:"POST",success:function(a){if(a.error)return e.showError(a.message),!1;e.showSuccess(a.message),t(".btn-compare .header-item-counter").text(a.data.count)},error:function(t){e.showError(t.message)},complete:function(){o.removeClass("loading")}})}))},e.addProductToCart=function(){e.$body.on("click","form.cart-form button[type=submit]",(function(a){a.preventDefault();var o=t(this).closest("form.cart-form"),r=t(this);r.addClass("loading");var n=o.serializeArray();n.push({name:"checkout",value:"checkout"===r.prop("name")?1:0}),t.ajax({type:"POST",url:o.prop("action"),data:t.param(n),success:function(t){return t.error?(e.showError(t.message),void 0!==t.data.next_url&&(window.location.href=t.data.next_url),!1):void 0!==t.data.next_url?(window.location.href=t.data.next_url,!1):(e.showSuccess(t.message),void e.loadAjaxCart())},error:function(t){e.handleError(t,o)},complete:function(){r.removeClass("loading")}})}))},e.applyCouponCode=function(){t(document).on("keypress",".form-coupon-wrapper .coupon-code",(function(e){if("Enter"===e.key)return e.preventDefault(),e.stopPropagation(),t(e.currentTarget).closest(".form-coupon-wrapper").find(".btn-apply-coupon-code").trigger("click"),!1})),t(document).on("click",".btn-apply-coupon-code",(function(a){a.preventDefault();var o=t(a.currentTarget);t.ajax({url:o.data("url"),type:"POST",data:{coupon_code:o.closest(".form-coupon-wrapper").find(".coupon-code").val()},beforeSend:function(){o.prop("disabled",!0).addClass("loading")},success:function(a){a.error?e.showError(a.message):t(".cart-page-content").load(window.location.href+"?applied_coupon=1 .cart-page-content > *",(function(){o.prop("disabled",!1).removeClass("loading"),e.showSuccess(a.message)}))},error:function(t){e.handleError(t)},complete:function(e){var t;200==e.status&&0==(null==e||null===(t=e.responseJSON)||void 0===t?void 0:t.error)||o.prop("disabled",!1).removeClass("loading")}})})),t(document).on("click",".btn-remove-coupon-code",(function(a){a.preventDefault();var o=t(a.currentTarget),r=o.text();o.text(o.data("processing-text")),t.ajax({url:o.data("url"),type:"POST",success:function(a){a.error?e.showError(a.message):t(".cart-page-content").load(window.location.href+" .cart-page-content > *",(function(){o.text(r)}))},error:function(t){e.handleError(t)},complete:function(e){var t;200==e.status&&0==(null==e||null===(t=e.responseJSON)||void 0===t?void 0:t.error)||o.text(r)}})}))},e.loadAjaxCart=function(){var a;null!==(a=window.siteConfig)&&void 0!==a&&a.ajaxCart&&t.ajax({url:window.siteConfig.ajaxCart,method:"GET",success:function(a){a.error||(t(".mini-cart-content .widget-shopping-cart-content").html(a.data.html),t(".btn-shopping-cart .header-item-counter").text(a.data.count),t(".cart--mini .cart-price-total .cart-amount span").text(a.data.total_price),t(".menu--footer .icon-cart .cart-counter").text(a.data.count),e.lazyLoad(t(".mini-cart-content")[0]))}})},e.changeInputInSearchForm=function(o){a=!1,e.$formSearch.find("input, select, textarea").each((function(e,a){var r=t(a),n=r.attr("name"),i=o[n]||null;if("checkbox"===r.attr("type"))r.prop("checked",!1),Array.isArray(i)?r.prop("checked",i.includes(r.val())):r.prop("checked",!!i);else r.is("[name=max_price]")?r.val(i||r.data("max")):r.is("[name=min_price]")?r.val(i||r.data("min")):r.val()!=i&&r.val(i)})),a=!0},e.convertFromDataToArray=function(t){var a=[];return t.forEach((function(t){if(t.value){if(["min_price","max_price"].includes(t.name))if(e.$formSearch.find("input[name="+t.name+"]").data(t.name.substring(0,3))==parseInt(t.value))return;a.push(t)}})),a};var a=!0;e.productsFilter=function(){function o(a){if(a)a.length&&(a.addClass("opened"),a.removeClass("d-none"),a.find("> .widget-layered-nav-list__item .nav-list__item-link").removeClass("active"),a.closest("ul").closest("li.category-filter").length&&o(a.closest("ul").closest("li.category-filter")));else{var r=t(".widget-product-categories").find("li a.active");r.length?e.$widgetProductCategories.find(".widget-layered-nav-list > ul > li.category-filter").addClass("d-none"):(e.$widgetProductCategories.find(".widget-layered-nav-list > ul > li.category-filter").removeClass("d-none"),e.$widgetProductCategories.find(".show-all-product-categories").addClass("d-none")),e.$widgetProductCategories.find(".widget-layered-nav-list li.category-filter").removeClass("opened"),r.map((function(a,r){var n=t(r).closest("li.category-filter").closest("ul").closest("li.category-filter");n.removeClass("d-none"),n.length?(o(n),e.$widgetProductCategories.find(".show-all-product-categories").removeClass("d-none")):(e.$widgetProductCategories.find("li.category-filter").removeClass("d-none"),e.$widgetProductCategories.find(".show-all-product-categories").addClass("d-none"))}))}e.$widgetProductCategories.find(".loading-skeleton").removeClass("loading-skeleton")}e.widgetProductCategories=".widget-product-categories",e.$widgetProductCategories=t(e.widgetProductCategories),t(document).on("change","#products-filter-form .product-filter-item",(function(){a&&t(this).closest("form").trigger("submit")})),o(),t(".catalog-toolbar__ordering input[name=sort-by]").on("change",(function(a){e.$formSearch.find("input[name=sort-by]").val(t(a.currentTarget).val()),e.$formSearch.trigger("submit")})),e.$body.on("click",".cat-menu-close",(function(e){e.preventDefault(),t(this).closest("li").toggleClass("opened")})),t(document).on("click",e.widgetProductCategories+" li a",(function(a){a.preventDefault();var r=t(a.currentTarget),n=r.hasClass("active"),i=r.closest(e.widgetProductCategories);i.find("li a").removeClass("active"),r.addClass("active");var s=r.data("id");s?(i.find(".widget-layered-nav-list .nav-list__item-link[data-id="+s+"]").addClass("active"),o()):(i.find(".widget-layered-nav-list .category-filter").removeClass("opened d-none"),i.find(".show-all-product-categories").addClass("d-none"));r.closest(e.formSearch).find(".widget-product-brands ul li, .dropdown-swatches-wrapper, .text-swatches-wrapper, .visual-swatches-wrapper").each((function(e,a){var o=t(a),r=o.data("categories");r&&Array.isArray(r)&&r.length&&(r.includes(s)?o.removeClass("d-none"):(o.addClass("d-none"),o.find("input").prop("checked",!1),o.find("select").val("")))}));var c=i.find("input[name='categories[]']");if(c.length)n?(r.removeClass("active"),c.val("")):c.val(s),c.trigger("change");else{var l=r.attr("href");e.$formSearch.attr("action",l).trigger("submit")}})),t(document).on("submit","#products-filter-form",(function(a){a.preventDefault();var o=t(a.currentTarget),r=o.serializeArray(),n=e.convertFromDataToArray(r),i=[],s=e.$productListing.find("input[name=page]");s.val()&&n.push({name:"page",value:s.val()}),n.map((function(e){i.push(encodeURIComponent(e.name)+"="+e.value)}));var c=o.attr("action")+(i&&i.length?"?"+i.join("&"):"");n.push({name:"_",value:+new Date}),t.ajax({url:o.attr("action"),type:"GET",data:n,beforeSend:function(){e.$productListing.find(".loading").show(),t("html, body").animate({scrollTop:e.$productListing.offset().top-200},500);var a=e.$formSearch.find(".nonlinear");a.length&&a[0].noUiSlider.set([e.$formSearch.find("input[name=min_price]").val(),e.$formSearch.find("input[name=max_price]").val()]),e.toggleSidebarFilterProducts()},success:function(a){if(0==a.error){var o,r,i;e.$productListing.html(a.data);var s=a.message;s&&t(".products-found").length&&t(".products-found").html('<span class="text-primary me-1">'+s.substr(0,s.indexOf(" "))+"</span>"+s.substr(s.indexOf(" ")+1)),e.lazyLoad(e.$productListing[0]);var l=(null===(o=a.additional)||void 0===o||null===(r=o.category)||void 0===r?void 0:r.name)||e.$formSearch.data("title");t("h1.catalog-header__title").text(l),document.title=l,null!==(i=a.additional)&&void 0!==i&&i.breadcrumb&&t(".page-breadcrumbs div").html(a.additional.breadcrumb),c!=window.location.href&&window.history.pushState(n,a.message,c)}else e.showError(a.message||"Opp!")},error:function(t){e.handleError(t)},complete:function(){e.$productListing.find(".loading").hide()}})})),e.$formSearch.length&&window.addEventListener("popstate",(function(){var t=window.location.origin+window.location.pathname;e.$formSearch.attr("action",t);var a=e.parseParamsSearch();e.changeInputInSearchForm(a),e.$formSearch.trigger("submit")}),!1),t(document).on("click",e.productListing+" .pagination a",(function(a){a.preventDefault();var o=new URL(t(a.currentTarget).attr("href")).searchParams.get("page");e.$productListing.find("input[name=page]").val(o),e.$formSearch.trigger("submit")}))},e.parseParamsSearch=function(e){for(var t,a=arguments.length>1&&void 0!==arguments[1]&&arguments[1],o=e||window.location.search.substring(1),r=/([^&=]+)=?([^&]*)/g,n=/\+/g,i=function(e){return decodeURIComponent(e.replace(n," "))},s={};t=r.exec(o);){var c=i(t[1]),l=i(t[2]);"[]"==c.substring(c.length-2)?(a&&(c=c.substring(0,c.length-2)),(s[c]||(s[c]=[])).push(l)):s[c]=l}return s},e.searchProducts=function(){t("body").on("click",(function(e){t(e.target).closest(".form--quick-search").length||t(".panel--search-result").removeClass("active")}));var e=null;function a(a){var o=arguments.length>1&&void 0!==arguments[1]?arguments[1]:null,r=a.find(".panel--search-result");if(a.find(".input-search-product").val()){var n=a.find("button[type=submit]");e=t.ajax({type:"GET",url:o||a.data("ajax-url"),data:o?[]:a.serialize(),beforeSend:function(){null!=e&&e.abort(),n.addClass("loading")},success:function(e){if(e.error)r.html("").removeClass("active");else if(o){var a=t("<div>"+e.data+"</div>");r.find(".panel__content").find(".loadmore-container").remove(),r.find(".panel__content").append(a.find(".panel__content").contents())}else r.html(e.data).addClass("active");n.removeClass("loading")},error:function(){n.removeClass("loading")}})}else r.html("").removeClass("active")}t(".form--quick-search .input-search-product").on("keyup",(function(){a(t(this).closest("form"))})),t(".form--quick-search .product-category-select").on("change",(function(){a(t(this).closest("form"))})),t(".form--quick-search").on("click",".loadmore",(function(e){e.preventDefault();var o=t(this).closest("form");t(this).addClass("loading"),a(o,t(this).attr("href"))}))},e.processUpdateCart=function(a){var o=t(".cart-page-content").find(".form--shopping-cart");if(!o.length)return!1;t.ajax({type:"POST",cache:!1,url:o.prop("action"),data:new FormData(o[0]),contentType:!1,processData:!1,beforeSend:function(){a.addClass("loading")},success:function(a){if(a.error)return e.showError(a.message),!1;t(".cart-page-content").load(window.siteConfig.cartUrl+" .cart-page-content > *",(function(){e.lazyLoad(t(".cart-page-content")[0])})),e.loadAjaxCart(),e.showSuccess(a.message)},error:function(t){a.closest(".ps-table--shopping-cart").removeClass("content-loading"),e.handleError(t)},complete:function(){a.removeClass("loading")}})},e.ajaxUpdateCart=function(a){t(document).on("click",".cart-page-content .update_cart",(function(a){a.preventDefault();var o=t(a.currentTarget);e.processUpdateCart(o)}))},e.removeCartItem=function(){t(document).on("click",".remove-cart-item",(function(a){a.preventDefault();var o=t(this);t.ajax({url:o.data("url"),method:"GET",beforeSend:function(){o.addClass("loading")},success:function(a){var o;if(a.error)return e.showError(a.message),!1;var r=t(".cart-page-content");r.length&&null!==(o=window.siteConfig)&&void 0!==o&&o.cartUrl&&r.load(window.siteConfig.cartUrl+" .cart-page-content > *",(function(){e.lazyLoad(r[0])})),e.loadAjaxCart()},error:function(t){e.handleError(t)},complete:function(){o.removeClass("loading")}})}))},e.removeWishlistItem=function(){t(document).on("click",".remove-wishlist-item",(function(a){a.preventDefault();var o=t(this);t.ajax({url:o.data("url"),method:"POST",data:{_method:"DELETE"},beforeSend:function(){o.addClass("loading")},success:function(a){a.error?e.showError(a.message):(e.showSuccess(a.message),t(".btn-wishlist .header-item-counter").text(a.data.count),o.closest("tr").remove())},error:function(t){e.handleError(t)},complete:function(){o.removeClass("loading")}})}))},e.removeCompareItem=function(){t(document).on("click",".remove-compare-item",(function(a){a.preventDefault();var o=t(this);t.ajax({url:o.data("url"),method:"POST",data:{_method:"DELETE"},beforeSend:function(){o.addClass("loading")},success:function(a){a.error?e.showError(a.message):(e.showSuccess(a.message),t(".btn-compare .header-item-counter").text(a.data.count),t(".compare-page-content").load(window.location.href+" .compare-page-content > *"))},error:function(t){e.handleError(t)},complete:function(){o.removeClass("loading")}})}))},e.handleTabBootstrap=function(){var e=window.location.hash;if(e){var a=t('a[href="'+e+'"]');if(a.length)new bootstrap.Tab(a[0]).show()}},e.filterSlider=function(){t(".nonlinear").each((function(a,o){var r=t(o),n=r.data("min"),i=r.data("max"),s=t(o).closest(".nonlinear-wrapper");noUiSlider.create(o,{connect:!0,behaviour:"tap",start:[s.find(".product-filter-item-price-0").val(),s.find(".product-filter-item-price-1").val()],range:{min:n,"10%":.1*i,"20%":.2*i,"30%":.3*i,"40%":.4*i,"50%":.5*i,"60%":.6*i,"70%":.7*i,"80%":.8*i,"90%":.9*i,max:i}});var c=[s.find(".slider__min"),s.find(".slider__max")];o.noUiSlider.on("update",(function(t,a){c[a].html(e.numberFormat(t[a]))})),o.noUiSlider.on("change",(function(e,t){s.find(".product-filter-item-price-"+t).val(Math.round(e[t])).trigger("change")}))}))},e.numberFormat=function(e,t,a,o){var r=isFinite(+e)?+e:0,n=isFinite(+t)?Math.abs(t):0,i=void 0===o?",":o,s=void 0===a?".":a,c=(n?function(e,t){var a=Math.pow(10,t);return Math.round(e*a)/a}(r,n):Math.round(r)).toString().split(".");return c[0].length>3&&(c[0]=c[0].replace(/\B(?=(?:\d{3})+(?!\d))/g,i)),(c[1]||"").length<n&&(c[1]=c[1]||"",c[1]+=new Array(n-c[1].length+1).join("0")),c.join(s)},e.submitReviewProduct=function(){var a=[],o=function(e){for(var t=new ClipboardEvent("").clipboardData||new DataTransfer,o=0,n=a;o<n.length;o++){var i=n[o];t.items.add(i)}e.files=t.files,r(e)},r=function(e){var a=t(".image-upload__text"),o=t(e).data("max-files"),r=e.files.length;o?(r>=o?a.closest(".image-upload__uploader-container").addClass("d-none"):a.closest(".image-upload__uploader-container").removeClass("d-none"),a.text(r+"/"+o)):a.text(r);var n=t(".image-viewer__list"),i=t("#review-image-template").html();if(n.addClass("is-loading"),n.find(".image-viewer__item").remove(),r){for(var s=r-1;s>=0;s--)n.prepend(i.replace("__id__",s));for(var c=function(t){var a=new FileReader;a.onload=function(e){n.find(".image-viewer__item[data-id="+t+"]").find("img").attr("src",e.target.result)},a.readAsDataURL(e.files[t])},l=r-1;l>=0;l--)c(l)}n.removeClass("is-loading")};t(document).on("change",".form-review-product input[type=file]",(function(r){r.preventDefault();var n=this,i=t(n),s=i.data("max-size");Object.keys(n.files).map((function(t){if(s&&n.files[t].size/1024>s){var o=i.data("max-size-message").replace("__attribute__",n.files[t].name).replace("__max__",s);e.showError(o)}else a.push(n.files[t])}));var c=a.length,l=i.data("max-files");l&&c>l&&a.splice(c-l-1,c-l),o(n)})),t(document).on("click",".form-review-product .image-viewer__icon-remove",(function(e){e.preventDefault();var r=t(e.currentTarget).closest(".image-viewer__item").data("id");a.splice(r,1);var n=t(".form-review-product input[type=file]")[0];o(n)})),sessionStorage.reloadReviewsTab&&(t('#product-detail-tabs a[href="#product-reviews"]').length&&new bootstrap.Tab(t('#product-detail-tabs a[href="#product-reviews"]')[0]).show(),sessionStorage.reloadReviewsTab=!1),t(document).on("click",".form-review-product button[type=submit]",(function(a){a.preventDefault(),a.stopPropagation();var o=t(a.currentTarget),r=t(this).closest("form");t.ajax({type:"POST",cache:!1,url:r.prop("action"),data:new FormData(r[0]),contentType:!1,processData:!1,beforeSend:function(){o.prop("disabled",!0).addClass("loading")},success:function(t){t.error?e.showError(t.message):(r.find("select").val(0),r.find("textarea").val(""),e.showSuccess(t.message),setTimeout((function(){sessionStorage.reloadReviewsTab=!0,window.location.reload()}),1500))},error:function(t){e.handleError(t,r)},complete:function(){o.prop("disabled",!1).removeClass("loading")}})}))},e.vendorRegisterForm=function(){t(document).on("click","input[name=is_vendor]",(function(){1==t(this).val()?t(".show-if-vendor").slideDown().show():(t(".show-if-vendor").slideUp(500),t(this).closest("form").find("button[type=submit]").prop("disabled",!1))})),t("#shop-url-register").on("keyup",(function(){var e=t(this).closest(".form-group").find("span small");e.html(e.data("base-url")+"/<strong>"+t(this).val().toLowerCase()+"</strong>")})).on("change",(function(){var e=t(this),a=e.val();if(a){var o=e.closest(".form-group").find("span small");t.ajax({url:e.data("url"),type:"POST",data:{url:a},beforeSend:function(){e.prop("disabled",!0),e.closest("form").find("button[type=submit]").prop("disabled",!0)},success:function(a){var r,n;(a.error?(e.addClass("is-invalid").removeClass("is-valid"),t(".shop-url-status").removeClass("text-success").addClass("text-danger").text(a.message)):(e.addClass("is-valid").removeClass("is-invalid"),t(".shop-url-status").removeClass("text-danger").addClass("text-success").text(a.message),e.closest("form").find("button[type=submit]").prop("disabled",!1)),null!==(r=a.data)&&void 0!==r&&r.slug)&&o.html(o.data("base-url")+"/<strong>"+(null===(n=a.data)||void 0===n?void 0:n.slug)+"</strong>")},error:function(){},complete:function(){e.prop("disabled",!1)}})}}))},e.customerDashboard=function(){t.fn.datepicker&&t("#date_of_birth").datepicker({format:"yyyy-mm-dd",orientation:"bottom"}),t("#avatar").on("change",(function(e){var a=e.currentTarget;if(a.files&&a.files[0]){var o=new FileReader;o.onload=function(e){t(".userpic-avatar").attr("src",e.target.result)},o.readAsDataURL(a.files[0])}})),t(document).on("click",".btn-trigger-delete-address",(function(e){e.preventDefault(),t(".btn-confirm-delete").data("url",t(this).data("url")),t("#confirm-delete-modal").modal("show")})),t(document).on("click",".btn-confirm-delete",(function(a){a.preventDefault();var o=t(this);t.ajax({url:o.data("url"),type:"GET",beforeSend:function(){o.addClass("loading")},success:function(a){o.closest(".modal").modal("hide"),a.error?e.showError(a.message):(e.showSuccess(a.message),t('.btn-trigger-delete-address[data-url="'+o.data("url")+'"]').closest(".col").remove())},error:function(t){e.handleError(t)},complete:function(){o.removeClass("loading")}})}))},e.newsletterForm=function(){t(document).on("submit","form.subscribe-form",(function(a){a.preventDefault(),a.stopPropagation();var o=t(a.currentTarget),r=o.find("button[type=submit]");t.ajax({type:"POST",cache:!1,url:o.prop("action"),data:new FormData(o[0]),contentType:!1,processData:!1,beforeSend:function(){r.prop("disabled",!0).addClass("button-loading")},success:function(t){"undefined"!=typeof refreshRecaptcha&&refreshRecaptcha(),t.error?e.showError(t.message):(o.find("input[type=email]").val(""),e.showSuccess(t.message))},error:function(t){"undefined"!=typeof refreshRecaptcha&&refreshRecaptcha(),e.handleError(t)},complete:function(){r.prop("disabled",!1).removeClass("button-loading")}})}))},e.contactSellerForm=function(){t(document).on("click","form.form-contact-store button[type=submit]",(function(a){a.preventDefault(),a.stopPropagation();var o=t(a.currentTarget),r=o.closest("form");t.ajax({type:"POST",cache:!1,url:r.prop("action"),data:new FormData(r[0]),contentType:!1,processData:!1,beforeSend:function(){o.prop("disabled",!0).addClass("button-loading")},success:function(t){"undefined"!=typeof refreshRecaptcha&&refreshRecaptcha(),t.error?e.showError(t.message):(r.find("input[type=email]:not(:disabled)").val(""),r.find("input[type=text]:not(:disabled)").val(""),r.find("textarea").val(""),e.showSuccess(t.message))},error:function(t){"undefined"!=typeof refreshRecaptcha&&refreshRecaptcha(),e.handleError(t)},complete:function(){o.prop("disabled",!1).removeClass("button-loading")}})}))},e.recentlyViewedProducts=function(){e.$body.find(".header-recently-viewed").each((function(){var a,o=t(this);o.hover((function(){var r=o.find(".recently-viewed-products");if(!o.data("loaded")&&!a){var n=o.data("url");n&&t.ajax({type:"GET",url:n,beforeSend:function(){a=!0},success:function(t){t.error?e.showError(t.message):(r.html(t.data),r.find(".product-list li").length>0&&e.slickSlide(r.find(".product-list")),o.data("loaded",!0).find(".loading--wrapper").addClass("d-none"))},error:function(t){e.handleError(t)},complete:function(){a=!1}})}}))}))},e.showNotice=function(t,a){e.$toastLive.removeClass((function(e,t){return(t.match(/(^|\s)toast--\S+/g)||[]).join(" ")})),e.$toastLive.addClass("toast--"+t),e.$toastLive.find(".toast-body .toast-message").html(a),e.toast.show()},e.showError=function(e){this.showNotice("error",e)},e.showSuccess=function(e){this.showNotice("success",e)},e.handleError=function(t){void 0!==t.errors&&t.errors.length?e.handleValidationError(t.errors):void 0!==t.responseJSON?void 0!==t.responseJSON.errors?422===t.status&&e.handleValidationError(t.responseJSON.errors):void 0!==t.responseJSON.message?e.showError(t.responseJSON.message):e.showError(t.responseJSON.join(", ").join(", ")):e.showError(t.statusText)},e.handleValidationError=function(a){var o="";t.each(a,(function(e,t){""!==o&&(o+="<br />"),o+=t})),e.showError(o)},e.toggleViewProducts=function(){t(document).on("click",".store-list-filter-button",(function(e){e.preventDefault(),t("#store-listing-filter-form-wrap").toggle(500)})),e.$body.on("click",".toolbar-view__icon a",(function(a){a.preventDefault();var o=t(a.currentTarget);o.closest(".toolbar-view__icon").find("a").removeClass("active"),o.addClass("active"),t(o.data("target")).removeClass(o.data("class-remove")).addClass(o.data("class-add")),e.$formSearch.find("input[name=layout]").val(o.data("layout"));var r=new URLSearchParams(window.location.search);r.set("layout",o.data("layout"));var n=window.location.protocol+"//"+window.location.host+window.location.pathname+"?"+r.toString();n!=window.location.href&&window.history.pushState(e.$productListing.html(),"",n)}))},e.toolbarOrderingProducts=function(){e.$body.on("click",".catalog-toolbar__ordering .dropdown .dropdown-menu a",(function(e){e.preventDefault();var a=t(e.currentTarget),o=a.closest(".dropdown");o.find("li").removeClass("active"),a.closest("li").addClass("active"),o.find("a[data-bs-toggle=dropdown").html(a.html()),a.closest(".catalog-toolbar__ordering").find("input[name=sort-by]").val(a.data("value")).trigger("change")}))},e.backToTop=function(){var e=0,a=t("#back2top");t(window).scroll((function(){var o=t(window).scrollTop();o>e&&o>500?a.addClass("active"):a.removeClass("active"),e=o})),a.on("click",(function(){t("html, body").animate({scrollTop:"0px"},0)}))},e.stickyHeader=function(){var e=t(".header-js-handler"),a=e.height();e.each((function(){if(!0===t(this).data("sticky")){var e=t(this);t(window).scroll((function(){t(this).scrollTop()>a?e.addClass("header--sticky"):e.removeClass("header--sticky")}))}}))},e.stickyAddToCart=function(){var e=t(".header--product");t(window).scroll((function(){t(this).scrollTop()>50?e.addClass("header--sticky"):e.removeClass("header--sticky")})),t(".header--product ul li > a ").on("click",(function(e){e.preventDefault();var a=t(this).attr("href");t(this).closest("li").siblings("li").removeClass("active"),t(this).closest("li").addClass("active"),t(a).closest(".product-detail-tabs").find("a").removeClass("active"),t(a).addClass("active"),t(".header--product ul li").removeClass("active"),t('.header--product ul li a[href="'+a+'"]').closest("li").addClass("active"),t("#product-detail-tabs-content > .tab-pane").removeClass("active show"),t(t(a).attr("href")).addClass("active show"),t("html, body").animate({scrollTop:t(a).offset().top-t(".header--product .navigation").height()-165+"px"},0)}));var a=t(".product-details .entry-product-header"),o=t(".sticky-atc-wrap");if(o.length&&a.length&&t(window).width()<768){var r=a.offset().top+a.outerHeight(),n=t(".footer-mobile"),i=0,s=n.length>0,c=function(){var e=t(window).scrollTop(),a=t(window).height(),c=t(document).height();i=s?n.offset().top-n.height():e,e+a===c||r>e||e>i?o.removeClass("sticky-atc-shown"):r<e&&e+a!==c&&o.addClass("sticky-atc-shown")};c(),t(window).scroll(c)}},t((function(){e.init(),window.onBeforeChangeSwatches=function(e,t){var a=t.closest(".product-details"),o=a.find(".cart-form");a.find(".error-message").hide(),a.find(".success-message").hide(),a.find(".number-items-available").html("").hide();var r=o.find("button[type=submit]");r.addClass("loading"),e&&e.attributes&&r.prop("disabled",!0)},window.onChangeSwatchesSuccess=function(a,o){var r=o.closest(".product-details"),n=r.find(".cart-form"),i=t(".footer-cart-form");if(r.find(".error-message").hide(),r.find(".success-message").hide(),a){var s=n.find("button[type=submit]");if(s.removeClass("loading"),a.error)s.prop("disabled",!0),r.find(".number-items-available").html('<span class="text-danger">('+a.message+")</span>").show(),n.find(".hidden-product-id").val(""),i.find(".hidden-product-id").val("");else{var c=a.data,l=t(document).find(".js-product-content"),d=l.find(".product-price-sale"),u=l.find(".product-price-original");c.sale_price!==c.price?(d.removeClass("d-none"),u.addClass("d-none")):(d.addClass("d-none"),u.removeClass("d-none")),d.find("ins .amount").text(c.display_sale_price),d.find("del .amount").text(c.display_price),u.find(".amount").text(c.display_sale_price),c.sku?(r.find(".meta-sku .meta-value").text(c.sku),r.find(".meta-sku").removeClass("d-none")):r.find(".meta-sku").addClass("d-none"),n.find(".hidden-product-id").val(c.id),i.find(".hidden-product-id").val(c.id),s.prop("disabled",!1),c.error_message?(s.prop("disabled",!0),r.find(".number-items-available").html('<span class="text-danger">('+c.error_message+")</span>").show()):c.success_message?r.find(".number-items-available").html(a.data.stock_status_html).show():r.find(".number-items-available").html("").hide();var f=c.unavailable_attribute_ids||[];r.find(".attribute-swatch-item").removeClass("pe-none"),r.find(".product-filter-item option").prop("disabled",!1),f&&f.length&&f.map((function(e){var t=r.find('.attribute-swatch-item[data-id="'+e+'"]');t.length?(t.addClass("pe-none"),t.find("input").prop("checked",!1)):(t=r.find('.product-filter-item option[data-id="'+e+'"]')).length&&t.prop("disabled","disabled").prop("selected",!1)}));var p=r.closest(".product-detail-container").find(".product-gallery");c.image_with_sizes.origin.length||c.image_with_sizes.origin.push(siteConfig.img_placeholder),c.image_with_sizes.thumb.length||c.image_with_sizes.thumb.push(siteConfig.img_placeholder);var m="";c.image_with_sizes.origin.forEach((function(e){m+="<div class='product-gallery__image item'>\n                                <a class='img-fluid-eq' href='".concat(e,"'>\n                                    <div class='img-fluid-eq__dummy'></div>\n                                    <div class='img-fluid-eq__wrap'>\n                                        <img class='mx-auto' alt='").concat(c.name,"' title='").concat(c.name,"' src='").concat(siteConfig.img_placeholder?siteConfig.img_placeholder:e,"' data-lazy='").concat(e,"'>\n                                    </div>\n                                </a>\n                            </div>")})),p.find(".product-gallery__wrapper").slick("unslick").html(m);var h="";c.image_with_sizes.thumb.forEach((function(e){h+="<div class='item'>\n                            <div class='border p-1 m-1'>\n                                <img class='lazyload' alt='".concat(c.name,"' title='").concat(c.name,"' src='").concat(siteConfig.img_placeholder?siteConfig.img_placeholder:e,"' data-src='").concat(e,"' data-lazy='").concat(e,"'>\n                            </div>\n                        </div>")})),p.find(".product-gallery__variants").slick("unslick").html(h),e.productGallery(!0,p),e.lightBox()}}},jQuery().mCustomScrollbar&&t(".ps-custom-scrollbar").mCustomScrollbar({theme:"dark",scrollInertia:0}),t(document).on("click",".toggle-show-more",(function(e){e.preventDefault(),t("#store-short-description").fadeOut(),t(this).hide(),t("#store-content").slideDown(500),t(".toggle-show-less").show()})),t(document).on("click",".toggle-show-less",(function(e){e.preventDefault(),t(this).hide(),t("#store-content").slideUp(500),t("#store-short-description").fadeIn(),t(".toggle-show-more").show()}));var a=function(){t(".page-breadcrumbs ol li").each((function(){var e=t(this);e.is(":first-child")||e.is(":nth-child(2)")||e.is(":last-child")||(e.is(":nth-child(3)")?(e.find("a").hide(),e.find(".extra-breadcrumb-name").text("...").show()):e.find("a").closest("li").hide())}))};t(window).width()<768&&a(),t(window).on("resize",(function(){a()})),t(".product-entry-meta .anchor-link").on("click",(function(e){e.preventDefault();var a=t(this).attr("href");t("#product-detail-tabs a").removeClass("active"),t(a).addClass("active"),t("#product-detail-tabs-content > .tab-pane").removeClass("active show"),t(t(a).attr("href")).addClass("active show"),t("html, body").animate({scrollTop:t(a).offset().top-t(".header--product .navigation").height()-250+"px"},0)})),t(document).on("click","#sticky-add-to-cart .add-to-cart-button",(function(e){e.preventDefault(),e.stopPropagation();var a=t(e.currentTarget);a.addClass("button-loading"),setTimeout((function(){var e=".js-product-content .cart-form button[name="+a.prop("name")+"].add-to-cart-button";t(document).find(e).trigger("click"),a.removeClass("button-loading")}),200)}))}))}(jQuery)})();
+'use strict'
+
+let MartApp = MartApp || {}
+window.MartApp = MartApp
+MartApp.$iconChevronLeft =
+    '<span class="slick-prev-arrow svg-icon"><svg><use href="#svg-icon-chevron-left" xlink:href="#svg-icon-chevron-left"></use></svg></span>'
+MartApp.$iconChevronRight =
+    '<span class="slick-next-arrow svg-icon"><svg><use href="#svg-icon-chevron-right" xlink:href="#svg-icon-chevron-right"></use></svg></span>'
+
+window._scrollBar = new ScrollBarHelper()
+
+MartApp.isRTL = $('body').prop('dir') === 'rtl';
+
+(function($) {
+
+    $.ajaxSetup({
+        headers: {
+            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
+        },
+    })
+
+    function basicEvents() {
+        $('.form--quick-search .form-group--icon').show()
+        let $categoryLabel = $('.product-category-label .text')
+        $(document).on('change', '.product-category-select', function() {
+            $categoryLabel.text($.trim($(this).find('option:selected').text()))
+        })
+
+        $categoryLabel.text(
+            $.trim($('.product-category-select option:selected').text()),
+        )
+
+        $(document).ready(function() {
+            $('.preloader').addClass('fade-in')
+        })
+    }
+
+    function subMenuToggle() {
+        $('.menu-item-has-children > a > .sub-toggle').on(
+            'click',
+            function(e) {
+                e.preventDefault()
+                const $this = $(this)
+                const $parent = $this.closest('.menu-item-has-children')
+                $parent.toggleClass('active')
+            },
+        )
+
+        $('.mega-menu__column > a > .sub-toggle').on(
+            'click',
+            function(e) {
+                e.preventDefault()
+                const $this = $(this)
+                const $parent = $this.closest('.mega-menu__column')
+                $parent.toggleClass('active')
+            },
+        )
+    }
+
+    function siteToggleAction() {
+        $('.toggle--sidebar').on('click', function(e) {
+            e.preventDefault()
+
+            let url = $(this).attr('href')
+
+            $(this).toggleClass('active')
+            $(this).siblings('a').removeClass('active')
+
+            $(url).toggleClass('active')
+
+            $(url).siblings('.panel--sidebar').removeClass('active')
+            _scrollBar.hide()
+        })
+
+        $(document).on('click', '.close-toggle--sidebar', function(e) {
+            e.preventDefault()
+            let $panel
+
+            if ($(this).data('toggle-closest')) {
+                $panel = $(this).closest($(this).data('toggle-closest'))
+            }
+
+            if (!$panel || !$panel.length) {
+                $panel = $(this).closest('.panel--sidebar')
+            }
+
+            $panel.removeClass('active')
+            _scrollBar.reset()
+        })
+
+        $('body').on('click', function(e) {
+            if ($(e.target).siblings('.panel--sidebar').hasClass('active')) {
+                $('.panel--sidebar').removeClass('active')
+                _scrollBar.reset()
+            }
+        })
+    }
+
+    $(function() {
+        basicEvents()
+        subMenuToggle()
+        siteToggleAction()
+    })
+
+    MartApp.init = function() {
+        MartApp.$body = $(document.body)
+        MartApp.$toastLive = $('#toast-notifications')
+        if (MartApp.$toastLive.length) {
+            MartApp.toast = new bootstrap.Toast(MartApp.$toastLive)
+        }
+
+        MartApp.formSearch = '#products-filter-form'
+        MartApp.$formSearch = $(MartApp.formSearch)
+        MartApp.productListing = '.products-listing'
+        MartApp.$productListing = $(MartApp.productListing)
+
+        this.lazyLoad(null, true)
+        this.productQuickView()
+        this.slickSlides()
+        this.productQuantity()
+        this.addProductToWishlist()
+        this.addProductToCompare()
+        this.addProductToCart()
+        this.applyCouponCode()
+        this.productGallery()
+        this.lightBox()
+        this.handleTabBootstrap()
+        this.toggleViewProducts()
+        this.filterSlider()
+        this.toolbarOrderingProducts()
+        this.productsFilter()
+        this.searchProducts()
+        this.ajaxUpdateCart()
+        this.removeCartItem()
+        this.removeWishlistItem()
+        this.removeCompareItem()
+        this.submitReviewProduct()
+        this.vendorRegisterForm()
+        this.customerDashboard()
+        this.newsletterForm()
+        this.contactSellerForm()
+        this.stickyAddToCart()
+        this.backToTop()
+        this.stickyHeader()
+        this.recentlyViewedProducts()
+
+        MartApp.$body.on(
+            'click',
+            '.catalog-sidebar .backdrop, #cart-mobile .backdrop',
+            function(e) {
+                e.preventDefault()
+                $(this).parent().removeClass('active')
+                _scrollBar.reset()
+            },
+        )
+
+        MartApp.$body.on('click', '.sidebar-filter-mobile', function(e) {
+            e.preventDefault()
+            MartApp.toggleSidebarFilterProducts('open', $(e.currentTarget).data('toggle'))
+        })
+
+        MartApp.$body.on('submit', '.products-filter-form-vendor', function(e) {
+            if (MartApp.$formSearch.length) {
+                MartApp.$formSearch.trigger('submit')
+                return false
+            }
+            return true
+        })
+    }
+
+    MartApp.toggleSidebarFilterProducts = function(status = 'close', target = 'product-categories-primary-sidebar') {
+        const $el = $('[data-toggle-target="' + target + '"]')
+        if (status === 'close') {
+            $el.removeClass('active')
+            _scrollBar.reset()
+        } else {
+            $el.addClass('active')
+            _scrollBar.hide()
+        }
+    }
+
+    MartApp.productQuickView = function() {
+        const $modal = $('#product-quick-view-modal')
+
+        MartApp.$body.on(
+            'click',
+            '.product-quick-view-button .quick-view',
+            function(e) {
+                e.preventDefault()
+                const _self = $(e.currentTarget)
+                _self.addClass('loading')
+                $modal.removeClass('loaded').addClass('loading')
+                $modal.modal('show')
+                $modal.find('.product-modal-content').html('')
+                $.ajax({
+                    url: _self.data('url'),
+                    type: 'GET',
+                    success: (res) => {
+                        if (!res.error) {
+                            $modal
+                                .find('.product-modal-content')
+                                .html(res.data)
+                            setTimeout(() => {
+                                MartApp.productGallery(true, $modal.find('.product-modal-content .product-gallery'))
+                                MartApp.lightBox()
+                                MartApp.lazyLoad($modal[0])
+                            }, 1000);
+                        }
+                    },
+                    error: () => {
+                    },
+                    complete: () => {
+                        $modal.addClass('loaded').removeClass('loading')
+                        _self.removeClass('loading')
+                    },
+                })
+            },
+        )
+    }
+
+    MartApp.productGallery = function(destroy, $gallery) {
+        if (!$gallery || !$gallery.length) {
+            $gallery = $('.product-gallery')
+        }
+
+        if ($gallery.length) {
+            const first = $gallery.find('.product-gallery__wrapper')
+            const second = $gallery.find('.product-gallery__variants')
+            if (destroy) {
+                if (first.length && first.hasClass('slick-initialized')) {
+                    first.slick('unslick')
+                }
+
+                if (second.length && second.hasClass('slick-initialized')) {
+                    second.slick('unslick')
+                }
+            }
+
+            first.not('.slick-initialized').slick({
+                rtl: MartApp.isRTL,
+                slidesToShow: 1,
+                slidesToScroll: 1,
+                infinite: false,
+                asNavFor: second,
+                dots: false,
+                prevArrow: MartApp.$iconChevronLeft,
+                nextArrow: MartApp.$iconChevronRight,
+                lazyLoad: 'ondemand',
+            })
+
+            second.not('.slick-initialized').slick({
+                rtl: MartApp.isRTL,
+                slidesToShow: 8,
+                slidesToScroll: 1,
+                infinite: false,
+                focusOnSelect: true,
+                asNavFor: first,
+                vertical: true,
+                prevArrow: '<span class="slick-prev-arrow svg-icon"><svg><use href="#svg-icon-arrow-up" xlink:href="#svg-icon-arrow-up"></use></svg></span>',
+                nextArrow: '<span class="slick-next-arrow svg-icon"><svg><use href="#svg-icon-chevron-down" xlink:href="#svg-icon-chevron-down"></use></svg></span>',
+                responsive: [
+                    {
+                        breakpoint: 768,
+                        settings: {
+                            slidesToShow: 6,
+                            vertical: false,
+                        },
+                    },
+                    {
+                        breakpoint: 480,
+                        settings: {
+                            slidesToShow: 3,
+                            vertical: false,
+                        },
+                    },
+                ],
+            })
+        }
+    }
+
+    MartApp.lightBox = function() {
+        $('.product-gallery--with-images').lightGallery({
+            selector: '.item a',
+            thumbnail: true,
+            share: false,
+            fullScreen: false,
+            autoplay: false,
+            autoplayControls: false,
+            actualSize: false,
+        })
+
+        let $galleries = $('.review-images-total.review-images')
+        if ($galleries.length) {
+            $galleries.map((index, value) => {
+                if (!$(value).data('lightGallery')) {
+                    $(value).lightGallery({
+                        selector: 'a',
+                        thumbnail: true,
+                        share: false,
+                        fullScreen: false,
+                        autoplay: false,
+                        autoplayControls: false,
+                        actualSize: false,
+                    })
+                }
+            })
+        }
+    }
+
+    MartApp.slickSlide = function(el) {
+        const $el = $(el)
+        if ($el.length && $el.not('.slick-initialized')) {
+            let slickOptions = $el.data('slick') || {}
+            if (slickOptions.appendArrows) {
+                slickOptions.appendArrows = $el
+                    .parent()
+                    .find(slickOptions.appendArrows)
+            }
+            slickOptions = Object.assign(slickOptions, {
+                rtl: MartApp.isRTL,
+                prevArrow: MartApp.$iconChevronLeft,
+                nextArrow: MartApp.$iconChevronRight,
+            })
+            $el.slick(slickOptions)
+        }
+    }
+
+    MartApp.slickSlides = function() {
+        $('.slick-slides-carousel')
+            .not('.slick-initialized')
+            .map(function(i, e) {
+                MartApp.slickSlide(e)
+            })
+    }
+
+    MartApp.lazyLoad = function(container, init = false) {
+        if (init) {
+            MartApp.lazyLoadInstance = new LazyLoad({
+                elements_selector: '.lazyload',
+                callback_error: img => {
+                    img.setAttribute('src', siteConfig.img_placeholder)
+                },
+            })
+        } else {
+            new LazyLoad({
+                container: container,
+                elements_selector: '.lazyload',
+                callback_error: img => {
+                    img.setAttribute('src', siteConfig.img_placeholder)
+                },
+            })
+        }
+    }
+
+    MartApp.productQuantity = function() {
+        MartApp.$body.on(
+            'click',
+            '.quantity .increase, .quantity .decrease',
+            function(e) {
+                e.preventDefault()
+                let $this = $(this),
+                    $wrapperBtn = $this.closest('.product-button'),
+                    $btn = $wrapperBtn.find('.quantity_button'),
+                    $price = $this
+                        .closest('.quantity')
+                        .siblings('.box-price')
+                        .find('.price-current'),
+                    $priceCurrent = $price.html(),
+                    $qty = $this.siblings('.qty'),
+                    step = parseInt($qty.attr('step'), 10),
+                    current = parseInt($qty.val(), 10),
+                    min = parseInt($qty.attr('min'), 10),
+                    max = parseInt($qty.attr('max'), 10)
+                min = min || 1
+                max = max || current + 1
+                if ($this.hasClass('decrease') && current > min) {
+                    $qty.val(current - step)
+                    $qty.trigger('change')
+                    let numQuantity = +$btn.attr('data-quantity')
+                    numQuantity = numQuantity - 1
+                    $btn.attr('data-quantity', numQuantity)
+                    let $total2 = (
+                        $priceCurrent * 1 -
+                        $priceCurrent / current
+                    ).toFixed(2)
+                    $price.html($total2)
+                }
+                if ($this.hasClass('increase') && current < max) {
+                    $qty.val(current + step)
+                    $qty.trigger('change')
+                    let numQuantity = +$btn.attr('data-quantity')
+                    numQuantity = numQuantity + 1
+                    $btn.attr('data-quantity', numQuantity)
+                    let $total = (
+                        $priceCurrent * 1 +
+                        $priceCurrent / current
+                    ).toFixed(2)
+                    $price.html($total)
+                }
+
+                MartApp.processUpdateCart($this)
+            },
+        )
+        MartApp.$body.on('keyup', '.quantity .qty', function(e) {
+            e.preventDefault()
+            let $this = $(this),
+                $wrapperBtn = $this.closest('.product-button'),
+                $btn = $wrapperBtn.find('.quantity_button'),
+                $price = $this
+                    .closest('.quantity')
+                    .siblings('.box-price')
+                    .find('.price-current'),
+                $priceFirst = $price.data('current'),
+                current = parseInt($this.val(), 10),
+                min = parseInt($this.attr('min'), 10),
+                max = parseInt($this.attr('max'), 10)
+            let min_check = min ? min : 1
+            let max_check = max ? max : current + 1
+            if (current <= max_check && current >= min_check) {
+                $btn.attr('data-quantity', current)
+                let $total = ($priceFirst * current).toFixed(2)
+                $price.html($total)
+            }
+
+            MartApp.processUpdateCart($this)
+        })
+    }
+
+    MartApp.addProductToWishlist = function() {
+        MartApp.$body.on('click', '.wishlist-button .wishlist', function(e) {
+            e.preventDefault()
+            const $btn = $(e.currentTarget)
+            $btn.addClass('loading')
+
+            $.ajax({
+                url: $btn.data('url'),
+                method: 'POST',
+                success: (res) => {
+                    if (res.error) {
+                        MartApp.showError(res.message)
+                        return false
+                    }
+
+                    MartApp.showSuccess(res.message)
+                    $('.btn-wishlist .header-item-counter').text(
+                        res.data.count,
+                    )
+                    if (res.data?.added) {
+                        $(
+                            '.wishlist-button .wishlist[data-url="' + $btn.data('url') + '"]',
+                        ).addClass('added-to-wishlist')
+                    } else {
+                        $(
+                            '.wishlist-button .wishlist[data-url="' + $btn.data('url') + '"]',
+                        ).removeClass('added-to-wishlist')
+                    }
+                },
+                error: (res) => {
+                    MartApp.showError(res.message)
+                },
+                complete: () => {
+                    $btn.removeClass('loading')
+                },
+            })
+        })
+    }
+
+    MartApp.addProductToCompare = function() {
+        MartApp.$body.on('click', '.compare-button .compare', function(e) {
+            e.preventDefault()
+            const $btn = $(e.currentTarget)
+            $btn.addClass('loading')
+
+            $.ajax({
+                url: $btn.data('url'),
+                method: 'POST',
+                success: (res) => {
+                    if (res.error) {
+                        MartApp.showError(res.message)
+                        return false
+                    }
+                    MartApp.showSuccess(res.message)
+                    $('.btn-compare .header-item-counter').text(res.data.count)
+                },
+                error: (res) => {
+                    MartApp.showError(res.message)
+                },
+                complete: () => {
+                    $btn.removeClass('loading')
+                },
+            })
+        })
+    }
+
+    MartApp.addProductToCart = function() {
+        MartApp.$body.on('click', 'form.cart-form button[type=submit]', function(e) {
+            e.preventDefault()
+            const $form = $(this).closest('form.cart-form')
+            const $btn = $(this)
+            $btn.addClass('loading')
+
+            let data = $form.serializeArray()
+            data.push({ name: 'checkout', value: $btn.prop('name') === 'checkout' ? 1 : 0 })
+
+            $.ajax({
+                type: 'POST',
+                url: $form.prop('action'),
+                data: $.param(data),
+                success: (res) => {
+
+                    if (res.error) {
+                        MartApp.showError(res.message)
+                        if (res.data.next_url !== undefined) {
+                            window.location.href = res.data.next_url
+                        }
+
+                        return false
+                    }
+
+                    if (res.data.next_url !== undefined) {
+                        window.location.href = res.data.next_url
+                        return false
+                    }
+
+                    MartApp.showSuccess(res.message)
+                    MartApp.loadAjaxCart()
+                },
+                error: (res) => {
+                    MartApp.handleError(res, $form)
+                },
+                complete: () => {
+                    $btn.removeClass('loading')
+                },
+            })
+        })
+    }
+
+    MartApp.applyCouponCode = function() {
+        $(document).on('keypress', '.form-coupon-wrapper .coupon-code', e => {
+            if (e.key === 'Enter') {
+                e.preventDefault()
+                e.stopPropagation()
+                $(e.currentTarget).closest('.form-coupon-wrapper').find('.btn-apply-coupon-code').trigger('click')
+                return false
+            }
+        })
+
+        $(document).on('click', '.btn-apply-coupon-code', e => {
+            e.preventDefault()
+            let _self = $(e.currentTarget)
+
+            $.ajax({
+                url: _self.data('url'),
+                type: 'POST',
+                data: {
+                    coupon_code: _self.closest('.form-coupon-wrapper').find('.coupon-code').val(),
+                },
+                beforeSend: () => {
+                    _self.prop('disabled', true).addClass('loading')
+                },
+                success: (res) => {
+                    if (!res.error) {
+                        $('.cart-page-content').load(window.location.href + '?applied_coupon=1 .cart-page-content > *', function() {
+                            _self.prop('disabled', false).removeClass('loading')
+                            MartApp.showSuccess(res.message)
+                        })
+                    } else {
+                        MartApp.showError(res.message)
+                    }
+                },
+                error: data => {
+                    MartApp.handleError(data)
+                },
+                complete: (res) => {
+                    if (!(res.status == 200 && res?.responseJSON?.error == false)) {
+                        _self.prop('disabled', false).removeClass('loading')
+                    }
+                },
+            })
+        })
+
+        $(document).on('click', '.btn-remove-coupon-code', e => {
+            e.preventDefault()
+            const _self = $(e.currentTarget)
+            const buttonText = _self.text()
+            _self.text(_self.data('processing-text'))
+
+            $.ajax({
+                url: _self.data('url'),
+                type: 'POST',
+                success: (res) => {
+                    if (!res.error) {
+                        $('.cart-page-content').load(window.location.href + ' .cart-page-content > *', function() {
+                            _self.text(buttonText)
+                        })
+                    } else {
+                        MartApp.showError(res.message)
+                    }
+                },
+                error: data => {
+                    MartApp.handleError(data)
+                },
+                complete: (res) => {
+                    if (!(res.status == 200 && res?.responseJSON?.error == false)) {
+                        _self.text(buttonText)
+                    }
+                },
+            })
+        })
+    }
+
+    MartApp.loadAjaxCart = function() {
+        if (window.siteConfig?.ajaxCart) {
+            $.ajax({
+                url: window.siteConfig.ajaxCart,
+                method: 'GET',
+                success: function(res) {
+                    if (!res.error) {
+                        $('.mini-cart-content .widget-shopping-cart-content').html(res.data.html)
+                        $('.btn-shopping-cart .header-item-counter').text(res.data.count)
+                        $('.cart--mini .cart-price-total .cart-amount span').text(res.data.total_price)
+                        $('.menu--footer .icon-cart .cart-counter').text(res.data.count)
+                        MartApp.lazyLoad($('.mini-cart-content')[0])
+                    }
+                },
+            })
+        }
+    }
+
+    MartApp.changeInputInSearchForm = function(parseParams) {
+        isReadySubmitTrigger = false
+        MartApp.$formSearch
+            .find('input, select, textarea')
+            .each(function(e, i) {
+                const $el = $(i)
+                const name = $el.attr('name')
+                let value = parseParams[name] || null
+                const type = $el.attr('type')
+                switch (type) {
+                    case 'checkbox':
+                        $el.prop('checked', false)
+                        if (Array.isArray(value)) {
+                            $el.prop('checked', value.includes($el.val()))
+                        } else {
+                            $el.prop('checked', !!value)
+                        }
+                        break
+                    default:
+                        if ($el.is('[name=max_price]')) {
+                            $el.val(value || $el.data('max'))
+                        } else if ($el.is('[name=min_price]')) {
+                            $el.val(value || $el.data('min'))
+                        } else if ($el.val() != value) {
+                            $el.val(value)
+                        }
+                        break
+                }
+            })
+        isReadySubmitTrigger = true
+    }
+
+    MartApp.convertFromDataToArray = function(formData) {
+        let data = []
+        formData.forEach(function(obj) {
+            if (obj.value) {
+                // break with price
+                if (['min_price', 'max_price'].includes(obj.name)) {
+                    const dataValue = MartApp.$formSearch
+                        .find('input[name=' + obj.name + ']')
+                        .data(obj.name.substring(0, 3))
+                    if (dataValue == parseInt(obj.value)) {
+                        return
+                    }
+                }
+                data.push(obj)
+            }
+        })
+        return data
+    }
+
+    let isReadySubmitTrigger = true
+
+    MartApp.productsFilter = function() {
+        MartApp.widgetProductCategories = '.widget-product-categories'
+        MartApp.$widgetProductCategories = $(MartApp.widgetProductCategories)
+
+        $(document).on('change', '#products-filter-form .product-filter-item', function() {
+            if (isReadySubmitTrigger) {
+                $(this).closest('form').trigger('submit')
+            }
+        })
+
+        function openCategoryFilter($li) {
+            if (!$li) {
+                const $categories = $('.widget-product-categories').find('li a.active')
+                if ($categories.length) {
+                    MartApp.$widgetProductCategories.find('.widget-layered-nav-list > ul > li.category-filter').addClass('d-none')
+                } else {
+                    MartApp.$widgetProductCategories.find('.widget-layered-nav-list > ul > li.category-filter').removeClass('d-none')
+                    MartApp.$widgetProductCategories.find('.show-all-product-categories').addClass('d-none')
+                }
+                MartApp.$widgetProductCategories.find('.widget-layered-nav-list li.category-filter').removeClass('opened')
+
+                $categories.map(function(e, i) {
+                    const $parent = $(i).closest('li.category-filter').closest('ul').closest('li.category-filter')
+                    $parent.removeClass('d-none')
+
+                    if ($parent.length) {
+                        openCategoryFilter($parent)
+                        MartApp.$widgetProductCategories.find('.show-all-product-categories').removeClass('d-none')
+                    } else {
+                        MartApp.$widgetProductCategories.find('li.category-filter').removeClass('d-none')
+                        MartApp.$widgetProductCategories.find('.show-all-product-categories').addClass('d-none')
+                    }
+                })
+            } else if ($li.length) {
+                $li.addClass('opened')
+                $li.removeClass('d-none')
+                $li.find('> .widget-layered-nav-list__item .nav-list__item-link').removeClass('active')
+
+                if ($li.closest('ul').closest('li.category-filter').length) {
+                    openCategoryFilter($li.closest('ul').closest('li.category-filter'))
+                }
+            }
+
+            MartApp.$widgetProductCategories.find('.loading-skeleton').removeClass('loading-skeleton')
+        }
+
+        openCategoryFilter()
+
+        $('.catalog-toolbar__ordering input[name=sort-by]').on('change', function(e) {
+            MartApp.$formSearch.find('input[name=sort-by]').val($(e.currentTarget).val())
+            MartApp.$formSearch.trigger('submit')
+        })
+
+        MartApp.$body.on('click', '.cat-menu-close', function(e) {
+            e.preventDefault()
+            $(this).closest('li').toggleClass('opened')
+        })
+
+        $(document).on('click', MartApp.widgetProductCategories + ' li a', function(e) {
+            e.preventDefault()
+            const $this = $(e.currentTarget)
+            const actived = $this.hasClass('active')
+            const $parent = $this.closest(MartApp.widgetProductCategories)
+            $parent.find('li a').removeClass('active')
+            $this.addClass('active')
+            let categoryId = $this.data('id')
+
+            if (categoryId) {
+                let $item = $parent.find('.widget-layered-nav-list .nav-list__item-link[data-id=' + categoryId + ']')
+                $item.addClass('active')
+
+                openCategoryFilter()
+            } else {
+                $parent.find('.widget-layered-nav-list .category-filter').removeClass('opened d-none')
+                $parent.find('.show-all-product-categories').addClass('d-none')
+            }
+            const $form = $this.closest(MartApp.formSearch)
+
+            $form.find('.widget-product-brands ul li, .dropdown-swatches-wrapper, .text-swatches-wrapper, .visual-swatches-wrapper').each(function(i, el) {
+                let $el = $(el)
+                let categories = $el.data('categories')
+                if (categories && Array.isArray(categories) && categories.length) {
+                    if (!categories.includes(categoryId)) {
+                        $el.addClass('d-none')
+                        $el.find('input').prop('checked', false)
+                        $el.find('select').val('')
+                    } else {
+                        $el.removeClass('d-none')
+                    }
+                }
+            })
+
+            const $input = $parent.find('input[name=\'categories[]\']')
+            if ($input.length) {
+                if (actived) {
+                    $this.removeClass('active')
+                    $input.val('')
+                } else {
+                    $input.val(categoryId)
+                }
+                $input.trigger('change')
+            } else {
+                let href = $this.attr('href')
+
+                MartApp.$formSearch.attr('action', href).trigger('submit')
+            }
+        })
+
+        $(document).on('submit', '#products-filter-form', function(e) {
+            e.preventDefault()
+            const $form = $(e.currentTarget)
+            const formData = $form.serializeArray()
+            let data = MartApp.convertFromDataToArray(formData)
+            let uriData = []
+
+            // Paginate
+            const $elPage = MartApp.$productListing.find('input[name=page]')
+            if ($elPage.val()) {
+                data.push({ name: 'page', value: $elPage.val() })
+            }
+
+            // Without "s" param
+            data.map(function(obj) {
+                uriData.push(encodeURIComponent(obj.name) + '=' + obj.value)
+            })
+
+            const nextHref =
+                $form.attr('action') +
+                (uriData && uriData.length ? '?' + uriData.join('&') : '')
+
+            // add to params get to popstate not show json
+            data.push({ name: '_', value: +new Date() })
+
+            $.ajax({
+                url: $form.attr('action'),
+                type: 'GET',
+                data: data,
+                beforeSend: function() {
+                    // Show loading before sending
+                    MartApp.$productListing.find('.loading').show()
+                    // Animation scroll to filter button
+                    $('html, body').animate({ scrollTop: MartApp.$productListing.offset().top - 200 }, 500)
+                    // Change price step;
+                    const priceStep = MartApp.$formSearch.find('.nonlinear')
+                    if (priceStep.length) {
+                        priceStep[0].noUiSlider.set([
+                            MartApp.$formSearch
+                                .find('input[name=min_price]')
+                                .val(),
+                            MartApp.$formSearch
+                                .find('input[name=max_price]')
+                                .val(),
+                        ])
+                    }
+                    MartApp.toggleSidebarFilterProducts()
+                },
+                success: function(res) {
+                    if (res.error == false) {
+                        MartApp.$productListing.html(res.data)
+
+                        const total = res.message
+                        if (total && $('.products-found').length) {
+                            $('.products-found').html('<span class="text-primary me-1">' + total.substr(0, total.indexOf(' ')) +
+                                '</span>' + total.substr(total.indexOf(' ') + 1))
+                        }
+
+                        MartApp.lazyLoad(MartApp.$productListing[0])
+                        let title = res.additional?.category?.name || MartApp.$formSearch.data('title')
+                        $('h1.catalog-header__title').text(title)
+                        document.title = title
+
+                        if (res.additional?.breadcrumb) {
+                            $('.page-breadcrumbs div').html(res.additional.breadcrumb)
+                        }
+
+                        if (nextHref != window.location.href) {
+                            window.history.pushState(
+                                data,
+                                res.message,
+                                nextHref,
+                            )
+                        }
+                    } else {
+                        MartApp.showError(res.message || 'Opp!')
+                    }
+                },
+                error: function(res) {
+                    MartApp.handleError(res)
+                },
+                complete: function() {
+                    MartApp.$productListing.find('.loading').hide()
+                },
+            })
+        })
+
+        if (MartApp.$formSearch.length) {
+            window.addEventListener(
+                'popstate',
+                function() {
+                    let url = window.location.origin + window.location.pathname
+                    MartApp.$formSearch.attr('action', url)
+                    const parseParams = MartApp.parseParamsSearch()
+                    MartApp.changeInputInSearchForm(parseParams)
+                    MartApp.$formSearch.trigger('submit')
+                },
+                false,
+            )
+        }
+
+        $(document).on(
+            'click',
+            MartApp.productListing + ' .pagination a',
+            function(e) {
+                e.preventDefault()
+                let url = new URL($(e.currentTarget).attr('href'))
+                let page = url.searchParams.get('page')
+                MartApp.$productListing.find('input[name=page]').val(page)
+                MartApp.$formSearch.trigger('submit')
+            },
+        )
+    }
+
+    MartApp.parseParamsSearch = function(query, includeArray = false) {
+        let pairs = query || window.location.search.substring(1)
+        let re = /([^&=]+)=?([^&]*)/g
+        let decodeRE = /\+/g  // Regex for replacing addition symbol with a space
+        let decode = function(str) {
+            return decodeURIComponent(str.replace(decodeRE, ' '))
+        }
+        let params = {}, e
+        while (e = re.exec(pairs)) {
+            let k = decode(e[1]), v = decode(e[2])
+            if (k.substring(k.length - 2) == '[]') {
+                if (includeArray) {
+                    k = k.substring(0, k.length - 2)
+                }
+                (params[k] || (params[k] = [])).push(v)
+            } else params[k] = v
+        }
+        return params
+    }
+
+    MartApp.searchProducts = function() {
+        $('body').on('click', function(e) {
+            if (!$(e.target).closest('.form--quick-search').length) {
+                $('.panel--search-result').removeClass('active')
+            }
+        })
+
+        let currentRequest = null
+        $('.form--quick-search .input-search-product')
+            .on('keyup', function() {
+                const $form = $(this).closest('form')
+                ajaxSearchProduct($form)
+            })
+
+        $('.form--quick-search .product-category-select').on('change', function() {
+            const $form = $(this).closest('form')
+            ajaxSearchProduct($form)
+        })
+
+        $('.form--quick-search').on('click', '.loadmore', function(e) {
+            e.preventDefault()
+            const $form = $(this).closest('form')
+            $(this).addClass('loading')
+            ajaxSearchProduct($form, $(this).attr('href'))
+        })
+
+        function ajaxSearchProduct($form, url = null) {
+            const $panel = $form.find('.panel--search-result')
+            const k = $form.find('.input-search-product').val()
+            if (!k) {
+                $panel.html('').removeClass('active')
+                return
+            }
+            const $button = $form.find('button[type=submit]')
+
+            currentRequest = $.ajax({
+                type: 'GET',
+                url: url || $form.data('ajax-url'),
+                data: url ? [] : $form.serialize(),
+                beforeSend: function() {
+                    if (currentRequest != null) {
+                        currentRequest.abort()
+                    }
+
+                    $button.addClass('loading')
+                },
+                success: (res) => {
+                    if (!res.error) {
+                        if (url) {
+                            const $content = $('<div>' + res.data + '</div>')
+                            $panel.find('.panel__content').find('.loadmore-container').remove()
+                            $panel.find('.panel__content').append($content.find('.panel__content').contents())
+                        } else {
+                            $panel.html(res.data).addClass('active')
+                        }
+                    } else {
+                        $panel.html('').removeClass('active')
+                    }
+
+                    $button.removeClass('loading')
+                },
+                error: () => {
+                    $button.removeClass('loading')
+                },
+            })
+        }
+    }
+
+    MartApp.processUpdateCart = function($this) {
+        const $form = $('.cart-page-content').find('.form--shopping-cart')
+
+        if (!$form.length) {
+            return false
+        }
+
+        $.ajax({
+            type: 'POST',
+            cache: false,
+            url: $form.prop('action'),
+            data: new FormData($form[0]),
+            contentType: false,
+            processData: false,
+            beforeSend: () => {
+                $this.addClass('loading')
+            },
+            success: (res) => {
+                if (res.error) {
+                    MartApp.showError(res.message)
+                    return false
+                }
+
+                $('.cart-page-content').load(window.siteConfig.cartUrl + ' .cart-page-content > *', function() {
+                    MartApp.lazyLoad($('.cart-page-content')[0])
+                })
+
+                MartApp.loadAjaxCart()
+
+                MartApp.showSuccess(res.message)
+            },
+            error: (res) => {
+                $this.closest('.ps-table--shopping-cart').removeClass('content-loading')
+                MartApp.handleError(res)
+            },
+            complete: () => {
+                $this.removeClass('loading')
+            },
+        })
+    }
+
+    MartApp.ajaxUpdateCart = function(_self) {
+        $(document).on('click', '.cart-page-content .update_cart', function(e) {
+            e.preventDefault()
+            const $this = $(e.currentTarget)
+
+            MartApp.processUpdateCart($this)
+        })
+    }
+
+    MartApp.removeCartItem = function() {
+        $(document).on('click', '.remove-cart-item', function(event) {
+            event.preventDefault()
+            let _self = $(this)
+
+            $.ajax({
+                url: _self.data('url'),
+                method: 'GET',
+                beforeSend: () => {
+                    _self.addClass('loading')
+                },
+                success: (res) => {
+                    if (res.error) {
+                        MartApp.showError(res.message)
+                        return false
+                    }
+
+                    const $cartContent = $('.cart-page-content')
+
+                    if ($cartContent.length && window.siteConfig?.cartUrl) {
+                        $cartContent.load(window.siteConfig.cartUrl + ' .cart-page-content > *', function() {
+                            MartApp.lazyLoad($cartContent[0])
+                        })
+                    }
+
+                    MartApp.loadAjaxCart()
+                },
+                error: (res) => {
+                    MartApp.handleError(res)
+                },
+                complete: () => {
+                    _self.removeClass('loading')
+                },
+            })
+        })
+    }
+
+    MartApp.removeWishlistItem = function() {
+        $(document).on('click', '.remove-wishlist-item', function(event) {
+            event.preventDefault()
+            let _self = $(this)
+
+            $.ajax({
+                url: _self.data('url'),
+                method: 'POST',
+                data: {
+                    _method: 'DELETE',
+                },
+                beforeSend: () => {
+                    _self.addClass('loading')
+                },
+                success: (res) => {
+                    if (res.error) {
+                        MartApp.showError(res.message)
+                    } else {
+                        MartApp.showSuccess(res.message)
+                        $('.btn-wishlist .header-item-counter').text(res.data.count)
+                        _self.closest('tr').remove()
+                    }
+                },
+                error: (res) => {
+                    MartApp.handleError(res)
+                },
+                complete: () => {
+                    _self.removeClass('loading')
+                },
+            })
+        })
+    }
+
+    MartApp.removeCompareItem = function() {
+        $(document).on('click', '.remove-compare-item', function(event) {
+            event.preventDefault()
+            let _self = $(this)
+
+            $.ajax({
+                url: _self.data('url'),
+                method: 'POST',
+                data: {
+                    _method: 'DELETE',
+                },
+                beforeSend: () => {
+                    _self.addClass('loading')
+                },
+                success: (res) => {
+                    if (res.error) {
+                        MartApp.showError(res.message)
+                    } else {
+                        MartApp.showSuccess(res.message)
+                        $('.btn-compare .header-item-counter').text(res.data.count)
+                        $('.compare-page-content').load(window.location.href + ' .compare-page-content > *')
+                    }
+                },
+                error: (res) => {
+                    MartApp.handleError(res)
+                },
+                complete: () => {
+                    _self.removeClass('loading')
+                },
+            })
+        })
+    }
+
+    MartApp.handleTabBootstrap = function() {
+        let hash = window.location.hash
+        if (hash) {
+            let tabTriggerEl = $('a[href="' + hash + '"]')
+            if (tabTriggerEl.length) {
+                let tab = new bootstrap.Tab(tabTriggerEl[0])
+                tab.show()
+            }
+        }
+    }
+
+    MartApp.filterSlider = function() {
+        $('.nonlinear').each(function(index, element) {
+            let $element = $(element)
+            let min = $element.data('min')
+            let max = $element.data('max')
+            let $wrapper = $(element).closest('.nonlinear-wrapper')
+            noUiSlider.create(element, {
+                connect: true,
+                behaviour: 'tap',
+                start: [
+                    $wrapper.find('.product-filter-item-price-0').val(),
+                    $wrapper.find('.product-filter-item-price-1').val(),
+                ],
+                range: {
+                    min: min,
+                    '10%': max * 0.1,
+                    '20%': max * 0.2,
+                    '30%': max * 0.3,
+                    '40%': max * 0.4,
+                    '50%': max * 0.5,
+                    '60%': max * 0.6,
+                    '70%': max * 0.7,
+                    '80%': max * 0.8,
+                    '90%': max * 0.9,
+                    max: max,
+                },
+            })
+
+            let nodes = [
+                $wrapper.find('.slider__min'),
+                $wrapper.find('.slider__max'),
+            ]
+
+            element.noUiSlider.on('update', function(values, handle) {
+                nodes[handle].html(MartApp.numberFormat(values[handle]))
+            })
+
+            element.noUiSlider.on('change', function(values, handle) {
+                $wrapper
+                    .find('.product-filter-item-price-' + handle)
+                    .val(Math.round(values[handle]))
+                    .trigger('change')
+            })
+        })
+    }
+
+    MartApp.numberFormat = function(
+        number,
+        decimals,
+        dec_point,
+        thousands_sep,
+    ) {
+        let n = !isFinite(+number) ? 0 : +number,
+            prec = !isFinite(+decimals) ? 0 : Math.abs(decimals),
+            sep = typeof thousands_sep === 'undefined' ? ',' : thousands_sep,
+            dec = typeof dec_point === 'undefined' ? '.' : dec_point,
+            toFixedFix = function(n, prec) {
+                // Fix for IE parseFloat(0.55).toFixed(0) = 0;
+                let k = Math.pow(10, prec)
+                return Math.round(n * k) / k
+            },
+            s = (prec ? toFixedFix(n, prec) : Math.round(n))
+                .toString()
+                .split('.')
+
+        if (s[0].length > 3) {
+            s[0] = s[0].replace(/\B(?=(?:\d{3})+(?!\d))/g, sep)
+        }
+
+        if ((s[1] || '').length < prec) {
+            s[1] = s[1] || ''
+            s[1] += new Array(prec - s[1].length + 1).join('0')
+        }
+        return s.join(dec)
+    }
+
+    MartApp.submitReviewProduct = function() {
+        let imagesReviewBuffer = []
+        let setImagesFormReview = function(input) {
+            const dT = new ClipboardEvent('').clipboardData || // Firefox < 62 workaround exploiting https://bugzilla.mozilla.org/show_bug.cgi?id=1422655
+                new DataTransfer() // specs compliant (as of March 2018 only Chrome)
+            for (let file of imagesReviewBuffer) {
+                dT.items.add(file)
+            }
+            input.files = dT.files
+            loadPreviewImage(input)
+        }
+
+        let loadPreviewImage = function(input) {
+            let $uploadText = $('.image-upload__text')
+            const maxFiles = $(input).data('max-files')
+            let filesAmount = input.files.length
+
+            if (maxFiles) {
+                if (filesAmount >= maxFiles) {
+                    $uploadText.closest('.image-upload__uploader-container').addClass('d-none')
+                } else {
+                    $uploadText.closest('.image-upload__uploader-container').removeClass('d-none')
+                }
+                $uploadText.text(filesAmount + '/' + maxFiles)
+            } else {
+                $uploadText.text(filesAmount)
+            }
+            const viewerList = $('.image-viewer__list')
+            const $template = $('#review-image-template').html()
+
+            viewerList.addClass('is-loading')
+            viewerList.find('.image-viewer__item').remove()
+
+            if (filesAmount) {
+                for (let i = filesAmount - 1; i >= 0; i--) {
+                    viewerList.prepend($template.replace('__id__', i))
+                }
+                for (let j = filesAmount - 1; j >= 0; j--) {
+                    let reader = new FileReader()
+                    reader.onload = function(event) {
+                        viewerList
+                            .find('.image-viewer__item[data-id=' + j + ']')
+                            .find('img')
+                            .attr('src', event.target.result)
+                    }
+                    reader.readAsDataURL(input.files[j])
+                }
+            }
+            viewerList.removeClass('is-loading')
+        }
+
+        $(document).on('change', '.form-review-product input[type=file]', function(event) {
+            event.preventDefault()
+            let input = this
+            let $input = $(input)
+            let maxSize = $input.data('max-size')
+            Object.keys(input.files).map(function(i) {
+                if (maxSize && (input.files[i].size / 1024) > maxSize) {
+                    let message = $input.data('max-size-message')
+                        .replace('__attribute__', input.files[i].name)
+                        .replace('__max__', maxSize)
+                    MartApp.showError(message)
+                } else {
+                    imagesReviewBuffer.push(input.files[i])
+                }
+            })
+
+            let filesAmount = imagesReviewBuffer.length
+            const maxFiles = $input.data('max-files')
+            if (maxFiles && filesAmount > maxFiles) {
+                imagesReviewBuffer.splice(filesAmount - maxFiles - 1, filesAmount - maxFiles)
+            }
+
+            setImagesFormReview(input)
+        })
+
+        $(document).on('click', '.form-review-product .image-viewer__icon-remove', function(event) {
+            event.preventDefault()
+            const $this = $(event.currentTarget)
+            let id = $this.closest('.image-viewer__item').data('id')
+            imagesReviewBuffer.splice(id, 1)
+
+            let input = $('.form-review-product input[type=file]')[0]
+            setImagesFormReview(input)
+        })
+
+        if (sessionStorage.reloadReviewsTab) {
+            if ($('#product-detail-tabs a[href="#product-reviews"]').length) {
+                new bootstrap.Tab($('#product-detail-tabs a[href="#product-reviews"]')[0]).show()
+            }
+            sessionStorage.reloadReviewsTab = false
+        }
+
+        $(document).on('click', '.form-review-product button[type=submit]', function(e) {
+            e.preventDefault()
+            e.stopPropagation()
+            const $this = $(e.currentTarget)
+
+            const $form = $(this).closest('form')
+            $.ajax({
+                type: 'POST',
+                cache: false,
+                url: $form.prop('action'),
+                data: new FormData($form[0]),
+                contentType: false,
+                processData: false,
+                beforeSend: () => {
+                    $this.prop('disabled', true).addClass('loading')
+                },
+                success: (res) => {
+                    if (!res.error) {
+                        $form.find('select').val(0)
+                        $form.find('textarea').val('')
+
+                        MartApp.showSuccess(res.message)
+
+                        setTimeout(function() {
+                            sessionStorage.reloadReviewsTab = true
+                            window.location.reload()
+                        }, 1500)
+                    } else {
+                        MartApp.showError(res.message)
+                    }
+                },
+                error: (res) => {
+                    MartApp.handleError(res, $form)
+                },
+                complete: () => {
+                    $this.prop('disabled', false).removeClass('loading')
+                },
+            })
+        })
+
+    }
+
+    MartApp.vendorRegisterForm = function() {
+        $(document).on('click', 'input[name=is_vendor]', function() {
+            if ($(this).val() == 1) {
+                $('.show-if-vendor').slideDown().show()
+            } else {
+                $('.show-if-vendor').slideUp(500)
+                $(this).closest('form').find('button[type=submit]').prop('disabled', false)
+            }
+        })
+
+        $('#shop-url-register')
+            .on('keyup', function() {
+                let displayURL = $(this).closest('.form-group').find('span small')
+                displayURL.html(displayURL.data('base-url') + '/<strong>' + $(this).val().toLowerCase() + '</strong>')
+            })
+            .on('change', function() {
+                const $this = $(this)
+                const url = $this.val()
+                if (!url) {
+                    return
+                }
+                let displayURL = $this.closest('.form-group').find('span small')
+
+                $.ajax({
+                    url: $this.data('url'),
+                    type: 'POST',
+                    data: { url },
+                    beforeSend: () => {
+                        $this.prop('disabled', true)
+                        $this.closest('form').find('button[type=submit]').prop('disabled', true)
+                    },
+                    success: (res) => {
+                        if (res.error) {
+                            $this.addClass('is-invalid').removeClass('is-valid')
+                            $('.shop-url-status').removeClass('text-success').addClass('text-danger').text(res.message)
+                        } else {
+                            $this.addClass('is-valid').removeClass('is-invalid')
+                            $('.shop-url-status').removeClass('text-danger').addClass('text-success').text(res.message)
+                            $this.closest('form').find('button[type=submit]').prop('disabled', false)
+                        }
+                        if (res.data?.slug) {
+                            displayURL.html(displayURL.data('base-url') + '/<strong>' + res.data?.slug + '</strong>')
+                        }
+                    },
+                    error: () => {
+                    },
+                    complete: () => {
+                        $this.prop('disabled', false)
+                    },
+                })
+            })
+    }
+
+    MartApp.customerDashboard = function() {
+        if ($.fn.datepicker) {
+            $('#date_of_birth').datepicker({
+                format: 'yyyy-mm-dd',
+                orientation: 'bottom',
+            })
+        }
+
+        $('#avatar').on('change', event => {
+            let input = event.currentTarget
+            if (input.files && input.files[0]) {
+                let reader = new FileReader()
+                reader.onload = e => {
+                    $('.userpic-avatar')
+                        .attr('src', e.target.result)
+                }
+                reader.readAsDataURL(input.files[0])
+            }
+        })
+
+        $(document).on('click', '.btn-trigger-delete-address', function(event) {
+            event.preventDefault()
+            $('.btn-confirm-delete').data('url', $(this).data('url'))
+            $('#confirm-delete-modal').modal('show')
+        })
+
+        $(document).on('click', '.btn-confirm-delete', function(event) {
+            event.preventDefault()
+            let $current = $(this)
+            $.ajax({
+                url: $current.data('url'),
+                type: 'GET',
+                beforeSend: () => {
+                    $current.addClass('loading')
+                },
+                success: (res) => {
+                    $current.closest('.modal').modal('hide')
+                    if (res.error) {
+                        MartApp.showError(res.message)
+                    } else {
+                        MartApp.showSuccess(res.message)
+                        $('.btn-trigger-delete-address[data-url="' + $current.data('url') + '"]').closest('.col').remove()
+                    }
+                },
+                error: (res) => {
+                    MartApp.handleError(res)
+                },
+                complete: () => {
+                    $current.removeClass('loading')
+                },
+            })
+        })
+    }
+
+    MartApp.newsletterForm = function() {
+        $(document).on('submit', 'form.subscribe-form', function(e) {
+            e.preventDefault()
+            e.stopPropagation()
+            const $this = $(e.currentTarget)
+
+            let _self = $this.find('button[type=submit]')
+
+            $.ajax({
+                type: 'POST',
+                cache: false,
+                url: $this.prop('action'),
+                data: new FormData($this[0]),
+                contentType: false,
+                processData: false,
+                beforeSend: () => {
+                    _self.prop('disabled', true).addClass('button-loading')
+                },
+                success: (res) => {
+                    if (typeof refreshRecaptcha !== 'undefined') {
+                        refreshRecaptcha()
+                    }
+
+                    if (!res.error) {
+                        $this.find('input[type=email]').val('')
+                        MartApp.showSuccess(res.message)
+                    } else {
+                        MartApp.showError(res.message)
+                    }
+                },
+                error: (res) => {
+                    if (typeof refreshRecaptcha !== 'undefined') {
+                        refreshRecaptcha()
+                    }
+                    MartApp.handleError(res)
+                },
+                complete: () => {
+                    _self.prop('disabled', false).removeClass('button-loading')
+                },
+            })
+        })
+    }
+
+    MartApp.contactSellerForm = function() {
+        $(document).on('click', 'form.form-contact-store button[type=submit]', function(e) {
+            e.preventDefault()
+            e.stopPropagation()
+            const $this = $(e.currentTarget)
+
+            let $form = $this.closest('form')
+
+            $.ajax({
+                type: 'POST',
+                cache: false,
+                url: $form.prop('action'),
+                data: new FormData($form[0]),
+                contentType: false,
+                processData: false,
+                beforeSend: () => {
+                    $this.prop('disabled', true).addClass('button-loading')
+                },
+                success: (res) => {
+                    if (typeof refreshRecaptcha !== 'undefined') {
+                        refreshRecaptcha()
+                    }
+
+                    if (!res.error) {
+                        $form.find('input[type=email]:not(:disabled)').val('')
+                        $form.find('input[type=text]:not(:disabled)').val('')
+                        $form.find('textarea').val('')
+                        MartApp.showSuccess(res.message)
+                    } else {
+                        MartApp.showError(res.message)
+                    }
+                },
+                error: (res) => {
+                    if (typeof refreshRecaptcha !== 'undefined') {
+                        refreshRecaptcha()
+                    }
+                    MartApp.handleError(res)
+                },
+                complete: () => {
+                    $this.prop('disabled', false).removeClass('button-loading')
+                },
+            })
+        })
+    }
+
+    MartApp.recentlyViewedProducts = function() {
+        MartApp.$body.find('.header-recently-viewed').each(function() {
+            const $el = $(this)
+            let loading
+            $el.hover(function() {
+                const $recently = $el.find('.recently-viewed-products')
+                if ($el.data('loaded') || loading) {
+                    return
+                }
+                const url = $el.data('url')
+                if (!url) {
+                    return
+                }
+                $.ajax({
+                    type: 'GET',
+                    url,
+                    beforeSend: () => {
+                        loading = true
+                    },
+                    success: (res) => {
+                        if (!res.error) {
+                            $recently.html(res.data)
+
+                            if ($recently.find('.product-list li').length > 0) {
+                                MartApp.slickSlide($recently.find('.product-list'))
+                            }
+                            $el.data('loaded', true).find('.loading--wrapper').addClass('d-none')
+                        } else {
+                            MartApp.showError(res.message)
+                        }
+                    },
+                    error: (res) => {
+                        MartApp.handleError(res)
+                    },
+                    complete: () => {
+                        loading = false
+                    },
+                })
+            })
+        })
+    }
+
+    MartApp.showNotice = function(messageType, message) {
+        MartApp.$toastLive.removeClass(function(index, className) {
+            return (className.match(/(^|\s)toast--\S+/g) || []).join(' ')
+        })
+        MartApp.$toastLive.addClass('toast--' + messageType)
+        MartApp.$toastLive.find('.toast-body .toast-message').html(message)
+        MartApp.toast.show()
+    }
+
+    MartApp.showError = function(message) {
+        this.showNotice('error', message)
+    }
+
+    MartApp.showSuccess = function(message) {
+        this.showNotice('success', message)
+    }
+
+    MartApp.handleError = (data) => {
+        if (typeof data.errors !== 'undefined' && data.errors.length) {
+            MartApp.handleValidationError(data.errors)
+        } else if (typeof data.responseJSON !== 'undefined') {
+            if (typeof data.responseJSON.errors !== 'undefined') {
+                if (data.status === 422) {
+                    MartApp.handleValidationError(data.responseJSON.errors)
+                }
+            } else if (typeof data.responseJSON.message !== 'undefined') {
+                MartApp.showError(data.responseJSON.message)
+            } else {
+                MartApp.showError(data.responseJSON.join(', ').join(', '))
+            }
+        } else {
+            MartApp.showError(data.statusText)
+        }
+    }
+
+    MartApp.handleValidationError = (errors) => {
+        let message = ''
+        $.each(errors, (index, item) => {
+            if (message !== '') {
+                message += '<br />'
+            }
+            message += item
+        })
+        MartApp.showError(message)
+    }
+
+    MartApp.toggleViewProducts = function() {
+        $(document).on('click', '.store-list-filter-button', function(e) {
+            e.preventDefault()
+            $('#store-listing-filter-form-wrap').toggle(500)
+        })
+
+        MartApp.$body.on('click', '.toolbar-view__icon a', function(e) {
+            e.preventDefault()
+            const $this = $(e.currentTarget)
+            $this
+                .closest('.toolbar-view__icon')
+                .find('a')
+                .removeClass('active')
+            $this.addClass('active')
+            $($this.data('target'))
+                .removeClass($this.data('class-remove'))
+                .addClass($this.data('class-add'))
+
+            MartApp.$formSearch
+                .find('input[name=layout]')
+                .val($this.data('layout'))
+
+            const params = new URLSearchParams(window.location.search)
+            params.set('layout', $this.data('layout'))
+            const nextHref = window.location.protocol + '//' + window.location.host + window.location.pathname + '?' + params.toString()
+            if (nextHref != window.location.href) {
+                window.history.pushState(
+                    MartApp.$productListing.html(),
+                    '',
+                    nextHref,
+                )
+            }
+        })
+    }
+
+    MartApp.toolbarOrderingProducts = function() {
+        MartApp.$body.on(
+            'click',
+            '.catalog-toolbar__ordering .dropdown .dropdown-menu a',
+            function(e) {
+                e.preventDefault()
+                const $this = $(e.currentTarget)
+                const $parent = $this.closest('.dropdown')
+                $parent.find('li').removeClass('active')
+                $this.closest('li').addClass('active')
+                $parent.find('a[data-bs-toggle=dropdown').html($this.html())
+                $this.closest('.catalog-toolbar__ordering').find('input[name=sort-by]').val($this.data('value')).trigger('change')
+            },
+        )
+    }
+
+    MartApp.backToTop = function() {
+        let scrollPos = 0
+        let element = $('#back2top')
+        $(window).scroll(function() {
+            let scrollCur = $(window).scrollTop()
+            if (scrollCur > scrollPos) {
+                // scroll down
+                if (scrollCur > 500) {
+                    element.addClass('active')
+                } else {
+                    element.removeClass('active')
+                }
+            } else {
+                // scroll up
+                element.removeClass('active')
+            }
+
+            scrollPos = scrollCur
+        })
+
+        element.on('click', function() {
+            $('html, body').animate(
+                {
+                    scrollTop: '0px',
+                },
+                0,
+            )
+        })
+    }
+
+    MartApp.stickyHeader = function() {
+        let header = $('.header-js-handler')
+        let checkpoint = header.height()
+        header.each(function() {
+            if ($(this).data('sticky') === true) {
+                let el = $(this)
+                $(window).scroll(function() {
+                    let currentPosition = $(this).scrollTop()
+                    if (currentPosition > checkpoint) {
+                        el.addClass('header--sticky')
+                    } else {
+                        el.removeClass('header--sticky')
+                    }
+                })
+            }
+        })
+    }
+
+    MartApp.stickyAddToCart = function() {
+        let $headerProduct = $('.header--product')
+        $(window).scroll(function() {
+            let currentPosition = $(this).scrollTop()
+            if (currentPosition > 50) {
+                $headerProduct.addClass('header--sticky')
+            } else {
+                $headerProduct.removeClass('header--sticky')
+            }
+        })
+
+        $('.header--product ul li > a ').on('click', function(e) {
+            e.preventDefault()
+            let target = $(this).attr('href')
+            $(this)
+                .closest('li')
+                .siblings('li')
+                .removeClass('active')
+            $(this)
+                .closest('li')
+                .addClass('active')
+            $(target)
+                .closest('.product-detail-tabs')
+                .find('a')
+                .removeClass('active')
+
+            $(target).addClass('active')
+            $('.header--product ul li').removeClass('active')
+            $('.header--product ul li a[href="' + target + '"]').closest('li').addClass('active')
+
+            $('#product-detail-tabs-content > .tab-pane').removeClass('active show')
+            $($(target).attr('href')).addClass('active show')
+
+            $('html, body').animate(
+                {
+                    scrollTop: ($(target).offset().top - $('.header--product .navigation').height() - 165) + 'px',
+                },
+                0,
+            )
+        })
+
+        const $trigger = $('.product-details .entry-product-header'),
+            $stickyBtn = $('.sticky-atc-wrap')
+
+        if ($stickyBtn.length && $trigger.length && $(window).width() < 768) {
+            let summaryOffset = $trigger.offset().top + $trigger.outerHeight(),
+                _footer = $('.footer-mobile'),
+                off_footer = 0,
+                ck_footer = _footer.length > 0
+
+            const stickyAddToCartToggle = function() {
+                let windowScroll = $(window).scrollTop(),
+                    windowHeight = $(window).height(),
+                    documentHeight = $(document).height()
+                if (ck_footer) {
+                    off_footer = _footer.offset().top - _footer.height()
+                } else {
+                    off_footer = windowScroll
+                }
+                if (windowScroll + windowHeight === documentHeight || summaryOffset > windowScroll || windowScroll > off_footer) {
+                    $stickyBtn.removeClass('sticky-atc-shown')
+                } else if (summaryOffset < windowScroll && windowScroll + windowHeight !== documentHeight) {
+                    $stickyBtn.addClass('sticky-atc-shown')
+                }
+            }
+
+            stickyAddToCartToggle()
+
+            $(window).scroll(stickyAddToCartToggle)
+        }
+    }
+
+    $(function() {
+        MartApp.init()
+
+        window.onBeforeChangeSwatches = function(data, $attrs) {
+            const $product = $attrs.closest('.product-details')
+            const $form = $product.find('.cart-form')
+
+            $product.find('.error-message').hide()
+            $product.find('.success-message').hide()
+            $product.find('.number-items-available').html('').hide()
+            const $submit = $form.find('button[type=submit]')
+            $submit.addClass('loading')
+
+            if (data && data.attributes) {
+                $submit.prop('disabled', true)
+            }
+        }
+
+        window.onChangeSwatchesSuccess = function(res, $attrs) {
+            const $product = $attrs.closest('.product-details')
+            const $form = $product.find('.cart-form')
+            const $footerCartForm = $('.footer-cart-form')
+            $product.find('.error-message').hide()
+            $product.find('.success-message').hide()
+
+            if (res) {
+                let $submit = $form.find('button[type=submit]')
+                $submit.removeClass('loading')
+                if (res.error) {
+                    $submit.prop('disabled', true)
+                    $product.find('.number-items-available').html('<span class="text-danger">(' + res.message + ')</span>').show()
+                    $form.find('.hidden-product-id').val('')
+                    $footerCartForm.find('.hidden-product-id').val('')
+                } else {
+                    const data = res.data
+                    const $price = $(document).find('.js-product-content')
+                    const $salePrice = $price.find('.product-price-sale')
+                    const $originalPrice = $price.find('.product-price-original')
+
+                    if (data.sale_price !== data.price) {
+                        $salePrice.removeClass('d-none')
+                        $originalPrice.addClass('d-none')
+                    } else {
+                        $salePrice.addClass('d-none')
+                        $originalPrice.removeClass('d-none')
+                    }
+
+                    $salePrice.find('ins .amount').text(data.display_sale_price)
+                    $salePrice.find('del .amount').text(data.display_price)
+                    $originalPrice.find('.amount').text(data.display_sale_price)
+
+                    if (data.sku) {
+                        $product.find('.meta-sku .meta-value').text(data.sku)
+                        $product.find('.meta-sku').removeClass('d-none')
+                    } else {
+                        $product.find('.meta-sku').addClass('d-none')
+                    }
+
+                    $form.find('.hidden-product-id').val(data.id)
+                    $footerCartForm.find('.hidden-product-id').val(data.id)
+                    $submit.prop('disabled', false)
+
+                    if (data.error_message) {
+                        $submit.prop('disabled', true)
+                        $product.find('.number-items-available').html('<span class="text-danger">(' + data.error_message + ')</span>').show()
+                    } else if (data.success_message) {
+                        $product.find('.number-items-available').html(res.data.stock_status_html).show()
+                    } else {
+                        $product.find('.number-items-available').html('').hide()
+                    }
+
+                    const unavailableAttributeIds = data.unavailable_attribute_ids || []
+                    $product.find('.attribute-swatch-item').removeClass('pe-none')
+                    $product.find('.product-filter-item option').prop('disabled', false)
+                    if (unavailableAttributeIds && unavailableAttributeIds.length) {
+                        unavailableAttributeIds.map(function(id) {
+                            let $item = $product.find('.attribute-swatch-item[data-id="' + id + '"]')
+                            if ($item.length) {
+                                $item.addClass('pe-none')
+                                $item.find('input').prop('checked', false)
+                            } else {
+                                $item = $product.find('.product-filter-item option[data-id="' + id + '"]')
+                                if ($item.length) {
+                                    $item.prop('disabled', 'disabled').prop('selected', false)
+                                }
+                            }
+                        })
+                    }
+
+                    const $gallery = $product.closest('.product-detail-container').find('.product-gallery')
+                    if (!data.image_with_sizes.origin.length) {
+                        data.image_with_sizes.origin.push(siteConfig.img_placeholder)
+                    }
+                    if (!data.image_with_sizes.thumb.length) {
+                        data.image_with_sizes.thumb.push(siteConfig.img_placeholder)
+                    }
+
+                    let imageHtml = ''
+                    data.image_with_sizes.origin.forEach(function(item) {
+                        imageHtml += `<div class='product-gallery__image item'>
+                                <a class='img-fluid-eq' href='${item}'>
+                                    <div class='img-fluid-eq__dummy'></div>
+                                    <div class='img-fluid-eq__wrap'>
+                                        <img class='mx-auto' alt='${data.name}' title='${data.name}' src='${siteConfig.img_placeholder ? siteConfig.img_placeholder : item}' data-lazy='${item}'>
+                                    </div>
+                                </a>
+                            </div>`
+                    })
+
+                    $gallery.find('.product-gallery__wrapper').slick('unslick').html(imageHtml)
+
+                    let thumbHtml = ''
+                    data.image_with_sizes.thumb.forEach(function(item) {
+                        thumbHtml += `<div class='item'>
+                            <div class='border p-1 m-1'>
+                                <img class='lazyload' alt='${data.name}' title='${data.name}' src='${siteConfig.img_placeholder ? siteConfig.img_placeholder : item}' data-src='${item}' data-lazy='${item}'>
+                            </div>
+                        </div>`
+                    })
+
+                    $gallery.find('.product-gallery__variants').slick('unslick').html(thumbHtml)
+
+                    MartApp.productGallery(true, $gallery)
+
+                    MartApp.lightBox()
+                }
+            }
+        }
+
+        if (jQuery().mCustomScrollbar) {
+            $('.ps-custom-scrollbar').mCustomScrollbar({
+                theme: 'dark',
+                scrollInertia: 0,
+            })
+        }
+
+        $(document).on('click', '.toggle-show-more', function(event) {
+            event.preventDefault()
+
+            $('#store-short-description').fadeOut()
+
+            $(this).hide()
+
+            $('#store-content').slideDown(500)
+
+            $('.toggle-show-less').show()
+        })
+
+        $(document).on('click', '.toggle-show-less', function(event) {
+            event.preventDefault()
+
+            $(this).hide()
+
+            $('#store-content').slideUp(500)
+
+            $('#store-short-description').fadeIn()
+
+            $('.toggle-show-more').show()
+        })
+
+        let collapseBreadcrumb = function() {
+            $('.page-breadcrumbs ol li').each(function() {
+                let $this = $(this)
+                if (!$this.is(':first-child') && !$this.is(':nth-child(2)') && !$this.is(':last-child')) {
+                    if (!$this.is(':nth-child(3)')) {
+                        $this.find('a').closest('li').hide()
+                    } else {
+                        $this.find('a').hide()
+                        $this.find('.extra-breadcrumb-name').text('...').show()
+                    }
+                }
+            })
+        }
+
+        if ($(window).width() < 768) {
+            collapseBreadcrumb()
+        }
+
+        $(window).on('resize', function() {
+            collapseBreadcrumb()
+        })
+
+        $('.product-entry-meta .anchor-link').on('click', function(e) {
+            e.preventDefault()
+            let target = $(this).attr('href')
+
+            $('#product-detail-tabs a').removeClass('active')
+            $(target).addClass('active')
+
+            $('#product-detail-tabs-content > .tab-pane').removeClass('active show')
+            $($(target).attr('href')).addClass('active show')
+
+            $('html, body').animate(
+                {
+                    scrollTop: ($(target).offset().top - $('.header--product .navigation').height() - 250) + 'px',
+                },
+                0,
+            )
+        })
+
+        $(document).on('click', '#sticky-add-to-cart .add-to-cart-button', e => {
+            e.preventDefault()
+            e.stopPropagation()
+
+            const $this = $(e.currentTarget)
+
+            $this.addClass('button-loading')
+
+            setTimeout(function() {
+                let target = '.js-product-content .cart-form button[name=' + $this.prop('name') + '].add-to-cart-button'
+
+                $(document).find(target).trigger('click')
+
+                $this.removeClass('button-loading')
+            }, 200)
+        })
+    })
+})(jQuery)
