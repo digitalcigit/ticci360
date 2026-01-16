@@ -39,8 +39,10 @@ docker compose -f "$COMPOSE_FILE" up -d
 # 3. Post-Deployment Tasks (Laravel)
 log_info "Running Laravel post-deployment tasks..."
 # Wait for DB to be ready might be needed here, or handle via healthchecks
-docker compose -f "$COMPOSE_FILE" exec -T app php artisan migrate --force
-docker compose -f "$COMPOSE_FILE" exec -T app php artisan optimize:clear
+echo "[INFO] Running post-deployment tasks..."
+docker compose -f $COMPOSE_FILE exec -T app php artisan package:discover
+docker compose -f $COMPOSE_FILE exec -T app php artisan migrate --force
+docker compose -f $COMPOSE_FILE exec -T app php artisan optimize:clear
 docker compose -f "$COMPOSE_FILE" exec -T app php artisan config:cache
 docker compose -f "$COMPOSE_FILE" exec -T app php artisan route:cache
 docker compose -f "$COMPOSE_FILE" exec -T app php artisan view:cache

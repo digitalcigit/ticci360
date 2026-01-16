@@ -12,3 +12,5 @@ docs/
 tests/
 ticcinew/
 savesave/
+bootstrap/cache/*.php
+!bootstrap/cache/.gitignore
