@@ -41,6 +41,8 @@ log_info "Running Laravel post-deployment tasks..."
 # Wait for DB to be ready might be needed here, or handle via healthchecks
 echo "[INFO] Running post-deployment tasks..."
 docker compose -f $COMPOSE_FILE exec -T app php artisan package:discover
+docker compose -f $COMPOSE_FILE exec -T app php artisan vendor:publish --tag=laravel-assets --ansi --force
+docker compose -f $COMPOSE_FILE exec -T app php artisan cms:publish:assets
 docker compose -f $COMPOSE_FILE exec -T app php artisan migrate --force
 docker compose -f $COMPOSE_FILE exec -T app php artisan optimize:clear
 docker compose -f "$COMPOSE_FILE" exec -T app php artisan config:cache
