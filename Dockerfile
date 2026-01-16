@@ -42,6 +42,13 @@ RUN composer config --unset scripts.post-update-cmd
 # Install dependencies
 RUN composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev --no-scripts
 
+# Create storage directory structure since it's ignored in .dockerignore
+RUN mkdir -p /var/www/storage/app/public \
+    /var/www/storage/framework/cache \
+    /var/www/storage/framework/sessions \
+    /var/www/storage/framework/views \
+    /var/www/storage/logs
+
 # Set permissions
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 
