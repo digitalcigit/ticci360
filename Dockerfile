@@ -31,6 +31,13 @@ WORKDIR /var/www
 # Copy existing application directory permissions
 COPY . /var/www
 
+# Copy example env to .env to avoid "no environment file" issues if artisan runs
+COPY .env.staging.example .env
+
+# Remove post-autoload-dump scripts to prevent package:discover during build
+# This avoids "Target class [cache] does not exist" errors caused by merge-plugin
+RUN composer config --unset scripts.post-autoload-dump
+
 # Install dependencies
 RUN composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev --no-scripts
 
