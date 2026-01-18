@@ -12,12 +12,12 @@ class CategoryResource extends JsonResource
      *
      * @return array<string, mixed>
      */
-    public function toArray(Request $request): array
+    public function toArray($request): array
     {
         return [
             'id' => $this->id,
             'name' => $this->name,
-            'slug' => $this->slug, // Assuming standard Botble slug handling, might need adjustment
+            'slug' => $this->slug,
             'description' => $this->description,
             'image' => $this->image ? get_image_url($this->image) : null,
             'parent_id' => $this->parent_id,
