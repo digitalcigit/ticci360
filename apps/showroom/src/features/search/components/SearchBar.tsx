@@ -1,39 +1,28 @@
 'use client';
 
-import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useDebouncedCallback } from 'use-debounce';
+import { useFilterStore } from '../store/filterStore';
+import { Search } from 'lucide-react';
 
 export function SearchBar() {
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
-  const { replace } = useRouter();
+  const { query, setQuery } = useFilterStore();
 
-  const handleSearch = useDebouncedCallback((term: string) => {
-    const params = new URLSearchParams(searchParams);
-    if (term) {
-      params.set('search', term);
-    } else {
-      params.delete('search');
-    }
-    replace(`${pathname}?${params.toString()}`);
+  const debouncedSetQuery = useDebouncedCallback((value: string) => {
+    setQuery(value);
   }, 300);
 
   return (
     <div className="relative w-full max-w-md">
-      <label htmlFor="search" className="sr-only">
-        Rechercher
-      </label>
-      <input
-        className="peer block w-full rounded-md border border-gray-200 py-[9px] pl-10 text-sm outline-2 placeholder:text-gray-500 text-gray-900 dark:bg-zinc-800 dark:border-gray-700 dark:text-gray-100 dark:placeholder:text-gray-400"
-        placeholder="Rechercher des produits..."
-        onChange={(e) => handleSearch(e.target.value)}
-        defaultValue={searchParams.get('search')?.toString()}
-      />
-      <div className="absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-gray-500 peer-focus:text-gray-900 dark:text-gray-400 dark:peer-focus:text-gray-100">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-        </svg>
+      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <Search className="h-5 w-5 text-gray-400" />
       </div>
+      <input
+        type="text"
+        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white dark:bg-zinc-800 dark:border-zinc-700 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+        placeholder="Rechercher des produits..."
+        defaultValue={query}
+        onChange={(e) => debouncedSetQuery(e.target.value)}
+      />
     </div>
   );
 }

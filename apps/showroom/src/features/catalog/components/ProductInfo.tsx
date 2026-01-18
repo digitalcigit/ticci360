@@ -51,10 +51,8 @@ export function ProductInfo({ product }: ProductInfoProps) {
         </div>
       )}
 
-      <div className="border-t border-gray-200 dark:border-gray-800 pt-6">
-        <div className="flex flex-col gap-4">
-          <AddToCartButton productId={product.id} stockStatus={product.stock_status} />
-        </div>
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border-t border-gray-200 dark:border-gray-800 lg:static lg:p-0 lg:bg-transparent lg:backdrop-blur-none lg:border-none z-50">
+        <AddToCartButton productId={product.id} stockStatus={product.stock_status} />
       </div>
 
       {product.content && (

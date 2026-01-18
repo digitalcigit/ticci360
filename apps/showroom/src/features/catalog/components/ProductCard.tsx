@@ -31,7 +31,7 @@ export function ProductCard({ product }: ProductCardProps) {
       <div className="flex justify-between items-start">
         <div>
           <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-            <Link href={`/products/${product.id}`}>
+            <Link href={`/products/${product.slug || product.id}`}>
               <span aria-hidden="true" className="absolute inset-0" />
               {product.name}
             </Link>

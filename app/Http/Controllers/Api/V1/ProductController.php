@@ -60,15 +60,15 @@ class ProductController extends ApiController
             ->where('is_variation', 0)
             ->where(function ($query) use ($id) {
                 $query->where('id', $id)
-                      ->orWhere('sku', $id);
+                      ->orWhere('sku', $id)
+                      ->orWhereHas('slugable', function ($q) use ($id) {
+                          $q->where('key', $id);
+                      });
             })
             ->with(['slugable', 'brand', 'tags', 'categories', 'variations', 'images'])
             ->first();
 
         if (! $product) {
-            // Try looking up by slug if not found by ID/SKU
-            // Note: In Botble, slugs are usually in a separate table, but let's assume direct lookup or slugable relation
-            // For now, simpler error.
             return $this->error('Product not found', 404);
         }
 
