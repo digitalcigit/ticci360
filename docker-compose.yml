@@ -12,7 +12,6 @@ services:
     volumes:
       - ./:/var/www
       - /var/www/vendor
-      - /var/www/storage
       - /var/www/bootstrap/cache
     networks:
       - ticci_net
