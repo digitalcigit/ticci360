@@ -42,9 +42,7 @@ class ProductController extends ApiController
         $products = $query->orderBy('created_at', 'desc')
             ->paginate($request->input('per_page', 12));
 
-        return $this->success(
-            ProductResource::collection($products)->response()->getData(true)
-        );
+        return $this->successPaginated(ProductResource::collection($products));
     }
 
     /**
