@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Product, Category, ApiResponse } from '@/types';
 import { ProductList } from './ProductList';
 import { Pagination } from './Pagination';
@@ -21,17 +22,25 @@ export function ProductCatalog({
   categories 
 }: ProductCatalogProps) {
   useFilterSync();
+  const searchParams = useSearchParams();
   const { query, categories: selectedCategories, minPrice, maxPrice, sortBy } = useFilterStore();
   
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [meta, setMeta] = useState(initialMeta);
   const [isLoading, setIsLoading] = useState(false);
-  const [page, setPage] = useState(initialMeta.pagination?.current_page || 1);
+  
+  const page = useMemo(() => {
+    const p = searchParams.get('page');
+    return p ? parseInt(p, 10) : 1;
+  }, [searchParams]);
 
   // Initial load sync - only if store is empty (handled by useFilterSync mostly)
   
   useEffect(() => {
-    // Skip first render if using initial props
+    // Skip fetching on initial mount if we already have the right data
+    // But since filters might have been synced from URL by useFilterSync, 
+    // we should probably fetch to be sure if any filter is active.
+    
     const fetchFilteredProducts = async () => {
       setIsLoading(true);
       try {
@@ -39,7 +48,7 @@ export function ProductCatalog({
           page,
           per_page: 12,
           search: query,
-          category_id: selectedCategories.join(',') as any, // Adjusted API helper handles this
+          category_id: selectedCategories.join(',') as any,
           min_price: minPrice || undefined,
           max_price: maxPrice || undefined,
           sort: sortBy,

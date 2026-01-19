@@ -20,6 +20,11 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'api-staging.tic.ci',
+        pathname: '/storage/**',
+      },
+      {
+        protocol: 'https',
         hostname: 'api.tic.ci',
         pathname: '/storage/**',
       },
