@@ -15,6 +15,7 @@ services:
       - /var/www/bootstrap/cache
     networks:
       - ticci_net
+      - digitalcloud_network
 
   showroom:
     build:
