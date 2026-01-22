@@ -5,8 +5,8 @@ namespace Botble\Ecommerce\Listeners;
 use Botble\Base\Events\CreatedContentEvent;
 use Botble\Base\Events\UpdatedContentEvent;
 use Botble\Ecommerce\Models\Product;
-use Illuminate\Support\Facades\DB;
 use Botble\Language\Facades\Language;
+use Illuminate\Support\Facades\DB;
 
 class AddLanguageForVariantsListener
 {

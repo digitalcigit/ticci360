@@ -1,0 +1,1 @@
+{"name":"botble/paypal-payout","type":"package","autoload":{"psr-4":{"Botble\\PaypalPayout\\":"src/"}}}

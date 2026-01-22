@@ -1,5 +1,6 @@
 <?php
 
+use Botble\Base\Facades\BaseHelper;
 use Botble\Theme\Contracts\Theme as ThemeContract;
 use Botble\Theme\Facades\AdminBar;
 use Botble\Theme\Facades\ThemeOption;
@@ -41,7 +42,7 @@ if (! function_exists('parse_args')) {
 }
 
 if (! function_exists('theme')) {
-    function theme(string|null $themeName = null, string|null $layoutName = null): mixed
+    function theme(?string $themeName = null, ?string $layoutName = null): mixed
     {
         $theme = app(ThemeContract::class);
 
@@ -64,7 +65,7 @@ if (! function_exists('theme_option')) {
             try {
                 return ThemeOption::getOption($key, $default);
             } catch (Exception $exception) {
-                info($exception->getMessage());
+                BaseHelper::logError($exception);
 
                 return $default;
             }
@@ -75,9 +76,9 @@ if (! function_exists('theme_option')) {
 }
 
 if (! function_exists('theme_path')) {
-    function theme_path(string|null $path = null): string
+    function theme_path(?string $path = null): string
     {
-        return platform_path('themes' . DIRECTORY_SEPARATOR . $path);
+        return platform_path('themes' . DIRECTORY_SEPARATOR . ltrim((string) $path, DIRECTORY_SEPARATOR));
     }
 }
 

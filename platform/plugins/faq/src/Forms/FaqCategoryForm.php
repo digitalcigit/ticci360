@@ -2,40 +2,29 @@
 
 namespace Botble\Faq\Forms;
 
+use Botble\Base\Forms\FieldOptions\DescriptionFieldOption;
+use Botble\Base\Forms\FieldOptions\NameFieldOption;
+use Botble\Base\Forms\FieldOptions\SortOrderFieldOption;
+use Botble\Base\Forms\FieldOptions\StatusFieldOption;
+use Botble\Base\Forms\Fields\NumberField;
+use Botble\Base\Forms\Fields\SelectField;
+use Botble\Base\Forms\Fields\TextareaField;
+use Botble\Base\Forms\Fields\TextField;
 use Botble\Base\Forms\FormAbstract;
-use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Faq\Http\Requests\FaqCategoryRequest;
 use Botble\Faq\Models\FaqCategory;
 
 class FaqCategoryForm extends FormAbstract
 {
-    public function buildForm(): void
+    public function setup(): void
     {
         $this
-            ->setupModel(new FaqCategory())
+            ->model(FaqCategory::class)
             ->setValidatorClass(FaqCategoryRequest::class)
-            ->withCustomFields()
-            ->add('name', 'text', [
-                'label' => trans('core/base::forms.name'),
-                'label_attr' => ['class' => 'control-label required'],
-                'attr' => [
-                    'placeholder' => trans('core/base::forms.name_placeholder'),
-                    'data-counter' => 120,
-                ],
-            ])
-            ->add('order', 'number', [
-                'label' => trans('core/base::forms.order'),
-                'label_attr' => ['class' => 'control-label'],
-                'attr' => [
-                    'placeholder' => trans('core/base::forms.order_by_placeholder'),
-                ],
-                'default_value' => 0,
-            ])
-            ->add('status', 'customSelect', [
-                'label' => trans('core/base::tables.status'),
-                'label_attr' => ['class' => 'control-label required'],
-                'choices' => BaseStatusEnum::labels(),
-            ])
+            ->add('name', TextField::class, NameFieldOption::make()->required())
+            ->add('description', TextareaField::class, DescriptionFieldOption::make())
+            ->add('order', NumberField::class, SortOrderFieldOption::make())
+            ->add('status', SelectField::class, StatusFieldOption::make())
             ->setBreakFieldPoint('status');
     }
 }

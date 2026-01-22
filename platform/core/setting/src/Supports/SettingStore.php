@@ -4,7 +4,6 @@ namespace Botble\Setting\Supports;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Cache;
 
 abstract class SettingStore
 {
@@ -14,9 +13,16 @@ abstract class SettingStore
 
     protected bool $loaded = false;
 
-    protected string $cacheKey = 'cms_settings_cache';
-
-    protected int $settingTime = 86400;
+    protected array $guard = [
+        'activated_plugins',
+        'theme',
+        'licensed_to',
+        'media_random_hash',
+        'admin_appearance_custom_css',
+        'admin_appearance_custom_header_js',
+        'admin_appearance_custom_body_js',
+        'admin_appearance_custom_footer_js',
+    ];
 
     public function get(string|array $key, mixed $default = null): mixed
     {
@@ -32,27 +38,40 @@ abstract class SettingStore
         return Arr::has($this->data, $key);
     }
 
-    public function set(string|array $key, mixed $value = null): self
+    public function set(string|array $key, mixed $value = null, bool $force = false): self
     {
         $this->load();
         $this->unsaved = true;
 
-        if (is_array($key)) {
-            foreach ($key as $k => $v) {
-                Arr::set($this->data, $k, $v);
+        if (! is_array($key)) {
+            $key = [$key => $value];
+        }
+
+        foreach ($key as $k => $v) {
+            if (! $force && in_array($k, $this->guard)) {
+                continue;
             }
-        } else {
-            Arr::set($this->data, $key, $value);
+
+            Arr::set($this->data, $k, $v);
         }
 
         return $this;
     }
 
-    public function forget(string $key): self
+    public function forceSet(string|array $key, mixed $value = null): self
+    {
+        return $this->set($key, $value, true);
+    }
+
+    public function forget(string $key, bool $force = false): self
     {
         $this->unsaved = true;
 
         if ($this->has($key)) {
+            if (! $force && in_array($key, $this->guard)) {
+                return $this;
+            }
+
             Arr::forget($this->data, $key);
         }
 
@@ -83,8 +102,6 @@ abstract class SettingStore
         $this->write($this->data);
         $this->unsaved = false;
 
-        $this->clearCache();
-
         return true;
     }
 
@@ -96,16 +113,13 @@ abstract class SettingStore
         }
     }
 
-    protected function clearCache(): void
-    {
-        Cache::forget($this->cacheKey);
-    }
-
     abstract protected function read(): array;
 
     abstract protected function write(array $data): void;
 
-    abstract public function delete(array $keys = [], array $except = []);
+    abstract public function delete(array|string $keys = [], array $except = [], bool $force = false);
+
+    abstract public function forceDelete(array|string $keys = [], array $except = []);
 
     abstract public function newQuery(): Builder;
 }

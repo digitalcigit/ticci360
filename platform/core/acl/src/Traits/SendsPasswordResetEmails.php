@@ -2,35 +2,19 @@
 
 namespace Botble\ACL\Traits;
 
-use Illuminate\Contracts\Auth\PasswordBroker;
-use Illuminate\Contracts\Foundation\Application;
-use Illuminate\Contracts\View\Factory;
-use Illuminate\Contracts\View\View;
+use Botble\Base\Rules\EmailRule;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
 
 trait SendsPasswordResetEmails
 {
-    /**
-     * Display the form to request a password reset link.
-     *
-     * @return Factory|Application|View|\Response
-     */
     public function showLinkRequestForm()
     {
-        return view('auth.passwords.email');
+        return null;
     }
 
-    /**
-     * Send a reset link to the given user.
-     *
-     * @param Request $request
-     * @return RedirectResponse|JsonResponse
-     * @throws ValidationException
-     */
     public function sendResetLinkEmail(Request $request)
     {
         $this->validateEmail($request);
@@ -47,35 +31,16 @@ trait SendsPasswordResetEmails
             : $this->sendResetLinkFailedResponse($request, $response);
     }
 
-    /**
-     * Validate the email for the given request.
-     *
-     * @param Request $request
-     * @return void
-     */
-    protected function validateEmail(Request $request)
+    protected function validateEmail(Request $request): void
     {
-        $request->validate(['email' => 'required|email']);
+        $request->validate(['email' => ['required', new EmailRule()]]);
     }
 
-    /**
-     * Get the needed authentication credentials from the request.
-     *
-     * @param Request $request
-     * @return array
-     */
     protected function credentials(Request $request)
     {
         return $request->only('email');
     }
 
-    /**
-     * Get the response for a successful password reset link.
-     *
-     * @param Request $request
-     * @param string $response
-     * @return RedirectResponse|JsonResponse
-     */
     protected function sendResetLinkResponse(Request $request, $response)
     {
         return $request->wantsJson()
@@ -83,14 +48,6 @@ trait SendsPasswordResetEmails
             : back()->with('status', trans($response));
     }
 
-    /**
-     * Get the response for a failed password reset link.
-     *
-     * @param Request $request
-     * @param string $response
-     * @return RedirectResponse
-     * @throws ValidationException
-     */
     protected function sendResetLinkFailedResponse(Request $request, $response)
     {
         if ($request->wantsJson()) {
@@ -104,11 +61,6 @@ trait SendsPasswordResetEmails
             ->withErrors(['email' => trans($response)]);
     }
 
-    /**
-     * Get the broker to be used during password reset.
-     *
-     * @return PasswordBroker
-     */
     public function broker()
     {
         return Password::broker();

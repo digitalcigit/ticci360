@@ -3,8 +3,9 @@
 namespace Botble\Faq\Listeners;
 
 use Botble\Base\Events\DeletedContentEvent;
-use Exception;
+use Botble\Base\Facades\BaseHelper;
 use Botble\Base\Facades\MetaBox;
+use Exception;
 
 class DeletedContentListener
 {
@@ -13,7 +14,7 @@ class DeletedContentListener
         try {
             MetaBox::deleteMetaData($event->data, 'faq_schema_config');
         } catch (Exception $exception) {
-            info($exception->getMessage());
+            BaseHelper::logError($exception);
         }
     }
 }

@@ -2,18 +2,24 @@
 
 namespace Botble\ACL\Forms;
 
-use Botble\Base\Facades\Assets;
 use Botble\ACL\Http\Requests\RoleCreateRequest;
 use Botble\ACL\Models\Role;
+use Botble\Base\Facades\Assets;
+use Botble\Base\Forms\FieldOptions\DescriptionFieldOption;
+use Botble\Base\Forms\FieldOptions\IsDefaultFieldOption;
+use Botble\Base\Forms\FieldOptions\NameFieldOption;
+use Botble\Base\Forms\Fields\OnOffField;
+use Botble\Base\Forms\Fields\TextareaField;
+use Botble\Base\Forms\Fields\TextField;
 use Botble\Base\Forms\FormAbstract;
 use Illuminate\Support\Arr;
 
 class RoleForm extends FormAbstract
 {
-    public function buildForm(): void
+    public function setup(): void
     {
-        Assets::addStyles(['jquery-ui', 'jqueryTree'])
-            ->addScripts(['jquery-ui', 'jqueryTree'])
+        Assets::addStyles(['jquery-ui', 'jqueryTreeView'])
+            ->addScripts(['jquery-ui', 'jqueryTreeView'])
             ->addScriptsDirectly('vendor/core/core/acl/js/role.js');
 
         $flags = (new Role())->getAvailablePermissions();
@@ -21,43 +27,30 @@ class RoleForm extends FormAbstract
         $children = $this->getPermissionTree($flags);
         $active = [];
 
-        if ($this->getModel()) {
-            $active = array_keys($this->getModel()->permissions);
+        /** @var Role $role */
+        $role = $this->getModel();
+
+        if ($role && $role->getKey()) {
+            $active = array_keys($role->permissions);
+
+            add_filter('base_action_form_actions_extra', function () use ($role) {
+                return view('core/acl::roles.includes.extra-actions', compact('role'))->render();
+            });
         }
 
         $this
-            ->setupModel(new Role())
+            ->model(Role::class)
             ->setValidatorClass(RoleCreateRequest::class)
-            ->withCustomFields()
-            ->add('name', 'text', [
-                'label' => trans('core/base::forms.name'),
-                'label_attr' => ['class' => 'control-label required'],
-                'attr' => [
-                    'placeholder' => trans('core/base::forms.name_placeholder'),
-                    'data-counter' => 120,
-                ],
-            ])
-            ->add('description', 'textarea', [
-                'label' => trans('core/base::forms.description'),
-                'label_attr' => ['class' => 'control-label required'],
-                'attr' => [
-                    'rows' => 4,
-                    'placeholder' => trans('core/base::forms.description_placeholder'),
-                    'data-counter' => 400,
-                ],
-            ])
-            ->add('is_default', 'onOff', [
-                'label' => trans('core/base::forms.is_default'),
-                'label_attr' => ['class' => 'control-label'],
-                'default_value' => false,
-            ])
+            ->add('name', TextField::class, NameFieldOption::make()->required()->maxLength(120))
+            ->add('description', TextareaField::class, DescriptionFieldOption::make())
+            ->add('is_default', OnOffField::class, IsDefaultFieldOption::make())
             ->addMetaBoxes([
                 'permissions' => [
                     'title' => trans('core/acl::permissions.permission_flags'),
                     'content' => view('core/acl::roles.permissions', compact('active', 'flags', 'children'))->render(),
+                    'header_actions' => view('core/acl::roles.permissions-actions')->render(),
                 ],
-            ])
-            ->setActionButtons(view('core/acl::roles.actions', ['role' => $this->getModel()])->render());
+            ]);
     }
 
     protected function getPermissionTree(array $permissions): array
@@ -76,15 +69,16 @@ class RoleForm extends FormAbstract
         return $children;
     }
 
-    protected function getChildren(string $parentFlag, array $allFlags): array
+    protected function getChildren(string $parentFlag, array $flags): array
     {
-        $newFlagArray = [];
-        foreach ($allFlags as $flagDetails) {
-            if (Arr::get($flagDetails, 'parent_flag', 'root') == $parentFlag) {
-                $newFlagArray[] = $flagDetails['flag'];
+        $newFlags = [];
+
+        foreach ($flags as $item) {
+            if (Arr::get($item, 'parent_flag', 'root') === $parentFlag) {
+                $newFlags[] = $item['flag'];
             }
         }
 
-        return $newFlagArray;
+        return $newFlags;
     }
 }

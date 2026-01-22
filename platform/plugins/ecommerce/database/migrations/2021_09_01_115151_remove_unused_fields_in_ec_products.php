@@ -7,19 +7,30 @@ use Illuminate\Support\Facades\Schema;
 return new class () extends Migration {
     public function up(): void
     {
-        Schema::table('ec_products', function (Blueprint $table) {
-            $table->dropColumn([
-                'options',
-                'is_searchable',
-                'is_show_on_list',
-                'barcode',
-                'category_id',
-                'length_unit',
-                'wide_unit',
-                'height_unit',
-                'weight_unit',
-            ]);
-        });
+        $columns = [
+            'options',
+            'is_searchable',
+            'is_show_on_list',
+            'barcode',
+            'category_id',
+            'length_unit',
+            'wide_unit',
+            'height_unit',
+            'weight_unit',
+        ];
+
+        $dropColumns = [];
+        foreach ($columns as $column) {
+            if (Schema::hasColumn('ec_products', $column)) {
+                $dropColumns[] = $column;
+            }
+        }
+
+        if (!empty($dropColumns)) {
+            Schema::table('ec_products', function (Blueprint $table) use ($dropColumns) {
+                $table->dropColumn($dropColumns);
+            });
+        }
     }
 
     public function down(): void

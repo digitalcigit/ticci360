@@ -3,36 +3,23 @@
 namespace Botble\Ecommerce\Http\Controllers;
 
 use Botble\Base\Facades\Assets;
-use Botble\Base\Facades\PageTitle;
-use Botble\Base\Http\Controllers\BaseController;
-use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Base\Widgets\Contracts\AdminWidget;
 use Botble\Ecommerce\Enums\OrderStatusEnum;
-use Botble\Ecommerce\Repositories\Interfaces\CustomerInterface;
-use Botble\Ecommerce\Repositories\Interfaces\OrderInterface;
-use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
+use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Ecommerce\Models\Order;
+use Botble\Ecommerce\Models\Product;
 use Botble\Ecommerce\Tables\Reports\RecentOrdersTable;
 use Botble\Ecommerce\Tables\Reports\TopSellingProductsTable;
 use Botble\Ecommerce\Tables\Reports\TrendingProductsTable;
 use Carbon\Carbon;
-use Botble\Ecommerce\Facades\EcommerceHelper;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
 class ReportController extends BaseController
 {
-    public function __construct(
-        protected OrderInterface $orderRepository,
-        protected ProductInterface $productRepository,
-        protected CustomerInterface $customerRepository
-    ) {
-    }
-
-    public function getIndex(
-        Request $request,
-        AdminWidget $widget,
-        BaseHttpResponse $response
-    ) {
-        PageTitle::setTitle(trans('plugins/ecommerce::reports.name'));
+    public function getIndex(Request $request, AdminWidget $widget)
+    {
+        $this->pageTitle(trans('plugins/ecommerce::reports.name'));
 
         Assets::addScriptsDirectly([
             'vendor/core/plugins/ecommerce/libraries/daterangepicker/daterangepicker.js',
@@ -48,7 +35,8 @@ class ReportController extends BaseController
         [$startDate, $endDate] = EcommerceHelper::getDateRangeInReport($request);
 
         if ($request->ajax()) {
-            return $response->setData(view('plugins/ecommerce::reports.ajax', compact('widget'))->render());
+            return $this
+                ->httpResponse()->setData(view('plugins/ecommerce::reports.ajax', compact('widget'))->render());
         }
 
         return view(
@@ -72,41 +60,46 @@ class ReportController extends BaseController
         return $trendingProductsTable->renderTable();
     }
 
-    public function getDashboardWidgetGeneral(BaseHttpResponse $response)
+    public function getDashboardWidgetGeneral()
     {
         $startOfMonth = Carbon::now()->startOfMonth();
         $today = Carbon::now();
 
-        $processingOrders = $this->orderRepository
-            ->getModel()
-            ->where('status', OrderStatusEnum::PENDING)
+        $processingOrders = Order::query()
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereNotIn('status', [OrderStatusEnum::CANCELED, OrderStatusEnum::COMPLETED])
+                    ->orWhereNull('completed_at');
+            })
             ->whereDate('created_at', '>=', $startOfMonth)
             ->whereDate('created_at', '<=', $today)
             ->count();
 
-        $completedOrders = $this->orderRepository
-            ->getModel()
-            ->where('status', OrderStatusEnum::COMPLETED)
+        $completedOrders = Order::query()
+            ->where(function (Builder $query): void {
+                $query
+                    ->where('status', OrderStatusEnum::COMPLETED)
+                    ->orWhereNotNull('completed_at');
+            })
             ->whereDate('created_at', '>=', $startOfMonth)
             ->whereDate('created_at', '<=', $today)
             ->count();
 
-        $revenue = $this->orderRepository->countRevenueByDateRange($startOfMonth, $today);
+        $revenue = Order::countRevenueByDateRange($startOfMonth, $today);
 
-        $lowStockProducts = $this->productRepository
-            ->getModel()
+        $lowStockProducts = Product::query()
             ->where('with_storehouse_management', 1)
             ->where('quantity', '<', 2)
             ->where('quantity', '>', 0)
             ->count();
 
-        $outOfStockProducts = $this->productRepository
-            ->getModel()
+        $outOfStockProducts = Product::query()
             ->where('with_storehouse_management', 1)
             ->where('quantity', '<', 1)
             ->count();
 
-        return $response
+        return $this
+            ->httpResponse()
             ->setData(
                 view(
                     'plugins/ecommerce::reports.widgets.general',

@@ -10,7 +10,7 @@ return new class () extends Migration {
     public function up(): void
     {
         if (! Schema::hasTable('ec_tax_products')) {
-            Schema::create('ec_tax_products', function (Blueprint $table) {
+            Schema::create('ec_tax_products', function (Blueprint $table): void {
                 $table->foreignId('tax_id')->index();
                 $table->foreignId('product_id')->index();
                 $table->primary(['product_id', 'tax_id'], 'tax_products_primary_key');
@@ -18,7 +18,7 @@ return new class () extends Migration {
         }
 
         try {
-            $products = Product::where('is_variation', 0)->withCount(['taxes'])->get();
+            $products = Product::query()->where('is_variation', 0)->withCount(['taxes'])->get();
             $defaultTaxRate = get_ecommerce_setting('default_tax_rate');
 
             foreach ($products as $product) {

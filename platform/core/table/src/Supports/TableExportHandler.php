@@ -16,10 +16,10 @@ class TableExportHandler extends DataTablesExportHandler implements WithEvents
     public function registerEvents(): array
     {
         return [
-            BeforeSheet::class => function (BeforeSheet $event) {
+            BeforeSheet::class => function (BeforeSheet $event): void {
                 $this->beforeSheet($event);
             },
-            AfterSheet::class => function (AfterSheet $event) {
+            AfterSheet::class => function (AfterSheet $event): void {
                 $this->afterSheet($event);
             },
         ];
@@ -55,8 +55,10 @@ class TableExportHandler extends DataTablesExportHandler implements WithEvents
         $lastColumnName = $this->getNameFromNumber($totalColumns);
 
         $dimensions = 'A1:' . $lastColumnName . '1';
-        $delegate->getStyle($dimensions)->applyFromArray(
-            [
+        $style = $delegate->getStyle($dimensions);
+
+        if ($style->getIndex()) {
+            $style->applyFromArray([
                 'font' => [
                     'bold' => true,
                     'color' => [
@@ -72,8 +74,8 @@ class TableExportHandler extends DataTablesExportHandler implements WithEvents
                         'argb' => '1d9977',
                     ],
                 ],
-            ]
-        );
+            ]);
+        }
 
         $delegate->getColumnDimension('A')->setWidth(10);
         $delegate->getRowDimension(1)->setRowHeight(20);
@@ -106,7 +108,7 @@ class TableExportHandler extends DataTablesExportHandler implements WithEvents
         return $letter;
     }
 
-    protected function getImageResourceFromURL(string|null $imageUrl)
+    protected function getImageResourceFromURL(?string $imageUrl)
     {
         if (! $imageUrl) {
             return null;

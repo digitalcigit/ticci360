@@ -2,17 +2,16 @@
 
 namespace Botble\Ecommerce\Http\Controllers\Fronts;
 
-use Botble\Base\Http\Responses\BaseHttpResponse;
-use Botble\Ecommerce\Models\Product;
-use Botble\Ecommerce\Repositories\Interfaces\ProductAttributeSetInterface;
-use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
+use Botble\Base\Http\Controllers\BaseController;
+use Botble\Ecommerce\AdsTracking\GoogleTagManager;
 use Botble\Ecommerce\Facades\Cart;
 use Botble\Ecommerce\Facades\EcommerceHelper;
-use Illuminate\Routing\Controller;
+use Botble\Ecommerce\Models\Product;
+use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
 use Botble\SeoHelper\Facades\SeoHelper;
 use Botble\Theme\Facades\Theme;
 
-class CompareController extends Controller
+class CompareController extends BaseController
 {
     public function __construct(protected ProductInterface $productRepository)
     {
@@ -20,15 +19,13 @@ class CompareController extends Controller
 
     public function index()
     {
-        if (! EcommerceHelper::isCompareEnabled()) {
-            abort(404);
-        }
+        $title = __('Compare');
 
-        SeoHelper::setTitle(__('Compare'));
+        SeoHelper::setTitle(theme_option('ecommerce_compare_seo_title') ?: $title)
+            ->setDescription(theme_option('ecommerce_compare_seo_description'));
 
         Theme::breadcrumb()
-            ->add(__('Home'), route('public.index'))
-            ->add(__('Compare'), route('public.compare'));
+            ->add($title, route('public.compare'));
 
         $itemIds = collect(Cart::instance('compare')->content())
             ->sortBy([['updated_at', 'desc']])
@@ -36,19 +33,20 @@ class CompareController extends Controller
 
         $products = collect();
         $attributeSets = collect();
-        if ($itemIds->count()) {
-            $products = $this->productRepository
-                ->getProductsByIds($itemIds->toArray(), array_merge([
-                    'take' => 10,
-                    'with' => [
-                        'slugable',
-                        'variations',
-                        'productCollections',
-                        'variationAttributeSwatchesForProductList',
-                    ],
-                ], EcommerceHelper::withReviewsParams()));
+        if ($itemIds->isNotEmpty()) {
+            $productIds = $itemIds->all();
 
-            $attributeSets = app(ProductAttributeSetInterface::class)->getAllWithSelected($itemIds);
+            $products = $this->productRepository
+                ->getProductsByIds($productIds, [
+                    'take' => 10,
+                    'with' => EcommerceHelper::withProductEagerLoadingRelations(),
+                ]);
+
+            $attributeSets = collect();
+
+            foreach ($products->load('productAttributeSets.attributes') as $product) {
+                $attributeSets = $attributeSets->merge($product->productAttributeSets);
+            }
         }
 
         return Theme::scope(
@@ -58,39 +56,42 @@ class CompareController extends Controller
         )->render();
     }
 
-    public function store(int|string $productId, BaseHttpResponse $response)
+    public function store(int|string $productId)
     {
-        if (! EcommerceHelper::isCompareEnabled()) {
-            abort(404);
-        }
+        $product = Product::query()->findOrFail($productId);
 
-        $product = $this->productRepository->findOrFail($productId);
+        if ($product->is_variation) {
+            $product = $product->original_product;
+            $productId = $product->getKey();
+        }
 
         $duplicates = Cart::instance('compare')->search(function ($cartItem) use ($productId) {
             return $cartItem->id == $productId;
         });
 
         if (! $duplicates->isEmpty()) {
-            return $response
-                ->setMessage(__(':product is already in your compare list!', ['product' => $product->name]))
+            return $this
+                ->httpResponse()
+                ->setMessage(trans('plugins/ecommerce::products.compare.already_in_list', ['product' => $product->name]))
                 ->setError();
         }
 
-        Cart::instance('compare')->add($productId, $product->name, 1, $product->front_sale_price)
+        Cart::instance('compare')
+            ->add($productId, $product->name, 1, $product->front_sale_price)
             ->associate(Product::class);
 
-        return $response
-            ->setMessage(__('Added product :product to compare list successfully!', ['product' => $product->name]))
-            ->setData(['count' => Cart::instance('compare')->count()]);
+        return $this
+            ->httpResponse()
+            ->setMessage(trans('plugins/ecommerce::products.compare.added_success', ['product' => $product->name]))
+            ->setData([
+                'count' => Cart::instance('compare')->count(),
+                'extra_data' => app(GoogleTagManager::class)->formatProductTrackingData($product->original_product),
+            ]);
     }
 
-    public function destroy(int|string $productId, BaseHttpResponse $response)
+    public function destroy(int|string $productId)
     {
-        if (! EcommerceHelper::isCompareEnabled()) {
-            abort(404);
-        }
-
-        $product = $this->productRepository->findOrFail($productId);
+        $product = Product::query()->findOrFail($productId);
 
         Cart::instance('compare')->search(function ($cartItem, $rowId) use ($productId) {
             if ($cartItem->id == $productId) {
@@ -102,8 +103,12 @@ class CompareController extends Controller
             return false;
         });
 
-        return $response
-            ->setMessage(__('Removed product :product from compare list successfully!', ['product' => $product->name]))
-            ->setData(['count' => Cart::instance('compare')->count()]);
+        return $this
+            ->httpResponse()
+            ->setMessage(trans('plugins/ecommerce::products.compare.removed_success', ['product' => $product->name]))
+            ->setData([
+                'count' => Cart::instance('compare')->count(),
+                'extra_data' => app(GoogleTagManager::class)->formatProductTrackingData($product->original_product),
+            ]);
     }
 }

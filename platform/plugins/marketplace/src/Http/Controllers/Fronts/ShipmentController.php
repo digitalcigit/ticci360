@@ -3,43 +3,32 @@
 namespace Botble\Marketplace\Http\Controllers\Fronts;
 
 use Botble\Base\Facades\Assets;
-use Botble\Base\Facades\PageTitle;
 use Botble\Base\Http\Controllers\BaseController;
-use Botble\Base\Http\Responses\BaseHttpResponse;
+use Botble\Ecommerce\Enums\OrderHistoryActionEnum;
 use Botble\Ecommerce\Enums\ShippingCodStatusEnum;
 use Botble\Ecommerce\Enums\ShippingStatusEnum;
 use Botble\Ecommerce\Events\ShippingStatusChanged;
+use Botble\Ecommerce\Facades\OrderHelper;
 use Botble\Ecommerce\Http\Requests\ShipmentRequest;
 use Botble\Ecommerce\Http\Requests\UpdateShipmentCodStatusRequest;
 use Botble\Ecommerce\Models\Customer;
+use Botble\Ecommerce\Models\OrderHistory;
 use Botble\Ecommerce\Models\Shipment;
-use Botble\Ecommerce\Repositories\Interfaces\OrderHistoryInterface;
-use Botble\Ecommerce\Repositories\Interfaces\OrderInterface;
-use Botble\Ecommerce\Repositories\Interfaces\ShipmentHistoryInterface;
-use Botble\Ecommerce\Repositories\Interfaces\ShipmentInterface;
-use Botble\Marketplace\Http\Requests\UpdateShippingStatusRequest;
+use Botble\Ecommerce\Models\ShipmentHistory;
+use Botble\Marketplace\Facades\MarketplaceHelper;
+use Botble\Marketplace\Http\Requests\Fronts\UpdateShippingStatusRequest;
 use Botble\Marketplace\Tables\ShipmentTable;
 use Carbon\Carbon;
 use Exception;
-use Illuminate\Http\Request;
-use Botble\Marketplace\Facades\MarketplaceHelper;
-use Botble\Ecommerce\Facades\OrderHelper;
+use Illuminate\Database\Eloquent\Model;
 
 class ShipmentController extends BaseController
 {
-    public function __construct(
-        protected OrderInterface $orderRepository,
-        protected ShipmentInterface $shipmentRepository,
-        protected OrderHistoryInterface $orderHistoryRepository,
-        protected ShipmentHistoryInterface $shipmentHistoryRepository
-    ) {
-    }
-
     public function index(ShipmentTable $dataTable)
     {
-        PageTitle::setTitle(trans('plugins/ecommerce::shipping.shipments'));
+        $this->pageTitle(trans('plugins/ecommerce::shipping.shipments'));
 
-        return $dataTable->render(MarketplaceHelper::viewPath('dashboard.table.base'));
+        return $dataTable->renderTable();
     }
 
     public function edit(int|string $id)
@@ -49,26 +38,37 @@ class ShipmentController extends BaseController
 
         $shipment = $this->findOrFail($id);
         $shipment->load([
-            'histories' => function ($query) {
+            'histories' => function ($query): void {
                 $query->latest();
             },
             'histories.order',
             'histories.user',
         ]);
 
-        PageTitle::setTitle(trans('plugins/ecommerce::shipping.edit_shipping', ['code' => get_shipment_code($id)]));
+        $this->pageTitle(trans('plugins/ecommerce::shipping.edit_shipping', ['code' => get_shipment_code($id)]));
 
-        return MarketplaceHelper::view('dashboard.shipments.edit', compact('shipment'));
+        return MarketplaceHelper::view('vendor-dashboard.shipments.edit', compact('shipment'));
     }
 
-    public function postUpdateStatus(int|string $id, UpdateShippingStatusRequest $request, BaseHttpResponse $response)
+    public function postUpdateStatus(int|string $id, UpdateShippingStatusRequest $request)
     {
+        $status = $request->input('status');
+
+        abort_if(! MarketplaceHelper::allowVendorManageShipping() &&
+        ! in_array($status, [
+            ShippingStatusEnum::ARRANGE_SHIPMENT,
+            ShippingStatusEnum::READY_TO_BE_SHIPPED_OUT,
+        ]), 404);
+
+        /**
+         * @var Shipment $shipment
+         */
         $shipment = $this->findOrFail($id);
         $previousShipment = $shipment->toArray();
-        $shipment->status = $request->input('status');
+        $shipment->status = $status;
         $shipment->save();
 
-        $this->shipmentHistoryRepository->createOrUpdate([
+        ShipmentHistory::query()->create([
             'action' => 'update_status',
             'description' => trans('plugins/ecommerce::shipping.changed_shipping_status', [
                 'status' => $shipment->status->label(),
@@ -84,13 +84,13 @@ class ShipmentController extends BaseController
                 $shipment->date_shipped = Carbon::now();
                 $shipment->save();
 
-                OrderHelper::shippingStatusDelivered($shipment, $request, 0);
+                OrderHelper::shippingStatusDelivered($shipment, $request);
 
                 break;
 
             case ShippingStatusEnum::CANCELED:
-                $this->orderHistoryRepository->createOrUpdate([
-                    'action' => 'cancel_shipment',
+                OrderHistory::query()->create([
+                    'action' => OrderHistoryActionEnum::CANCEL_SHIPMENT,
                     'description' => trans('plugins/ecommerce::shipping.shipping_canceled_by'),
                     'order_id' => $shipment->order_id,
                     'user_id' => 0,
@@ -101,10 +101,12 @@ class ShipmentController extends BaseController
 
         event(new ShippingStatusChanged($shipment, $previousShipment));
 
-        return $response->setMessage(trans('plugins/ecommerce::shipping.update_shipping_status_success'));
+        return $this
+            ->httpResponse()
+            ->setMessage(trans('plugins/ecommerce::shipping.update_shipping_status_success'));
     }
 
-    public function postUpdateCodStatus(int|string $id, UpdateShipmentCodStatusRequest $request, BaseHttpResponse $response)
+    public function postUpdateCodStatus(int|string $id, UpdateShipmentCodStatusRequest $request)
     {
         $shipment = $this->findOrFail($id);
         $shipment->cod_status = $request->input('status');
@@ -114,7 +116,7 @@ class ShipmentController extends BaseController
             OrderHelper::confirmPayment($shipment->order);
         }
 
-        $this->shipmentHistoryRepository->createOrUpdate([
+        ShipmentHistory::query()->create([
             'action' => 'update_cod_status',
             'description' => trans('plugins/ecommerce::shipping.updated_cod_status_by', [
                 'status' => $shipment->cod_status->label(),
@@ -125,60 +127,46 @@ class ShipmentController extends BaseController
             'user_type' => Customer::class,
         ]);
 
-        return $response->setMessage(trans('plugins/ecommerce::shipping.update_cod_status_success'));
+        return $this
+            ->httpResponse()
+            ->setMessage(trans('plugins/ecommerce::shipping.update_cod_status_success'));
     }
 
-    public function update(int|string $id, ShipmentRequest $request, BaseHttpResponse $response)
+    public function update(int|string $id, ShipmentRequest $request)
     {
         $shipment = $this->findOrFail($id);
 
         $shipment->fill($request->validated());
+        $shipment->save();
 
-        $this->shipmentRepository->createOrUpdate($shipment);
-
-        return $response
+        return $this->httpResponse()
             ->setPreviousUrl(route('marketplace.vendor.shipments.index'))
-            ->setMessage(trans('core/base::notices.update_success_message'));
+            ->withUpdatedSuccessMessage();
     }
 
-    public function destroy(int|string $id, BaseHttpResponse $response)
+    public function destroy(int|string $id)
     {
-        try {
-            $shipment = $this->findOrFail($id);
-            $this->shipmentRepository->delete($shipment);
+        $shipment = $this->findOrFail($id);
 
-            return $response->setMessage(trans('core/base::notices.delete_success_message'));
+        try {
+            $shipment->delete();
+
+            return $this
+                ->httpResponse()
+                ->setMessage(trans('core/base::notices.delete_success_message'));
         } catch (Exception $exception) {
-            return $response
+            return $this->httpResponse()
                 ->setError()
                 ->setMessage($exception->getMessage());
         }
     }
 
-    public function deletes(Request $request, BaseHttpResponse $response)
+    protected function findOrFail(int|string $id): Shipment|Model|null
     {
-        $ids = $request->input('ids');
-        if (empty($ids)) {
-            return $response
-                ->setError()
-                ->setMessage(trans('core/base::notices.no_select'));
-        }
-
-        foreach ($ids as $id) {
-            $shipment = $this->findOrFail($id);
-            $this->shipmentRepository->delete($shipment);
-        }
-
-        return $response->setMessage(trans('core/base::notices.delete_success_message'));
-    }
-
-    protected function findOrFail(int|string $id): Shipment|null
-    {
-        return $this->shipmentRepository
-            ->getModel()
+        return Shipment::query()
             ->where('id', $id)
-            ->whereHas('order', function ($query) {
-                $query->where('store_id', auth('customer')->user()->store->id);
+            ->whereHas('order', function ($query): void {
+                $query->where('store_id', auth('customer')->user()->store?->id);
             })
             ->firstOrFail();
     }

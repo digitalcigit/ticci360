@@ -60,6 +60,10 @@ if (! defined('TAX_MODULE_SCREEN_NAME')) {
     define('TAX_MODULE_SCREEN_NAME', 'ecommerce-tax');
 }
 
+if (! defined('TAX_RULE_MODULE_SCREEN_NAME')) {
+    define('TAX_RULE_MODULE_SCREEN_NAME', 'ecommerce-tax-rule');
+}
+
 if (! defined('REVIEW_MODULE_SCREEN_NAME')) {
     define('REVIEW_MODULE_SCREEN_NAME', 'plugin-review');
 }

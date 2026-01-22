@@ -3,9 +3,12 @@
 namespace Botble\Captcha;
 
 use Botble\Base\Facades\Html;
+use Botble\Captcha\Events\CaptchaRendered;
+use Botble\Captcha\Events\CaptchaRendering;
 use Exception;
 use Illuminate\Session\SessionManager;
 use Illuminate\Session\Store;
+use Illuminate\Support\HtmlString;
 
 class MathCaptcha
 {
@@ -22,7 +25,7 @@ class MathCaptcha
     {
         $label = $this->getMathLabelOnly();
 
-        return __('Please solve the following math function: :label = ?', compact('label'));
+        return trans('plugins/captcha::captcha.math_question', compact('label'));
     }
 
     public function getMathLabelOnly(): string
@@ -46,7 +49,12 @@ class MathCaptcha
 
         $attributes = array_merge($default, $attributes);
 
-        return '<input ' . Html::attributes($attributes) . '>';
+        CaptchaRendering::dispatch($attributes, [], '', '');
+
+        return tap(
+            Html::tag('input', '', $attributes),
+            fn (HtmlString $rendered) => CaptchaRendered::dispatch($rendered),
+        );
     }
 
     public function verify(string $value): bool

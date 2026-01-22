@@ -2,127 +2,52 @@
 
 namespace Botble\Faq\Tables;
 
-use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Enums\BaseStatusEnum;
 use Botble\Faq\Models\FaqCategory;
-use Botble\Faq\Repositories\Interfaces\FaqCategoryInterface;
 use Botble\Table\Abstracts\TableAbstract;
-use Botble\Base\Facades\Html;
-use Illuminate\Contracts\Routing\UrlGenerator;
+use Botble\Table\Actions\DeleteAction;
+use Botble\Table\Actions\EditAction;
+use Botble\Table\BulkActions\DeleteBulkAction;
+use Botble\Table\BulkChanges\CreatedAtBulkChange;
+use Botble\Table\BulkChanges\NameBulkChange;
+use Botble\Table\BulkChanges\StatusBulkChange;
+use Botble\Table\Columns\CreatedAtColumn;
+use Botble\Table\Columns\IdColumn;
+use Botble\Table\Columns\NameColumn;
+use Botble\Table\Columns\StatusColumn;
+use Botble\Table\HeaderActions\CreateHeaderAction;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Relations\Relation;
-use Illuminate\Database\Query\Builder as QueryBuilder;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Auth;
-use Botble\Table\DataTables;
 
 class FaqCategoryTable extends TableAbstract
 {
-    protected $hasActions = true;
-
-    protected $hasFilter = true;
-
-    public function __construct(DataTables $table, UrlGenerator $urlGenerator, FaqCategoryInterface $faqCategoryRepository)
+    public function setup(): void
     {
-        parent::__construct($table, $urlGenerator);
-
-        $this->repository = $faqCategoryRepository;
-
-        if (! Auth::user()->hasAnyPermission(['faq_category.edit', 'faq_category.destroy'])) {
-            $this->hasOperations = false;
-            $this->hasActions = false;
-        }
-    }
-
-    public function ajax(): JsonResponse
-    {
-        $data = $this->table
-            ->eloquent($this->query())
-            ->editColumn('name', function (FaqCategory $item) {
-                if (! Auth::user()->hasPermission('faq_category.edit')) {
-                    return BaseHelper::clean($item->name);
-                }
-
-                return Html::link(route('faq_category.edit', $item->id), BaseHelper::clean($item->name));
-            })
-            ->editColumn('checkbox', function (FaqCategory $item) {
-                return $this->getCheckbox($item->id);
-            })
-            ->editColumn('created_at', function (FaqCategory $item) {
-                return BaseHelper::formatDate($item->created_at);
-            })
-            ->editColumn('status', function (FaqCategory $item) {
-                return $item->status->toHtml();
-            })
-            ->addColumn('operations', function (FaqCategory $item) {
-                return $this->getOperations('faq_category.edit', 'faq_category.destroy', $item);
+        $this
+            ->model(FaqCategory::class)
+            ->addColumns([
+                IdColumn::make(),
+                NameColumn::make()->route('faq_category.edit'),
+                CreatedAtColumn::make(),
+                StatusColumn::make(),
+            ])
+            ->addHeaderAction(CreateHeaderAction::make()->route('faq_category.create'))
+            ->addActions([
+                EditAction::make()->route('faq_category.edit'),
+                DeleteAction::make()->route('faq_category.destroy'),
+            ])
+            ->addBulkAction(DeleteBulkAction::make()->permission('faq_category.destroy'))
+            ->addBulkChanges([
+                NameBulkChange::make(),
+                StatusBulkChange::make(),
+                CreatedAtBulkChange::make(),
+            ])
+            ->queryUsing(function (Builder $query) {
+                return $query
+                    ->select([
+                        'id',
+                        'name',
+                        'created_at',
+                        'status',
+                    ]);
             });
-
-        return $this->toJson($data);
-    }
-
-    public function query(): Relation|Builder|QueryBuilder
-    {
-        $query = $this->repository->getModel()->select([
-            'id',
-            'name',
-            'created_at',
-            'status',
-        ]);
-
-        return $this->applyScopes($query);
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => [
-                'title' => trans('core/base::tables.id'),
-                'width' => '20px',
-            ],
-            'name' => [
-                'title' => trans('core/base::tables.name'),
-                'class' => 'text-start',
-            ],
-            'created_at' => [
-                'title' => trans('core/base::tables.created_at'),
-                'width' => '100px',
-            ],
-            'status' => [
-                'title' => trans('core/base::tables.status'),
-                'width' => '100px',
-            ],
-        ];
-    }
-
-    public function buttons(): array
-    {
-        return $this->addCreateButton(route('faq_category.create'), 'faq_category.create');
-    }
-
-    public function bulkActions(): array
-    {
-        return $this->addDeleteAction(route('faq_category.deletes'), 'faq_category.destroy', parent::bulkActions());
-    }
-
-    public function getBulkChanges(): array
-    {
-        return [
-            'name' => [
-                'title' => trans('core/base::tables.name'),
-                'type' => 'text',
-                'validate' => 'required|max:120',
-            ],
-            'status' => [
-                'title' => trans('core/base::tables.status'),
-                'type' => 'customSelect',
-                'choices' => BaseStatusEnum::labels(),
-                'validate' => 'required|in:' . implode(',', BaseStatusEnum::values()),
-            ],
-            'created_at' => [
-                'title' => trans('core/base::tables.created_at'),
-                'type' => 'datePicker',
-            ],
-        ];
     }
 }

@@ -8,8 +8,8 @@ return new class () extends Migration {
     public function up(): void
     {
         if (! Schema::hasTable('faq_categories_translations')) {
-            Schema::create('faq_categories_translations', function (Blueprint $table) {
-                $table->string('lang_code');
+            Schema::create('faq_categories_translations', function (Blueprint $table): void {
+                $table->string('lang_code', 20);
                 $table->foreignId('faq_categories_id');
                 $table->string('name', 120)->nullable();
 
@@ -18,8 +18,8 @@ return new class () extends Migration {
         }
 
         if (! Schema::hasTable('faqs_translations')) {
-            Schema::create('faqs_translations', function (Blueprint $table) {
-                $table->string('lang_code');
+            Schema::create('faqs_translations', function (Blueprint $table): void {
+                $table->string('lang_code', 20);
                 $table->foreignId('faqs_id');
                 $table->text('question')->nullable();
                 $table->text('answer')->nullable();

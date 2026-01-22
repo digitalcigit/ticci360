@@ -2,71 +2,54 @@
 
 namespace Botble\Ecommerce\Tables;
 
-use Botble\Base\Facades\BaseHelper;
-use Botble\Ecommerce\Repositories\Interfaces\DiscountInterface;
+use Botble\Ecommerce\Enums\DiscountTypeEnum;
+use Botble\Ecommerce\Models\Discount;
 use Botble\Table\Abstracts\TableAbstract;
-use Illuminate\Contracts\Routing\UrlGenerator;
+use Botble\Table\Actions\DeleteAction;
+use Botble\Table\Actions\EditAction;
+use Botble\Table\BulkActions\DeleteBulkAction;
+use Botble\Table\Columns\Column;
+use Botble\Table\Columns\DateColumn;
+use Botble\Table\Columns\IdColumn;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
-use Botble\Table\DataTables;
 
 class DiscountTable extends TableAbstract
 {
-    protected $hasActions = true;
-
-    protected $hasFilter = false;
-
-    public function __construct(DataTables $table, UrlGenerator $urlGenerator, DiscountInterface $discountRepository)
+    public function setup(): void
     {
-        parent::__construct($table, $urlGenerator);
-
-        $this->repository = $discountRepository;
-
-        if (! Auth::user()->hasPermission('discounts.destroy')) {
-            $this->hasOperations = false;
-            $this->hasActions = false;
-        }
+        $this
+            ->model(Discount::class)
+            ->addActions([
+                EditAction::make()->route('discounts.edit'),
+                DeleteAction::make()->route('discounts.destroy'),
+            ]);
     }
 
     public function ajax(): JsonResponse
     {
         $data = $this->table
             ->eloquent($this->query())
-            ->editColumn('detail', function ($item) {
-                return view('plugins/ecommerce::discounts.detail', compact('item'))->render();
+            ->editColumn('detail', function (Discount $item) {
+                $isCoupon = $item->type == DiscountTypeEnum::COUPON;
+
+                return view('plugins/ecommerce::discounts.detail', compact('item', 'isCoupon'))->render();
             })
-            ->editColumn('checkbox', function ($item) {
-                return $this->getCheckbox($item->id);
-            })
-            ->editColumn('total_used', function ($item) {
-                if ($item->type === 'promotion') {
+            ->editColumn('total_used', function (Discount $item) {
+                if ($item->type == DiscountTypeEnum::PROMOTION) {
                     return '&mdash;';
                 }
 
                 if ($item->quantity === null) {
-                    return $item->total_used;
+                    return number_format($item->total_used);
                 }
 
-                return $item->total_used . '/' . $item->quantity;
-            })
-            ->editColumn('start_date', function ($item) {
-                return BaseHelper::formatDate($item->start_date);
-            })
-            ->editColumn('end_date', function ($item) {
-                if (! $item->end_date) {
-                    return '&mdash;';
-                }
-
-                return $item->end_date;
-            })
-            ->addColumn('operations', function ($item) {
-                return $this->getOperations(null, 'discounts.destroy', $item);
+                return sprintf('%d/%d', number_format($item->total_used), number_format($item->quantity));
             });
 
         return $this->toJson($data);
@@ -74,7 +57,10 @@ class DiscountTable extends TableAbstract
 
     public function query(): Relation|Builder|QueryBuilder
     {
-        $query = $this->repository->getModel()->select(['*']);
+        $query = $this
+            ->getModel()
+            ->query()
+            ->select(['*']);
 
         return $this->applyScopes($query);
     }
@@ -82,28 +68,18 @@ class DiscountTable extends TableAbstract
     public function columns(): array
     {
         return [
-            'id' => [
-                'title' => trans('core/base::tables.id'),
-                'width' => '20px',
-                'class' => 'text-start',
-            ],
-            'detail' => [
-                'name' => 'code',
-                'title' => trans('plugins/ecommerce::discount.detail'),
-                'class' => 'text-start',
-            ],
-            'total_used' => [
-                'title' => trans('plugins/ecommerce::discount.used'),
-                'width' => '100px',
-            ],
-            'start_date' => [
-                'title' => trans('plugins/ecommerce::discount.start_date'),
-                'class' => 'text-center',
-            ],
-            'end_date' => [
-                'title' => trans('plugins/ecommerce::discount.end_date'),
-                'class' => 'text-center',
-            ],
+            IdColumn::make(),
+            Column::make('detail')
+                ->name('code')
+                ->title(trans('plugins/ecommerce::discount.detail'))
+                ->alignStart(),
+            Column::make('total_used')
+                ->title(trans('plugins/ecommerce::discount.used'))
+                ->width(100),
+            DateColumn::make('start_date')
+                ->title(trans('plugins/ecommerce::discount.start_date')),
+            DateColumn::make('end_date')
+                ->title(trans('plugins/ecommerce::discount.end_date')),
         ];
     }
 
@@ -114,15 +90,14 @@ class DiscountTable extends TableAbstract
 
     public function bulkActions(): array
     {
-        return $this->addDeleteAction(route('discounts.deletes'), 'discounts.destroy', parent::bulkActions());
+        return [
+            DeleteBulkAction::make()->permission('discounts.destroy'),
+        ];
     }
 
     public function renderTable($data = [], $mergeData = []): View|Factory|Response
     {
-        if ($this->query()->count() === 0 &&
-            ! $this->request()->wantsJson() &&
-            $this->request()->input('filter_table_id') !== $this->getOption('id') && ! $this->request()->ajax()
-        ) {
+        if ($this->isEmpty()) {
             return view('plugins/ecommerce::discounts.intro');
         }
 

@@ -2,185 +2,88 @@
 
 namespace Botble\Ecommerce\Http\Controllers\Fronts;
 
-use Botble\Base\Http\Responses\BaseHttpResponse;
-use Botble\Ecommerce\Http\Requests\CartRequest;
-use Botble\Ecommerce\Http\Requests\UpdateCartRequest;
-use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
-use Botble\Ecommerce\Services\HandleApplyPromotionsService;
+use Botble\Base\Http\Controllers\BaseController;
+use Botble\Ecommerce\AdsTracking\FacebookPixel;
+use Botble\Ecommerce\AdsTracking\GoogleTagManager;
+use Botble\Ecommerce\Cart\Cart as CartInstance;
+use Botble\Ecommerce\Enums\DiscountTypeEnum;
 use Botble\Ecommerce\Facades\Cart;
 use Botble\Ecommerce\Facades\EcommerceHelper;
-use Exception;
-use Illuminate\Routing\Controller;
-use Illuminate\Support\Arr;
 use Botble\Ecommerce\Facades\OrderHelper;
+use Botble\Ecommerce\Http\Requests\CartRequest;
+use Botble\Ecommerce\Http\Requests\UpdateCartRequest;
+use Botble\Ecommerce\Models\Discount;
+use Botble\Ecommerce\Models\Product;
+use Botble\Ecommerce\Services\AbandonedCartService;
+use Botble\Ecommerce\Services\HandleApplyCouponService;
+use Botble\Ecommerce\Services\HandleApplyPromotionsService;
 use Botble\SeoHelper\Facades\SeoHelper;
 use Botble\Theme\Facades\Theme;
+use Exception;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
+use Throwable;
 
-class PublicCartController extends Controller
+class PublicCartController extends BaseController
 {
-    public function __construct(protected ProductInterface $productRepository)
-    {
+    protected ?array $cachedCartData = null;
+
+    protected ?object $cachedCartInstance = null;
+
+    public function __construct(
+        protected HandleApplyPromotionsService $applyPromotionsService,
+        protected HandleApplyCouponService $handleApplyCouponService
+    ) {
     }
 
-    public function store(CartRequest $request, BaseHttpResponse $response)
+    protected function getCartInstance(): CartInstance
     {
-        if (! EcommerceHelper::isCartEnabled()) {
-            abort(404);
+        if ($this->cachedCartInstance === null) {
+            $this->cachedCartInstance = Cart::instance('cart');
         }
 
-        $product = $this->productRepository->findById($request->input('id'));
-
-        if (! $product) {
-            return $response
-                ->setError()
-                ->setMessage(__('This product is out of stock or not exists!'));
-        }
-
-        if ($product->variations->count() > 0 && ! $product->is_variation) {
-            $product = $product->defaultVariation->product;
-        }
-
-        if ($product->isOutOfStock()) {
-            return $response
-                ->setError()
-                ->setMessage(__('Product :product is out of stock!', ['product' => $product->original_product->name ?: $product->name]));
-        }
-
-        $maxQuantity = $product->quantity;
-
-        if (! $product->canAddToCart($request->input('qty', 1))) {
-            return $response
-                ->setError()
-                ->setMessage(__('Maximum quantity is :max!', ['max' => $maxQuantity]));
-        }
-
-        $product->quantity -= $request->input('qty', 1);
-
-        $outOfQuantity = false;
-        foreach (Cart::instance('cart')->content() as $item) {
-            if ($item->id == $product->id) {
-                $originalQuantity = $product->quantity;
-                $product->quantity = (int)$product->quantity - $item->qty;
-
-                if ($product->quantity < 0) {
-                    $product->quantity = 0;
-                }
-
-                if ($product->isOutOfStock()) {
-                    $outOfQuantity = true;
-
-                    break;
-                }
-
-                $product->quantity = $originalQuantity;
-            }
-        }
-
-        if (
-            EcommerceHelper::isEnabledProductOptions() &&
-            $product->original_product->options()->where('required', true)->exists()
-        ) {
-            if (! $request->input('options')) {
-                return $response
-                    ->setError()
-                    ->setData(['next_url' => $product->original_product->url])
-                    ->setMessage(__('Please select product options!'));
-            }
-
-            $requiredOptions = $product->original_product->options()->where('required', true)->get();
-
-            $message = null;
-
-            foreach ($requiredOptions as $requiredOption) {
-                if (! $request->input('options.' . $requiredOption->id . '.values')) {
-                    $message .= trans('plugins/ecommerce::product-option.add_to_cart_value_required', ['value' => $requiredOption->name]);
-                }
-            }
-
-            if ($message) {
-                return $response
-                    ->setError()
-                    ->setMessage(__('Please select product options!'));
-            }
-        }
-
-        if ($outOfQuantity) {
-            return $response
-                ->setError()
-                ->setMessage(__('Product :product is out of stock!', ['product' => $product->original_product->name ?: $product->name]));
-        }
-
-        $cartItems = OrderHelper::handleAddCart($product, $request);
-
-        $response
-            ->setMessage(__(
-                'Added product :product to cart successfully!',
-                ['product' => $product->original_product->name ?: $product->name]
-            ));
-
-        $token = OrderHelper::getOrderSessionToken();
-
-        $nextUrl = route('public.checkout.information', $token);
-
-        if (EcommerceHelper::getQuickBuyButtonTarget() == 'cart') {
-            $nextUrl = route('public.cart');
-        }
-
-        if ($request->input('checkout')) {
-            $response->setData(['next_url' => $nextUrl]);
-
-            if ($request->ajax() && $request->wantsJson()) {
-                return $response;
-            }
-
-            return $response
-                ->setNextUrl($nextUrl);
-        }
-
-        return $response
-            ->setData([
-                'status' => true,
-                'count' => Cart::instance('cart')->count(),
-                'total_price' => format_price(Cart::instance('cart')->rawSubTotal()),
-                'content' => $cartItems,
-            ]);
+        return $this->cachedCartInstance;
     }
 
-    public function getView(HandleApplyPromotionsService $applyPromotionsService)
+    public function index(Request $request)
     {
-        if (! EcommerceHelper::isCartEnabled()) {
-            abort(404);
-        }
+        if ($token = $request->query('token')) {
+            $abandonedCartService = app(AbandonedCartService::class);
+            $abandonedCart = $abandonedCartService->recoverCart($token);
 
-        Theme::asset()
-            ->container('footer')
-            ->add('ecommerce-checkout-js', 'vendor/core/plugins/ecommerce/js/checkout.js', ['jquery']);
+            if ($abandonedCart) {
+                session()->flash('success', __('Your cart has been restored! Complete your purchase now.'));
+            }
+
+            return redirect()->route('public.cart');
+        }
 
         $promotionDiscountAmount = 0;
         $couponDiscountAmount = 0;
 
-        $products = [];
-        $crossSellProducts = collect();
+        $products = new Collection();
+        $crossSellProducts = new Collection();
 
-        if (Cart::instance('cart')->count() > 0) {
-            $products = Cart::instance('cart')->products();
+        if (Cart::instance('cart')->isNotEmpty()) {
+            [$products, $promotionDiscountAmount, $couponDiscountAmount] = $this->getCartData();
 
-            $promotionDiscountAmount = $applyPromotionsService->execute();
-
-            $sessionData = OrderHelper::getOrderSessionData();
-
-            if (session()->has('applied_coupon_code')) {
-                $couponDiscountAmount = Arr::get($sessionData, 'coupon_discount_amount', 0);
-            }
-
-            $parentIds = $products->pluck('original_product.id')->toArray();
-
-            $crossSellProducts = get_cart_cross_sale_products($parentIds, (int)theme_option('number_of_cross_sale_product', 4));
+            $crossSellProducts = get_cart_cross_sale_products(
+                $products->pluck('original_product.id')->all(),
+                (int) theme_option('number_of_cross_sale_product', 4)
+            ) ?: new Collection();
         }
 
-        SeoHelper::setTitle(__('Shopping Cart'));
+        $title = __('Shopping Cart');
 
-        Theme::breadcrumb()->add(__('Home'), route('public.index'))->add(__('Shopping Cart'), route('public.cart'));
+        SeoHelper::setTitle(theme_option('ecommerce_cart_seo_title') ?: $title)
+            ->setDescription(theme_option('ecommerce_cart_seo_description'));
+
+        Theme::breadcrumb()->add($title, route('public.cart'));
+
+        app(GoogleTagManager::class)->viewCart();
 
         return Theme::scope(
             'ecommerce.cart',
@@ -189,16 +92,201 @@ class PublicCartController extends Controller
         )->render();
     }
 
-    public function postUpdate(UpdateCartRequest $request, BaseHttpResponse $response)
+    public function store(CartRequest $request)
     {
-        if (! EcommerceHelper::isCartEnabled()) {
-            abort(404);
+        $response = $this->httpResponse();
+
+        /**
+         * @var Product $product
+         */
+        $product = Product::query()
+            ->find($request->input('id'));
+
+        if (! $product) {
+            return $response
+                ->setError()
+                ->setMessage(trans('plugins/ecommerce::products.cart.product_not_exists'));
         }
 
+        if ($product->variations->isNotEmpty() && ! $product->is_variation && $product->defaultVariation->product->id) {
+            $product = $product->defaultVariation->product;
+        }
+
+        $originalProduct = $product->original_product;
+
+        if ($product->isOutOfStock()) {
+            return $response
+                ->setError()
+                ->setMessage(
+                    trans(
+                        'plugins/ecommerce::products.cart.out_of_stock',
+                        ['product' => $originalProduct->name ?: $product->name]
+                    )
+                );
+        }
+
+        try {
+            do_action('ecommerce_before_add_to_cart', $product);
+        } catch (Exception $e) {
+            return $response
+                ->setError()
+                ->setMessage($e->getMessage());
+        }
+
+        $maxQuantity = $product->max_cart_quantity;
+
+        $requestQuantity = $request->integer('qty', 1);
+
+        $existingAddedToCart = Cart::instance('cart')->content()->firstWhere('id', $product->id);
+
+        if ($existingAddedToCart) {
+            $requestQuantity += $existingAddedToCart->qty;
+        }
+
+        if (! $product->canAddToCart($requestQuantity)) {
+            return $response
+                ->setError()
+                ->setMessage(trans('plugins/ecommerce::products.cart.max_quantity_detail', ['quantity' => $maxQuantity, 'product' => $product->name]));
+        }
+
+        $outOfQuantity = false;
+        $cartContent = Cart::instance('cart')->content();
+        $existingItem = $cartContent->firstWhere('id', $product->id);
+
+        if ($existingItem) {
+            $originalQuantity = $product->quantity;
+            $product->quantity = (int) $product->quantity - $existingItem->qty;
+
+            if ($product->quantity < 0) {
+                $product->quantity = 0;
+            }
+
+            if ($product->isOutOfStock()) {
+                $outOfQuantity = true;
+            }
+
+            $product->quantity = $originalQuantity;
+        }
+
+        $product->quantity = (int) $product->quantity - $request->integer('qty', 1);
+
+        if (
+            EcommerceHelper::isEnabledProductOptions() &&
+            DB::table('ec_options')
+                ->where('product_id', $originalProduct->id)
+                ->where('required', true)
+                ->exists()
+        ) {
+            if (! $request->input('options')) {
+                return $response
+                    ->setError()
+                    ->setData(['next_url' => $originalProduct->url])
+                    ->setMessage(trans('plugins/ecommerce::products.cart.select_options'));
+            }
+
+            $requiredOptions = DB::table('ec_options')
+                ->where('product_id', $originalProduct->id)
+                ->where('required', true)
+                ->get();
+
+            $message = null;
+
+            foreach ($requiredOptions as $requiredOption) {
+                if (! $request->input('options.' . $requiredOption->id . '.values')) {
+                    $message .= trans(
+                        'plugins/ecommerce::product-option.add_to_cart_value_required',
+                        ['value' => $requiredOption->name]
+                    );
+                }
+            }
+
+            if ($message) {
+                return $response
+                    ->setError()
+                    ->setMessage(trans('plugins/ecommerce::products.cart.select_options'));
+            }
+        }
+
+        if ($outOfQuantity) {
+            return $response
+                ->setError()
+                ->setMessage(trans(
+                    'plugins/ecommerce::products.cart.out_of_stock',
+                    ['product' => $originalProduct->name ?: $product->name]
+                ));
+        }
+
+        try {
+            $cartItems = OrderHelper::handleAddCart($product, $request);
+        } catch (Exception $e) {
+            return $response
+                ->setError()
+                ->setMessage($e->getMessage());
+        }
+
+        $cartItem = Arr::first(array_filter($cartItems, fn ($item) => $item['id'] == $product->id));
+
+        $response->setMessage(trans(
+            'plugins/ecommerce::products.cart.added_to_cart_success',
+            ['product' => $originalProduct->name ?: $product->name]
+        ));
+
+        $responseData = [
+            'status' => true,
+            'content' => $cartItems,
+            'extra_data' => app(GoogleTagManager::class)->formatProductTrackingData($originalProduct, $cartItem['qty']),
+        ];
+
+        app(GoogleTagManager::class)->addToCart(
+            $originalProduct,
+            $cartItem['qty'],
+            $cartItem['subtotal'],
+        );
+
+        app(FacebookPixel::class)->addToCart(
+            $originalProduct,
+            $cartItem['qty'],
+            $cartItem['subtotal'],
+        );
+
+        $token = OrderHelper::getOrderSessionToken();
+        $nextUrl = route('public.checkout.information', $token);
+
+        if (EcommerceHelper::getQuickBuyButtonTarget() == 'cart') {
+            $nextUrl = route('public.cart');
+        }
+
+        if ($request->input('checkout')) {
+            Cart::instance('cart')->refresh();
+
+            $responseData['next_url'] = $nextUrl;
+
+            $this->applyAutoCouponCode();
+
+            if ($request->ajax() && $request->wantsJson()) {
+                return $response->setData($responseData);
+            }
+
+            return $response
+                ->setData($responseData)
+                ->setNextUrl($nextUrl);
+        }
+
+        return $response
+            ->setData([
+                ...$this->getDataForResponse(),
+                ...$responseData,
+            ]);
+    }
+
+    public function update(UpdateCartRequest $request)
+    {
         if ($request->has('checkout')) {
             $token = OrderHelper::getOrderSessionToken();
 
-            return $response->setNextUrl(route('public.checkout.information', $token));
+            return $this
+                ->httpResponse()
+                ->setNextUrl(route('public.checkout.information', $token));
         }
 
         $data = $request->input('items', []);
@@ -211,11 +299,14 @@ class PublicCartController extends Controller
                 continue;
             }
 
-            $product = $this->productRepository->findById($cartItem->id);
+            /**
+             * @var Product $product
+             */
+            $product = Product::query()->find($cartItem->id);
 
             if ($product) {
                 $originalQuantity = $product->quantity;
-                $product->quantity = (int)$product->quantity - (int)Arr::get($item, 'values.qty', 0) + 1;
+                $product->quantity = (int) $product->quantity - (int) Arr::get($item, 'values.qty', 0) + 1;
 
                 if ($product->quantity < 0) {
                     $product->quantity = 0;
@@ -232,56 +323,182 @@ class PublicCartController extends Controller
         }
 
         if ($outOfQuantity) {
-            return $response
+            return $this
+                ->httpResponse()
                 ->setError()
-                ->setData([
-                    'count' => Cart::instance('cart')->count(),
-                    'total_price' => format_price(Cart::instance('cart')->rawSubTotal()),
-                    'content' => Cart::instance('cart')->content(),
-                ])
-                ->setMessage(__('One or all products are not enough quantity so cannot update!'));
+                ->setData($this->getDataForResponse())
+                ->setMessage(trans('plugins/ecommerce::products.cart.not_enough_quantity'));
         }
 
-        return $response
-            ->setData([
-                'count' => Cart::instance('cart')->count(),
-                'total_price' => format_price(Cart::instance('cart')->rawSubTotal()),
-                'content' => Cart::instance('cart')->content(),
-            ])
-            ->setMessage(__('Update cart successfully!'));
+        return $this
+            ->httpResponse()
+            ->setData($this->getDataForResponse())
+            ->setMessage(trans('plugins/ecommerce::products.cart.updated_cart_success'));
     }
 
-    public function getRemove(string $id, BaseHttpResponse $response)
+    public function destroy(string $id)
     {
-        if (! EcommerceHelper::isCartEnabled()) {
-            abort(404);
-        }
-
         try {
-            Cart::instance('cart')->remove($id);
-        } catch (Exception) {
-            return $response->setError()->setMessage(__('Cart item is not existed!'));
-        }
+            $cartItem = Cart::instance('cart')->get($id);
+            $product = Product::query()->find($cartItem->id);
 
-        return $response
-            ->setData([
-                'count' => Cart::instance('cart')->count(),
-                'total_price' => format_price(Cart::instance('cart')->rawSubTotal()),
-                'content' => Cart::instance('cart')->content(),
-            ])
-            ->setMessage(__('Removed item from cart successfully!'));
+            $googleTagManager = app(GoogleTagManager::class);
+
+            if ($product) {
+                $trackingData = $googleTagManager->formatProductTrackingData($product->original_product, $cartItem->qty);
+            }
+
+            $googleTagManager->removeFromCart($cartItem);
+
+            Cart::instance('cart')->remove($id);
+
+            $responseData = [
+                ...$this->getDataForResponse(),
+            ];
+
+            if (isset($trackingData)) {
+                $responseData['extra_data'] = $trackingData;
+            }
+
+            return $this
+                ->httpResponse()
+                ->setData($responseData)
+                ->setMessage(trans('plugins/ecommerce::products.cart.removed_from_cart_success', ['product' => $product?->name ?? '']));
+        } catch (Throwable) {
+            return $this
+                ->httpResponse()
+                ->setError()
+                ->setMessage(trans('plugins/ecommerce::products.cart.item_not_found'));
+        }
     }
 
-    public function getDestroy(BaseHttpResponse $response)
+    public function empty()
     {
-        if (! EcommerceHelper::isCartEnabled()) {
-            abort(404);
-        }
-
         Cart::instance('cart')->destroy();
 
-        return $response
+        return $this
+            ->httpResponse()
             ->setData(Cart::instance('cart')->content())
-            ->setMessage(__('Empty cart successfully!'));
+            ->setMessage(trans('plugins/ecommerce::products.cart.empty_success'));
+    }
+
+    protected function getCartData(): array
+    {
+        if ($this->cachedCartData !== null) {
+            return $this->cachedCartData;
+        }
+
+        $cartInstance = $this->getCartInstance();
+        $products = $cartInstance->products();
+
+        $cartData = [
+            'rawTotal' => $cartInstance->rawTotal(),
+            'cartItems' => $cartInstance->content(),
+            'countCart' => $cartInstance->count(),
+            'productItems' => $products,
+        ];
+
+        $promotionDiscountAmount = $this->applyPromotionsService->execute(null, $cartData);
+
+        $couponDiscountAmount = $this->applyAutoCouponCode();
+
+        $sessionData = OrderHelper::getOrderSessionData();
+
+        if (session()->has('applied_coupon_code')) {
+            $couponDiscountAmount = (float) Arr::get($sessionData, 'coupon_discount_amount', 0);
+        }
+
+        $this->cachedCartData = [$products, $promotionDiscountAmount, $couponDiscountAmount];
+
+        return $this->cachedCartData;
+    }
+
+    protected function getDataForResponse(): array
+    {
+        $cartContent = null;
+
+        $cartInstance = $this->getCartInstance();
+
+        $cartData = $this->getCartData();
+
+        [$products, $promotionDiscountAmount, $couponDiscountAmount] = $cartData;
+
+        $cartCount = $cartInstance->count();
+        $cartSubTotal = $cartInstance->rawSubTotal();
+        $cartContentData = $cartInstance->content();
+
+        if (Route::is('public.cart.*')) {
+            $crossSellProducts = collect();
+            if ($products->isNotEmpty()) {
+                $productIds = $products->pluck('original_product.id')->filter()->unique()->all();
+
+                if (! empty($productIds)) {
+                    $crossSellProducts = get_cart_cross_sale_products(
+                        $productIds,
+                        (int) theme_option('number_of_cross_sale_product', 4)
+                    ) ?: collect();
+                }
+            }
+
+            $cartContent = view(
+                EcommerceHelper::viewPath('cart'),
+                compact('products', 'promotionDiscountAmount', 'couponDiscountAmount', 'crossSellProducts')
+            )->render();
+        }
+
+        $additionalData = apply_filters('ecommerce_cart_additional_data', [], $cartData);
+
+        return apply_filters('ecommerce_cart_data_for_response', [
+            'count' => $cartCount,
+            'total_price' => format_price($cartSubTotal),
+            'content' => $cartContentData,
+            'cart_content' => $cartContent,
+            ...$additionalData,
+        ], $cartData);
+    }
+
+    protected function applyAutoCouponCode(): float
+    {
+        $couponDiscountAmount = 0;
+
+        if ($couponCode = session('auto_apply_coupon_code')) {
+            $coupon = Discount::query()
+                ->where('code', $couponCode)
+                ->where('apply_via_url', true)
+                ->where('type', DiscountTypeEnum::COUPON)
+                ->exists();
+
+            if ($coupon) {
+                $couponData = $this->handleApplyCouponService->execute($couponCode);
+
+                if (! Arr::get($couponData, 'error')) {
+                    $couponDiscountAmount = Arr::get($couponData, 'data.discount_amount', 0);
+                }
+            }
+        }
+
+        return (float) $couponDiscountAmount;
+    }
+
+    public function unsubscribe(string $token)
+    {
+        $abandonedCartService = app(AbandonedCartService::class);
+        $result = $abandonedCartService->unsubscribe($token);
+
+        SeoHelper::setTitle(__('Unsubscribe'));
+
+        if ($result) {
+            return Theme::scope(
+                'ecommerce.abandoned-cart-unsubscribed',
+                ['success' => true],
+                'plugins/ecommerce::themes.abandoned-cart-unsubscribed'
+            )->render();
+        }
+
+        return Theme::scope(
+            'ecommerce.abandoned-cart-unsubscribed',
+            ['success' => false],
+            'plugins/ecommerce::themes.abandoned-cart-unsubscribed'
+        )->render();
     }
 }

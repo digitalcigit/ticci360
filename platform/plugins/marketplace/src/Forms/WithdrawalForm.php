@@ -2,6 +2,8 @@
 
 namespace Botble\Marketplace\Forms;
 
+use Botble\Base\Forms\FieldOptions\HtmlFieldOption;
+use Botble\Base\Forms\Fields\HtmlField;
 use Botble\Base\Forms\FormAbstract;
 use Botble\Marketplace\Enums\PayoutPaymentMethodsEnum;
 use Botble\Marketplace\Http\Requests\WithdrawalRequest;
@@ -10,37 +12,37 @@ use Illuminate\Support\Arr;
 
 class WithdrawalForm extends FormAbstract
 {
-    public function buildForm(): void
+    public function setup(): void
     {
-        $symbol = ' (' . get_application_currency()->symbol . ')';
+        $symbol = sprintf(' (%s)', get_application_currency()->symbol);
+
+        /**
+         * @var Withdrawal $withdrawal
+         */
+        $withdrawal = $this->getModel();
 
         $this
-            ->setupModel(new Withdrawal())
+            ->model(Withdrawal::class)
             ->setValidatorClass(WithdrawalRequest::class)
-            ->withCustomFields()
             ->add('amount', 'text', [
                 'label' => trans('plugins/marketplace::withdrawal.forms.amount') . $symbol,
-                'label_attr' => ['class' => 'control-label'],
                 'attr' => [
                     'disabled' => 'disabled',
                 ],
             ])
             ->add('fee', 'text', [
                 'label' => trans('plugins/marketplace::withdrawal.forms.fee') . $symbol,
-                'label_attr' => ['class' => 'control-label'],
                 'attr' => [
                     'disabled' => 'disabled',
                 ],
             ])
             ->add('payment_channel', 'customSelect', [
                 'label' => trans('plugins/marketplace::withdrawal.forms.payment_channel'),
-                'label_attr' => ['class' => 'control-label'],
                 'choices' => Arr::pluck(PayoutPaymentMethodsEnum::payoutMethodsEnabled(), 'label', 'key'),
                 'attr' => $this->model->transaction_id ? ['disabled' => 'disabled'] : [],
             ])
             ->add('transaction_id', 'text', [
                 'label' => trans('plugins/marketplace::withdrawal.forms.transaction_id'),
-                'label_attr' => ['class' => 'control-label'],
                 'attr' => [
                     'placeholder' => trans('plugins/marketplace::withdrawal.forms.transaction_id_placeholder'),
                     'data-counter' => 60,
@@ -48,7 +50,6 @@ class WithdrawalForm extends FormAbstract
             ])
             ->add('description', 'textarea', [
                 'label' => trans('core/base::forms.description'),
-                'label_attr' => ['class' => 'control-label'],
                 'attr' => [
                     'rows' => 4,
                     'placeholder' => trans('core/base::forms.description_placeholder'),
@@ -57,35 +58,42 @@ class WithdrawalForm extends FormAbstract
             ])
             ->add('payoutInfo', 'html', [
                 'html' => view('plugins/marketplace::withdrawals.payout-info', [
-                    'bankInfo' => $this->getModel()->bank_info,
-                    'taxInfo' => $this->getModel()->customer->tax_info,
-                    'paymentChannel' => $this->getModel()->payment_channel,
-                    'title' => __('Payout account'),
+                    'bankInfo' => $withdrawal->bank_info,
+                    'taxInfo' => $withdrawal->customer->tax_info,
+                    'paymentChannel' => $withdrawal->payment_channel,
+                    'title' => trans('plugins/marketplace::withdrawal.payout_account'),
                 ])->render(),
             ])
             ->add('images[]', 'mediaImages', [
                 'label' => trans('plugins/ecommerce::products.form.image'),
-                'label_attr' => ['class' => 'control-label'],
-                'values' => $this->getModel() ? $this->getModel()->images : [],
-            ]);
+                'values' => $withdrawal ? $withdrawal->images : [],
+            ])
+            ->when(! $withdrawal->canEditStatus(), function (FormAbstract $form) use ($withdrawal): void {
+                $form->add(
+                    'download_invoice',
+                    HtmlField::class,
+                    HtmlFieldOption::make()
+                        ->content(view('plugins/marketplace::withdrawals.download-invoice', compact('withdrawal'))->render())
+                );
+            });
 
-        if ($this->getModel()->canEditStatus()) {
+        if ($withdrawal->canEditStatus()) {
             $this
                 ->add('status', 'customSelect', [
                     'label' => trans('core/base::tables.status'),
-                    'label_attr' => ['class' => 'control-label required'],
+                    'required' => true,
                     'attr' => [
                         'class' => 'form-control',
                     ],
-                    'choices' => $this->getModel()->getNextStatuses(),
+                    'choices' => $withdrawal->getNextStatuses(),
                     'help_block' => [
-                        'text' => $this->getModel()->getStatusHelper(),
+                        'text' => $withdrawal->getStatusHelper(),
                     ],
                 ]);
         } else {
             $this
                 ->add('status', 'html', [
-                    'html' => $this->getModel()->status->toHtml(),
+                    'html' => $withdrawal->status->toHtml(),
                 ]);
         }
 

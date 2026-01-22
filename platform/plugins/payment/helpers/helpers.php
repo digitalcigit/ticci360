@@ -12,15 +12,18 @@ if (! function_exists('convert_stripe_amount_from_api')) {
 }
 
 if (! function_exists('get_payment_setting')) {
-    function get_payment_setting(string $key, $type = null, $default = null): ?string
+    function get_payment_setting(string $key, $type = null, $default = null): string|array|null
     {
-        if (! empty($type)) {
-            $key = 'payment_' . $type . '_' . $key;
-        } else {
-            $key = 'payment_' . $key;
-        }
+        return setting(get_payment_setting_key($key, $type), $default);
+    }
+}
 
-        return setting($key, $default);
+if (! function_exists('get_payment_setting_key')) {
+    function get_payment_setting_key(string $key, ?string $type = null): string
+    {
+        $key = $type ? "payment_{$type}_{$key}" : "payment_$key";
+
+        return apply_filters('payment_setting_key', $key);
     }
 }
 
@@ -29,18 +32,20 @@ if (! function_exists('get_payment_is_support_refund_online')) {
     {
         $paymentService = $payment->payment_channel->getServiceClass();
 
-        if ($paymentService && class_exists($paymentService)) {
-            if (method_exists($paymentService, 'getSupportRefundOnline')) {
-                try {
-                    $isSupportRefund = (new $paymentService())->getSupportRefundOnline();
-
-                    return $isSupportRefund ? $paymentService : false;
-                } catch (Exception) {
-                    return false;
-                }
-            }
+        if (! $paymentService || ! class_exists($paymentService)) {
+            return false;
         }
 
-        return false;
+        if (! method_exists($paymentService, 'getSupportRefundOnline')) {
+            return false;
+        }
+
+        try {
+            $isSupportRefund = (new $paymentService())->getSupportRefundOnline();
+
+            return $isSupportRefund ? $paymentService : false;
+        } catch (Exception) {
+            return false;
+        }
     }
 }

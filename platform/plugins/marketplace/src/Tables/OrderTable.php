@@ -3,55 +3,62 @@
 namespace Botble\Marketplace\Tables;
 
 use Botble\Base\Facades\BaseHelper;
-use Botble\Ecommerce\Repositories\Interfaces\OrderInterface;
-use Botble\Table\Abstracts\TableAbstract;
 use Botble\Ecommerce\Facades\EcommerceHelper;
-use Illuminate\Contracts\Routing\UrlGenerator;
+use Botble\Ecommerce\Models\Order;
+use Botble\Ecommerce\Tables\Formatters\PriceFormatter;
+use Botble\Marketplace\Facades\MarketplaceHelper;
+use Botble\Marketplace\Tables\Traits\ForVendor;
+use Botble\Table\Abstracts\TableAbstract;
+use Botble\Table\Actions\DeleteAction;
+use Botble\Table\Actions\EditAction;
+use Botble\Table\Columns\Column;
+use Botble\Table\Columns\CreatedAtColumn;
+use Botble\Table\Columns\FormattedColumn;
+use Botble\Table\Columns\IdColumn;
+use Botble\Table\Columns\StatusColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\JsonResponse;
-use Botble\Marketplace\Facades\MarketplaceHelper;
-use Botble\Table\DataTables;
 
 class OrderTable extends TableAbstract
 {
-    protected $hasCheckbox = false;
+    use ForVendor;
 
-    public function __construct(DataTables $table, UrlGenerator $urlGenerator, OrderInterface $orderRepository)
+    public function setup(): void
     {
-        $this->repository = $orderRepository;
-        parent::__construct($table, $urlGenerator);
+        $this
+            ->model(Order::class)
+            ->addActions(array_filter([
+                EditAction::make()->route('marketplace.vendor.orders.edit'),
+                EcommerceHelper::isOrderDeletionEnabled() && MarketplaceHelper::allowVendorDeleteTheirOrders()
+                    ? DeleteAction::make()->route('marketplace.vendor.orders.destroy')
+                    : null,
+            ]));
     }
 
     public function ajax(): JsonResponse
     {
         $data = $this->table
             ->eloquent($this->query())
-            ->editColumn('checkbox', function ($item) {
-                return $this->getCheckbox($item->id);
+            ->editColumn('payment_status', function (Order $item) {
+                if (! is_plugin_active('payment')) {
+                    return '&mdash;';
+                }
+
+                return $item->payment->status->label() ? BaseHelper::clean(
+                    $item->payment->status->toHtml()
+                ) : '&mdash;';
             })
-            ->editColumn('status', function ($item) {
-                return $item->status->toHtml();
+            ->editColumn('payment_method', function (Order $item) {
+                if (! is_plugin_active('payment')) {
+                    return '&mdash;';
+                }
+
+                return BaseHelper::clean($item->payment->payment_channel->displayName() ?: '&mdash;');
             })
-            ->editColumn('payment_status', function ($item) {
-                return $item->payment->status->label() ? BaseHelper::clean($item->payment->status->toHtml()) : '&mdash;';
-            })
-            ->editColumn('payment_method', function ($item) {
-                return BaseHelper::clean($item->payment->payment_channel->label() ?: '&mdash;');
-            })
-            ->editColumn('amount', function ($item) {
-                return format_price($item->amount);
-            })
-            ->editColumn('shipping_amount', function ($item) {
-                return format_price($item->shipping_amount);
-            })
-            ->editColumn('user_id', function ($item) {
-                return BaseHelper::clean($item->user->name ?: $item->address->name);
-            })
-            ->editColumn('created_at', function ($item) {
-                return BaseHelper::formatDate($item->created_at);
-            });
+            ->formatColumn('amount', PriceFormatter::class)
+            ->formatColumn('shipping_amount', PriceFormatter::class);
 
         if (EcommerceHelper::isTaxEnabled()) {
             $data = $data->editColumn('tax_amount', function ($item) {
@@ -60,12 +67,8 @@ class OrderTable extends TableAbstract
         }
 
         $data = $data
-            ->addColumn('operations', function ($item) {
-                return view(MarketplaceHelper::viewPath('dashboard.table.actions'), [
-                    'edit' => 'marketplace.vendor.orders.edit',
-                    'delete' => 'marketplace.vendor.orders.destroy',
-                    'item' => $item,
-                ])->render();
+            ->filter(function ($query) {
+                return $query->searchByKeyword($this->request->input('search.value'));
             });
 
         return $this->toJson($data);
@@ -73,7 +76,16 @@ class OrderTable extends TableAbstract
 
     public function query(): Relation|Builder|QueryBuilder
     {
-        $query = $this->repository->getModel()
+        $with = ['user'];
+
+        if (is_plugin_active('payment')) {
+            $with[] = 'payment';
+        }
+
+        $query = $this
+            ->getModel()
+            ->query()
+            ->with($with)
             ->select([
                 'id',
                 'status',
@@ -84,9 +96,8 @@ class OrderTable extends TableAbstract
                 'shipping_amount',
                 'payment_id',
             ])
-            ->with(['user', 'payment'])
             ->where('is_finished', 1)
-            ->where('store_id', auth('customer')->user()->store->id);
+            ->where('store_id', auth('customer')->user()->store?->id);
 
         return $this->applyScopes($query);
     }
@@ -94,62 +105,55 @@ class OrderTable extends TableAbstract
     public function columns(): array
     {
         $columns = [
-            'id' => [
-                'title' => trans('core/base::tables.id'),
-                'width' => '20px',
-                'class' => 'text-start',
-            ],
-            'user_id' => [
-                'title' => trans('plugins/ecommerce::order.customer_label'),
-                'class' => 'text-start',
-            ],
-            'amount' => [
-                'title' => trans('plugins/ecommerce::order.amount'),
-                'class' => 'text-center',
-            ],
+            IdColumn::make(),
+            FormattedColumn::make('user_id')
+                ->title(trans('plugins/ecommerce::order.email'))
+                ->alignStart()
+                ->orderable(false)
+                ->renderUsing(function (FormattedColumn $column) {
+                    $item = $column->getItem();
+
+                    return sprintf(
+                        '%s <br> %s <br> %s',
+                        $item->user->name ?: $item->address->name,
+                        $item->user->email ?: $item->address->email,
+                        $item->user->phone ?: $item->address->phone
+                    );
+                }),
+            Column::formatted('amount')
+                ->title(trans('plugins/ecommerce::order.amount')),
         ];
 
         if (EcommerceHelper::isTaxEnabled()) {
-            $columns['tax_amount'] = [
-                'title' => trans('plugins/ecommerce::order.tax_amount'),
-                'class' => 'text-center',
-            ];
+            $columns[] = Column::make('tax_amount')
+                ->title(trans('plugins/ecommerce::order.tax_amount'));
         }
 
-        $columns += [
-            'shipping_amount' => [
-                'title' => trans('plugins/ecommerce::order.shipping_amount'),
-                'class' => 'text-center',
-            ],
-            'payment_method' => [
-                'name' => 'payment_id',
-                'title' => trans('plugins/ecommerce::order.payment_method'),
-                'class' => 'text-center',
-            ],
-            'payment_status' => [
-                'name' => 'payment_id',
-                'title' => trans('plugins/ecommerce::order.payment_status_label'),
-                'class' => 'text-center',
-            ],
-            'status' => [
-                'title' => trans('core/base::tables.status'),
-                'class' => 'text-center',
-            ],
-            'created_at' => [
-                'title' => trans('core/base::tables.created_at'),
-                'width' => '100px',
-                'class' => 'text-start',
-            ],
-        ];
+        $columns = array_merge($columns, [
+            Column::formatted('shipping_amount')
+                ->title(trans('plugins/ecommerce::order.shipping_amount')),
+        ]);
 
-        return $columns;
+        if (is_plugin_active('payment')) {
+            $columns = array_merge($columns, [
+                Column::make('payment_method')
+                    ->name('payment_id')
+                    ->title(trans('plugins/ecommerce::order.payment_method'))
+                    ->alignStart(),
+                Column::make('payment_status')
+                    ->name('payment_id')
+                    ->title(trans('plugins/ecommerce::order.payment_status_label')),
+            ]);
+        }
+
+        return array_merge($columns, [
+            CreatedAtColumn::make(),
+            StatusColumn::make(),
+        ]);
     }
 
     public function getDefaultButtons(): array
     {
-        return [
-            'export',
-            'reload',
-        ];
+        return array_unique(array_merge(['export'], parent::getDefaultButtons()));
     }
 }

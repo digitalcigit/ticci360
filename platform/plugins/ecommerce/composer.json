@@ -3,6 +3,19 @@
     "description": "The most powerful Laravel eCommerce system",
     "type": "package",
     "require": {
-        "khaled.alshamaa/ar-php": "^6.3"
+        "khaled.alshamaa/ar-php": "^7.0",
+        "bacon/bacon-qr-code": "^2.0|^3.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Botble\\Ecommerce\\": "src/"
+        },
+        "files": [
+            "helpers/common.php",
+            "helpers/constants.php",
+            "helpers/customer.php",
+            "helpers/order.php",
+            "helpers/shipping.php"
+        ]
     }
 }

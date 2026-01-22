@@ -2,6 +2,7 @@
 
 return [
     'name' => 'Payments',
+    'description' => 'View payment transactions with status, amount, and refund history',
     'payment_method' => 'Payment methods',
     'view_payment' => 'View payment #',
     'charge_id' => 'Charge ID',
@@ -27,7 +28,7 @@ return [
     'go_back' => 'Go back',
     'view' => 'View',
     'cash_on_delivery' => 'Cash on delivery (COD)',
-    'via_bank_transfer' => 'Via Digital Pay',
+    'via_bank_transfer' => 'Via bank transfer',
     'payment_via_cart' => 'Payment via card',
     'card_number' => 'Card number',
     'full_name' => 'Full name',
@@ -53,4 +54,5 @@ return [
     'no_option' => 'No option',
     'edit_payment' => 'Edit payment',
     'save' => 'Save',
+    'view_new_tab' => 'View in new tab',
 ];

@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Facades\DB;
 
 class FlashSale extends BaseModel
 {
@@ -22,9 +23,14 @@ class FlashSale extends BaseModel
 
     protected $casts = [
         'status' => BaseStatusEnum::class,
-        'end_date' => 'datetime',
+        'end_date' => 'date',
         'name' => SafeContent::class,
     ];
+
+    protected static function booted(): void
+    {
+        static::deleted(fn (FlashSale $flashSale) => $flashSale->products()->detach());
+    }
 
     public function products(): BelongsToMany
     {
@@ -33,40 +39,61 @@ class FlashSale extends BaseModel
             ->withPivot(['price', 'quantity', 'sold']);
     }
 
-    public function getEndDateAttribute($value): ?string
-    {
-        if (! $value) {
-            return $value;
-        }
-
-        return Carbon::parse($value)->format('Y/m/d');
-    }
-
     public function scopeNotExpired(Builder $query): Builder
     {
-        return $query->whereDate('end_date', '>', Carbon::now()->toDateString());
+        return $query->whereDate('end_date', '>=', Carbon::now());
     }
 
     public function scopeExpired(Builder $query): Builder
     {
-        return $query->whereDate('end_date', '=<', Carbon::now()->toDateString());
+        return $query->whereDate('end_date', '<', Carbon::now());
+    }
+
+    protected function isAvailable(): Attribute
+    {
+        return Attribute::get(fn (): bool => ! $this->expired && ! $this->is_sold_out);
     }
 
     protected function expired(): Attribute
     {
-        return Attribute::make(
-            get: function (): bool {
-                return Carbon::parse($this->end_date)->lessThan(Carbon::now());
-            },
-        );
+        return Attribute::get(fn (): bool => $this->end_date->lessThan(Carbon::today()));
     }
 
-    protected static function boot(): void
+    protected function saleCountLeftLabel(): Attribute
     {
-        parent::boot();
+        return Attribute::get(function (): ?string {
+            if (! $this->pivot) {
+                return null;
+            }
 
-        static::deleting(function (FlashSale $flashSale) {
-            $flashSale->products()->detach();
-        });
+            return $this->pivot->sold . '/' . $this->pivot->quantity;
+        })->shouldCache();
+    }
+
+    protected function saleCountLeftPercent(): Attribute
+    {
+        return Attribute::get(function (): float {
+            if (! $this->pivot) {
+                return 0;
+            }
+
+            return $this->pivot->quantity > 0 ? ($this->pivot->sold / $this->pivot->quantity) * 100 : 0;
+        })->shouldCache();
+    }
+
+    protected function isSoldOut(): Attribute
+    {
+        return Attribute::get(function (): bool {
+            if (! $this->pivot) {
+                return false;
+            }
+
+            return $this->pivot->sold >= $this->pivot->quantity;
+        })->shouldCache();
+    }
+
+    public function availableProducts(): BelongsToMany
+    {
+        return $this->products()->wherePivot('quantity', '>', DB::raw('sold'));
     }
 }

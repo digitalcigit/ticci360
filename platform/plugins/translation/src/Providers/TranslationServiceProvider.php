@@ -2,98 +2,107 @@
 
 namespace Botble\Translation\Providers;
 
-use Botble\Base\Facades\DashboardMenu;
+use Botble\Base\Facades\PanelSectionManager;
+use Botble\Base\PanelSections\PanelSectionItem;
+use Botble\Base\Supports\ServiceProvider;
 use Botble\Base\Traits\LoadAndPublishDataTrait;
-use Botble\Translation\Console\CleanCommand;
+use Botble\DataSynchronize\PanelSections\ExportPanelSection;
+use Botble\DataSynchronize\PanelSections\ImportPanelSection;
+use Botble\Translation\Console\AutoTranslateCoreCommand;
+use Botble\Translation\Console\AutoTranslateThemeCommand;
+use Botble\Translation\Console\CheckMissingTranslationCommand;
+use Botble\Translation\Console\CleanupTranslationsCommand;
 use Botble\Translation\Console\DownloadLocaleCommand;
-use Botble\Translation\Console\ExportCommand;
-use Botble\Translation\Console\ImportCommand;
+use Botble\Translation\Console\FindTranslationsByPathCommand;
+use Botble\Translation\Console\RemoveLocaleCommand;
 use Botble\Translation\Console\RemoveUnusedTranslationsCommand;
-use Botble\Translation\Console\ResetCommand;
 use Botble\Translation\Console\UpdateThemeTranslationCommand;
-use Botble\Translation\Manager;
-use Botble\Translation\Models\Translation;
-use Botble\Translation\Repositories\Caches\TranslationCacheDecorator;
-use Botble\Translation\Repositories\Eloquent\TranslationRepository;
-use Botble\Translation\Repositories\Interfaces\TranslationInterface;
-use Illuminate\Routing\Events\RouteMatched;
-use Illuminate\Support\ServiceProvider;
+use Botble\Translation\PanelSections\LocalizationPanelSection;
 
 class TranslationServiceProvider extends ServiceProvider
 {
     use LoadAndPublishDataTrait;
 
-    public function register(): void
-    {
-        $this->app->bind(TranslationInterface::class, function () {
-            return new TranslationCacheDecorator(new TranslationRepository(new Translation()));
-        });
-
-        $this->app->bind('translation-manager', Manager::class);
-
-        $this->commands([
-            ImportCommand::class,
-        ]);
-
-        if ($this->app->runningInConsole()) {
-            $this->commands([
-                ResetCommand::class,
-                ExportCommand::class,
-                CleanCommand::class,
-                UpdateThemeTranslationCommand::class,
-                RemoveUnusedTranslationsCommand::class,
-                DownloadLocaleCommand::class,
-            ]);
-        }
-    }
-
     public function boot(): void
     {
-        $this->setNamespace('plugins/translation')
-            ->loadAndPublishConfigurations(['general', 'permissions'])
+        $this
+            ->setNamespace('plugins/translation')
+            ->loadAndPublishConfigurations(['general'])
+            ->loadAndPublishConfigurations(['permissions'])
             ->loadMigrations()
             ->loadRoutes()
             ->loadAndPublishViews()
             ->loadAndPublishTranslations()
             ->publishAssets();
 
-        $this->app['events']->listen(RouteMatched::class, function () {
-            DashboardMenu::registerItem([
-                'id' => 'cms-plugin-translation',
-                'priority' => 997,
-                'parent_id' => null,
-                'name' => 'plugins/translation::translation.translations',
-                'icon' => 'fas fa-language',
-                'url' => route('translations.index'),
-                'permissions' => ['translations.index'],
-            ])
-                ->registerItem([
-                    'id' => 'cms-plugin-translation-locale',
-                    'priority' => 1,
-                    'parent_id' => 'cms-plugin-translation',
-                    'name' => 'plugins/translation::translation.locales',
-                    'icon' => null,
-                    'url' => route('translations.locales'),
-                    'permissions' => ['translations.index'],
-                ])
-                ->registerItem([
-                    'id' => 'cms-plugin-translation-theme-translations',
-                    'priority' => 2,
-                    'parent_id' => 'cms-plugin-translation',
-                    'name' => 'plugins/translation::translation.theme-translations',
-                    'icon' => null,
-                    'url' => route('translations.theme-translations'),
-                    'permissions' => ['translations.index'],
-                ])
-                ->registerItem([
-                    'id' => 'cms-plugin-translation-admin-translations',
-                    'priority' => 3,
-                    'parent_id' => 'cms-plugin-translation',
-                    'name' => 'plugins/translation::translation.admin-translations',
-                    'icon' => null,
-                    'url' => route('translations.index'),
-                    'permissions' => ['translations.index'],
-                ]);
+        PanelSectionManager::beforeRendering(function (): void {
+            PanelSectionManager::register(LocalizationPanelSection::class);
         });
+
+        PanelSectionManager::setGroupId('data-synchronize')->beforeRendering(function (): void {
+            PanelSectionManager::default()
+                ->registerItem(
+                    ExportPanelSection::class,
+                    fn () => PanelSectionItem::make('export-theme-translations')
+                        ->setTitle(trans('plugins/translation::translation.panel.theme-translations.title'))
+                        ->withDescription(trans(
+                            'plugins/translation::translation.export_description',
+                            ['name' => trans('plugins/translation::translation.panel.theme-translations.title')]
+                        ))
+                        ->withPriority(999)
+                        ->withPermission('theme-translations.export')
+                        ->withRoute('tools.data-synchronize.export.theme-translations.index')
+                )
+                ->registerItem(
+                    ExportPanelSection::class,
+                    fn () => PanelSectionItem::make('other-translations')
+                        ->setTitle(trans('plugins/translation::translation.panel.admin-translations.title'))
+                        ->withDescription(trans(
+                            'plugins/translation::translation.export_description',
+                            ['name' => trans('plugins/translation::translation.panel.admin-translations.title')]
+                        ))
+                        ->withPriority(999)
+                        ->withPermission('other-translations.export')
+                        ->withRoute('tools.data-synchronize.export.other-translations.index')
+                )
+                ->registerItem(
+                    ImportPanelSection::class,
+                    fn () => PanelSectionItem::make('import-theme-translations')
+                        ->setTitle(trans('plugins/translation::translation.panel.theme-translations.title'))
+                        ->withDescription(trans(
+                            'plugins/translation::translation.import_description',
+                            ['name' => trans('plugins/translation::translation.panel.theme-translations.title')]
+                        ))
+                        ->withPriority(999)
+                        ->withPermission('theme-translations.import')
+                        ->withRoute('tools.data-synchronize.import.theme-translations.index')
+                )
+                ->registerItem(
+                    ImportPanelSection::class,
+                    fn () => PanelSectionItem::make('other-translations')
+                        ->setTitle(trans('plugins/translation::translation.panel.admin-translations.title'))
+                        ->withDescription(trans(
+                            'plugins/translation::translation.import_description',
+                            ['name' => trans('plugins/translation::translation.panel.admin-translations.title')]
+                        ))
+                        ->withPriority(999)
+                        ->withPermission('other-translations.import')
+                        ->withRoute('tools.data-synchronize.import.other-translations.index')
+                );
+        });
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                UpdateThemeTranslationCommand::class,
+                FindTranslationsByPathCommand::class,
+                CleanupTranslationsCommand::class,
+                RemoveUnusedTranslationsCommand::class,
+                DownloadLocaleCommand::class,
+                RemoveLocaleCommand::class,
+                AutoTranslateThemeCommand::class,
+                AutoTranslateCoreCommand::class,
+                CheckMissingTranslationCommand::class,
+            ]);
+        }
     }
 }

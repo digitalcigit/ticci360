@@ -2,63 +2,73 @@
 
 namespace Botble\Ecommerce\Forms;
 
-use Botble\Base\Enums\BaseStatusEnum;
+use Botble\Base\Facades\Assets;
+use Botble\Base\Facades\Html;
+use Botble\Base\Forms\FieldOptions\DescriptionFieldOption;
+use Botble\Base\Forms\FieldOptions\MediaImageFieldOption;
+use Botble\Base\Forms\FieldOptions\NameFieldOption;
+use Botble\Base\Forms\FieldOptions\OnOffFieldOption;
+use Botble\Base\Forms\FieldOptions\StatusFieldOption;
+use Botble\Base\Forms\Fields\MediaImageField;
+use Botble\Base\Forms\Fields\OnOffField;
+use Botble\Base\Forms\Fields\SelectField;
+use Botble\Base\Forms\Fields\TextareaField;
+use Botble\Base\Forms\Fields\TextField;
 use Botble\Base\Forms\FormAbstract;
 use Botble\Ecommerce\Http\Requests\ProductCollectionRequest;
 use Botble\Ecommerce\Models\ProductCollection;
 
 class ProductCollectionForm extends FormAbstract
 {
-    public function buildForm(): void
+    public function setup(): void
     {
+        Assets::addStylesDirectly('vendor/core/plugins/ecommerce/css/ecommerce.css')
+            ->addScriptsDirectly('vendor/core/plugins/ecommerce/js/edit-product-collection.js');
+
         $this
-            ->setupModel(new ProductCollection())
+            ->model(ProductCollection::class)
             ->setValidatorClass(ProductCollectionRequest::class)
-            ->withCustomFields()
-            ->add('name', 'text', [
-                'label' => trans('core/base::forms.name'),
-                'label_attr' => ['class' => 'control-label required'],
-                'attr' => [
-                    'placeholder' => trans('core/base::forms.name_placeholder'),
-                    'data-counter' => 120,
-                ],
-                'help_block' => [
-                    'text' => $this->getModel() ? trans(
-                        'plugins/ecommerce::product-collections.slug_help_block',
-                        ['slug' => $this->getModel()->slug]
-                    ) : null,
-                ],
-            ])
+            ->add(
+                'name',
+                TextField::class,
+                NameFieldOption::make()
+                    ->when($this->getModel()->slug, function (NameFieldOption $option, string $slug): void {
+                        $option
+                            ->helperText(trans('plugins/ecommerce::product-collections.slug_help_block', compact('slug')));
+                    })
+            )
             ->add('slug', 'text', [
                 'label' => trans('core/base::forms.slug'),
-                'label_attr' => ['class' => 'control-label required'],
+                'required' => true,
                 'attr' => [
                     'data-counter' => 120,
                 ],
             ])
-            ->add('description', 'textarea', [
-                'label' => trans('core/base::forms.description'),
-                'label_attr' => ['class' => 'control-label'],
-                'attr' => [
-                    'rows' => 4,
-                    'placeholder' => trans('plugins/ecommerce::products.form.description'),
-                    'data-counter' => 400,
-                ],
-            ])
-            ->add('status', 'customSelect', [
-                'label' => trans('core/base::tables.status'),
-                'label_attr' => ['class' => 'control-label required'],
-                'choices' => BaseStatusEnum::labels(),
-            ])
-            ->add('is_featured', 'onOff', [
-                'label' => trans('core/base::forms.is_featured'),
-                'label_attr' => ['class' => 'control-label'],
-                'default_value' => false,
-            ])
-            ->add('image', 'mediaImage', [
-                'label' => trans('core/base::forms.image'),
-                'label_attr' => ['class' => 'control-label'],
-            ])
+            ->add('description', TextareaField::class, DescriptionFieldOption::make())
+            ->add('status', SelectField::class, StatusFieldOption::make())
+            ->add(
+                'is_featured',
+                OnOffField::class,
+                OnOffFieldOption::make()
+                    ->label(trans('core/base::forms.is_featured'))
+                    ->defaultValue(false)
+            )
+            ->add('image', MediaImageField::class, MediaImageFieldOption::make())
             ->setBreakFieldPoint('status');
+
+        if ($productCollectionId = $this->getModel()->id) {
+            $this
+                ->addMetaBoxes([
+                    'collection-products' => [
+                        'title' => trans('plugins/ecommerce::products.name'),
+                        'content' =>
+                            Html::tag('div', '', [
+                                'class' => 'wrap-collection-products',
+                                'data-target' => route('product-collections.get-product-collection', $productCollectionId),
+                            ]),
+                        'priority' => 9999,
+                    ],
+            ]);
+        }
     }
 }

@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\V1\CartController;
 use App\Http\Controllers\Api\V1\QuoteController;
 
 Route::prefix('v1')->group(function () {
+    Route::get('test-route', function() { return 'working'; });
     Route::get('health', [HealthCheckController::class, 'index']);
 
     // Auth Routes
@@ -31,6 +32,8 @@ Route::prefix('v1')->group(function () {
     Route::get('products/{id}', [ProductController::class, 'show']);
     Route::get('categories', [CategoryController::class, 'index']);
     Route::get('categories/{id}', [CategoryController::class, 'show']);
+    Route::get('sliders', [App\Http\Controllers\Api\V1\SliderController::class, 'index']);
+    Route::get('brands', [App\Http\Controllers\Api\V1\BrandController::class, 'index']);
 
     // Cart Routes (Session based - Public/Auth mixed)
     Route::get('cart', [CartController::class, 'index']);

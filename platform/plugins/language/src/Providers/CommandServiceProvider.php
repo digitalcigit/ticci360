@@ -2,21 +2,27 @@
 
 namespace Botble\Language\Providers;
 
+use Botble\Base\Supports\ServiceProvider;
+use Botble\Language\Commands\AddLanguageCommand;
+use Botble\Language\Commands\RemoveLanguageCommand;
 use Botble\Language\Commands\RouteCacheCommand;
 use Botble\Language\Commands\RouteClearCommand;
 use Botble\Language\Commands\RouteTranslationsListCommand;
-use Botble\Language\Commands\SyncOldDataCommand;
 use Illuminate\Foundation\Console\RouteCacheCommand as BaseRouteCacheCommand;
 use Illuminate\Foundation\Console\RouteClearCommand as BaseRouteClearCommand;
-use Illuminate\Support\ServiceProvider;
 
 class CommandServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
+        if (! $this->app->runningInConsole()) {
+            return;
+        }
+
         $this->commands([
-            SyncOldDataCommand::class,
             RouteTranslationsListCommand::class,
+            AddLanguageCommand::class,
+            RemoveLanguageCommand::class,
         ]);
 
         $this->app->extend(BaseRouteCacheCommand::class, function () {

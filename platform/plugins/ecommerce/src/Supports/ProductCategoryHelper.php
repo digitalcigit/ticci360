@@ -3,139 +3,258 @@
 namespace Botble\Ecommerce\Supports;
 
 use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Base\Supports\SortItemsWithChildrenHelper;
-use Botble\Ecommerce\Repositories\Interfaces\ProductCategoryInterface;
-use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Botble\Ecommerce\Models\ProductCategory;
+use Botble\Language\Facades\Language;
+use Botble\Slug\Facades\SlugHelper;
+use Botble\Support\Services\Cache\Cache;
+use Carbon\Carbon;
+use Illuminate\Database\Query\Builder;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
-use Botble\Language\Facades\Language;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ProductCategoryHelper
 {
-    protected Collection|array $allCategories = [];
+    protected Collection $allCategories;
 
-    protected Collection|array $treeCategories = [];
+    protected Collection $treeCategories;
 
-    public function getAllProductCategories(array $params = [], bool $onlyParent = false): Collection|EloquentCollection
+    public function getAllProductCategories(array $params = [], bool $onlyParent = false): Collection
     {
-        if (! $this->allCategories instanceof Collection) {
-            $this->allCategories = collect();
-        }
+        if (! isset($this->allCategories)) {
+            $query = ProductCategory::query();
 
-        if ($this->allCategories->count() == 0) {
-            $with = array_merge(Arr::get($params, 'with', []), ['slugable', 'metadata']);
-            if (is_plugin_active('language-advanced') && Language::getCurrentLocaleCode() != Language::getDefaultLocaleCode()) {
-                $with[] = 'translations';
+            if (! empty($conditions = Arr::get($params, 'condition', []))) {
+                $query = $query->where($conditions);
             }
 
-            $this->allCategories = app(ProductCategoryInterface::class)->getProductCategories(
-                Arr::get($params, 'condition', []),
-                $with,
-                Arr::get($params, 'withCount', []),
-                $onlyParent
-            );
+            if (! empty($with = Arr::get($params, 'with', []))) {
+                $query = $query->with($with);
+            }
+
+            if (! empty($withCount = Arr::get($params, 'withCount', []))) {
+                $query = $query->withCount($withCount);
+            }
+
+            if ($onlyParent) {
+                $query = $query->where(function ($query): void {
+                    $query
+                        ->whereNull('parent_id')
+                        ->orWhere('parent_id', 0);
+                });
+            }
+
+            $query = $query
+                ->oldest('order')->latest();
+
+            if ($select = Arr::get($params, 'select', [
+                'id',
+                'name',
+                'status',
+                'is_featured',
+                'image',
+            ])) {
+                $query = $query->select($select);
+            }
+
+            $this->allCategories = $query->get();
         }
 
         return $this->allCategories;
     }
 
+    /**
+     * @deprecated
+     */
     public function getAllProductCategoriesSortByChildren(): Collection
     {
-        $categories = $this->getAllProductCategories();
-
-        return $this->sortChildren($categories);
+        return $this->getTreeCategories();
     }
 
+    /**
+     * @deprecated
+     */
     public function getAllProductCategoriesWithChildren(): array
     {
-        $categories = $this->getAllProductCategories();
-
-        return app(SortItemsWithChildrenHelper::class)
-            ->setChildrenProperty('child_cats')
-            ->setItems($categories)
-            ->sort();
+        return $this->getTreeCategories()->toArray();
     }
 
-    protected function sortChildren(Collection $categories, $parent = null, int $depth = 0): Collection
+    /**
+     * @deprecated
+     */
+    public function getProductCategoriesWithIndent(): Collection
     {
-        foreach ($categories as &$object) {
-            if ($object->parent_id == $object->id) {
-                continue;
-            }
-
-            if ((int)$object->parent_id == (int)$parent) {
-                $object->depth = $depth;
-                $this->sortChildren($categories, $object->id, $depth + 1);
-            }
-        }
-
-        return $categories;
-    }
-
-    public function getProductCategoriesWithIndent(string $indent = '&nbsp;&nbsp;', bool $sortChildren = true): Collection
-    {
-        $categories = $this->getAllProductCategoriesSortByChildren();
-
-        foreach ($categories as $category) {
-            $depth = (int)$category->depth;
-
-            $indentText = str_repeat($indent, $depth);
-
-            $category->indent_text = $indentText;
-        }
-
-        if (! $sortChildren) {
-            return $categories;
-        }
-
-        return collect(sort_item_with_children($categories));
-    }
-
-    public function getProductCategoriesWithIndentName(Collection|array $categories = [], string $indent = '&nbsp;&nbsp;'): array
-    {
-        if (! $categories instanceof Collection) {
-            $categories = $this->getAllProductCategories([], true);
-        }
-
-        $results = [];
-        $this->appendIndentTextToProductCategoryName($categories, 0, $results, $indent);
-
-        return $results;
-    }
-
-    public function appendIndentTextToProductCategoryName(
-        Collection $categories,
-        int $depth = 0,
-        array &$results = [],
-        string $indent = '&nbsp;&nbsp;'
-    ): bool {
-        foreach ($categories as $category) {
-            $results[$category->id] = str_repeat($indent, $depth) . $category->name;
-
-            if ($category->children->count()) {
-                $this->appendIndentTextToProductCategoryName($category->children, $depth + 1, $results, $indent);
-            }
-        }
-
-        return true;
+        return $this->getActiveTreeCategories();
     }
 
     public function getActiveTreeCategories(): Collection
     {
-        if (! $this->treeCategories instanceof Collection) {
-            $this->treeCategories = collect();
-        }
+        return $this->getTreeCategories(true);
+    }
 
-        if ($this->treeCategories->count() == 0) {
+    public function getTreeCategories(bool $activeOnly = false, array $select = ['*']): Collection
+    {
+        if (! isset($this->treeCategories)) {
             $this->treeCategories = $this->getAllProductCategories(
                 [
-                    'condition' => ['status' => BaseStatusEnum::PUBLISHED],
-                    'with' => ['activeChildren'],
+                    'condition' => $activeOnly ? ['status' => BaseStatusEnum::PUBLISHED] : [],
+                    'with' => [$activeOnly ? 'activeChildren' : 'children' => function ($query) use ($select): void {
+                        $query->select($select ?: '*');
+                    }],
                 ],
                 true
             );
         }
 
         return $this->treeCategories;
+    }
+
+    public function getTreeCategoriesOptions(array|Collection $categories, array $options = [], ?string $indent = null): array
+    {
+        if (! $categories instanceof Collection) {
+            foreach ($categories as $category) {
+                $options[$category['id']] = $indent . $category['name'];
+
+                if (! empty($category['active_children']) || ! empty($category['children'])) {
+                    $options = $this->getTreeCategoriesOptions($category['active_children'] ?? $category['children'], $options, $indent . '&nbsp;&nbsp;');
+                }
+            }
+
+            return $options;
+        }
+
+        foreach ($categories as $category) {
+            $options[$category->id] = $indent . $category->name;
+
+            if (! empty($category->activeChildren)) {
+                $options = $this->getTreeCategoriesOptions(
+                    $category->activeChildren,
+                    $options,
+                    $indent . '&nbsp;&nbsp;'
+                );
+            }
+        }
+
+        return $options;
+    }
+
+    public function renderProductCategoriesSelect(array|int|string|null $selected = null): string
+    {
+        $cache = Cache::make(ProductCategory::class);
+
+        $locale = app()->getLocale();
+        $cacheKey = 'ecommerce_categories_for_rendering_select_' . $locale . '_' . md5($cache->generateCacheKeyFromInput() . serialize(func_get_args()));
+
+        if ($cache->has($cacheKey)) {
+            $categories = $cache->get($cacheKey);
+        } else {
+            $query = ProductCategory::query()
+                ->toBase()
+                ->where('status', BaseStatusEnum::PUBLISHED)
+                ->select([
+                    'ec_product_categories.id',
+                    'ec_product_categories.name',
+                    'parent_id',
+                ])
+                ->oldest('order')
+                ->latest();
+
+            $categories = $this->applyQuery($query)->get();
+
+            $cache->put($cacheKey, $categories, Carbon::now()->addHours(2));
+        }
+
+        return view('core/base::forms.partials.nested-select-option', [
+            'options' => $categories,
+            'indent' => null,
+            'selected' => $selected,
+        ])->render();
+    }
+
+    public function getProductCategoriesWithUrl(array $categoryIds = [], array $condition = [], ?int $limit = null): Collection
+    {
+        $cache = Cache::make(ProductCategory::class);
+
+        $locale = app()->getLocale();
+        $cacheKey = 'ecommerce_categories_for_widgets_' . $locale . '_' . md5($cache->generateCacheKeyFromInput() . serialize(func_get_args()));
+
+        if ($cache->has($cacheKey)) {
+            return $cache->get($cacheKey);
+        }
+
+        $query = ProductCategory::query()
+            ->toBase()
+            ->where('status', BaseStatusEnum::PUBLISHED)
+            ->select([
+                'ec_product_categories.id',
+                'ec_product_categories.name',
+                'ec_product_categories.slug',
+                'ec_product_categories.order',
+                'parent_id',
+                'icon',
+                'image',
+                'icon_image',
+            ])
+            ->oldest('ec_product_categories.order')
+            ->when(
+                ! empty($categoryIds),
+                fn (Builder $query) => $query->whereIn('ec_product_categories.id', $categoryIds)
+            )
+            ->when($limit > 0, fn ($query) => $query->limit($limit))
+            ->when($condition, fn ($query) => $query->where($condition));
+
+        $query = $this->applyQuery($query);
+
+        $categories = $query->get()->unique('id');
+
+        $prefix = SlugHelper::getPrefix(ProductCategory::class);
+
+        $categories = $categories->map(function ($category) use ($prefix) {
+            if ($this->isEnabledMultiLanguages() && Schema::hasTable('ec_product_categories_translations')) {
+                $translation = DB::table('ec_product_categories_translations')
+                    ->where('ec_product_categories_id', $category->id)
+                    ->where('lang_code', Language::getCurrentLocaleCode())
+                    ->select('slug')
+                    ->first();
+
+                if ($translation && $translation->slug) {
+                    $category->slug = $translation->slug;
+                }
+            }
+
+            $category->url = $prefix
+                ? $prefix . '/' . $category->slug
+                : $category->slug;
+
+            return $category;
+        });
+
+        $cache->put($cacheKey, $categories, Carbon::now()->addHours(2));
+
+        return $categories;
+    }
+
+    public function applyQuery(Builder $query): Builder
+    {
+        if ($this->isEnabledMultiLanguages()) {
+            return $query
+                ->leftJoin('ec_product_categories_translations as ct', function (JoinClause $join): void {
+                    $join
+                        ->on('ec_product_categories_id', 'ec_product_categories.id')
+                        ->where('ct.lang_code', Language::getCurrentLocaleCode());
+                })
+                ->addSelect(DB::raw('IF(ct.name IS NOT NULL, ct.name, ec_product_categories.name) as name'));
+        }
+
+        return $query;
+    }
+
+    protected function isEnabledMultiLanguages(): bool
+    {
+        return is_plugin_active('language') &&
+            is_plugin_active('language-advanced') &&
+            Language::getCurrentLocale() !== Language::getDefaultLocale();
     }
 }

@@ -1,13 +1,13 @@
 <?php
 
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
 return new class () extends Migration {
     public function up(): void
     {
-        Schema::create('languages', function (Blueprint $table) {
+        Schema::create('languages', function (Blueprint $table): void {
             $table->id('lang_id');
             $table->string('lang_name', 120);
             $table->string('lang_locale', 20);
@@ -18,10 +18,10 @@ return new class () extends Migration {
             $table->tinyInteger('lang_is_rtl')->unsigned()->default(0);
         });
 
-        Schema::create('language_meta', function (Blueprint $table) {
+        Schema::create('language_meta', function (Blueprint $table): void {
             $table->id('lang_meta_id');
             $table->text('lang_meta_code')->nullable();
-            $table->string('lang_meta_origin', 255);
+            $table->string('lang_meta_origin');
             $table->foreignId('reference_id')->index();
             $table->string('reference_type', 120);
         });

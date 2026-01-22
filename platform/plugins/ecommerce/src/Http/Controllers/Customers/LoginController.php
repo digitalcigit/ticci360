@@ -2,20 +2,23 @@
 
 namespace Botble\Ecommerce\Http\Controllers\Customers;
 
-use App\Http\Controllers\Controller;
 use Botble\ACL\Traits\AuthenticatesUsers;
 use Botble\ACL\Traits\LogoutGuardTrait;
+use Botble\Base\Facades\BaseHelper;
+use Botble\Base\Http\Controllers\BaseController;
 use Botble\Ecommerce\Enums\CustomerStatusEnum;
 use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Ecommerce\Forms\Fronts\Auth\LoginForm;
 use Botble\Ecommerce\Http\Requests\LoginRequest;
-use Botble\JsValidation\Facades\JsValidator;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\ValidationException;
+use Botble\Ecommerce\Models\Customer;
 use Botble\SeoHelper\Facades\SeoHelper;
 use Botble\Theme\Facades\Theme;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cookie;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
-class LoginController extends Controller
+class LoginController extends BaseController
 {
     use AuthenticatesUsers, LogoutGuardTrait {
         AuthenticatesUsers::attemptLogin as baseAttemptLogin;
@@ -30,26 +33,23 @@ class LoginController extends Controller
 
     public function showLoginForm()
     {
-        SeoHelper::setTitle(__('Login'));
+        $title = __('Login');
+        SeoHelper::setTitle(theme_option('ecommerce_login_seo_title') ?: $title)
+            ->setDescription(theme_option('ecommerce_login_seo_description'));
 
-        Theme::breadcrumb()->add(__('Home'), route('public.index'))->add(__('Login'), route('customer.login'));
+        Theme::breadcrumb()->add($title, route('customer.login'));
 
-        if (! session()->has('url.intended') &&
-            ! in_array(url()->previous(), [route('customer.login'), route('customer.register')])
-        ) {
+        if (request()->has('redirect') && request()->get('redirect')) {
+            session(['url.intended' => request()->get('redirect')]);
+        } elseif (! session()->has('url.intended') && ! in_array(url()->previous(), [route('customer.login'), route('customer.register')])) {
             session(['url.intended' => url()->previous()]);
         }
 
-        Theme::asset()
-            ->container('footer')
-            ->usePath(false)
-            ->add('js-validation', 'vendor/core/core/js-validation/js/js-validation.js', ['jquery']);
-
-        add_filter(THEME_FRONT_FOOTER, function ($html) {
-            return $html . JsValidator::formRequest(LoginRequest::class)->render();
-        });
-
-        return Theme::scope('ecommerce.customers.login', [], 'plugins/ecommerce::themes.customers.login')->render();
+        return Theme::scope(
+            'ecommerce.customers.login',
+            ['form' => LoginForm::create()],
+            'plugins/ecommerce::themes.customers.login'
+        )->render();
     }
 
     protected function guard()
@@ -57,15 +57,8 @@ class LoginController extends Controller
         return auth('customer');
     }
 
-    protected function validator(array $data)
+    public function login(LoginRequest $request)
     {
-        return Validator::make($data, (new LoginRequest())->rules());
-    }
-
-    public function login(Request $request)
-    {
-        $this->validateLogin($request);
-
         // If the class is using the ThrottlesLogins trait, we can automatically throttle
         // the login attempts for this application. We'll key this by the username and
         // the IP address of the client making these requests into this application.
@@ -87,44 +80,112 @@ class LoginController extends Controller
         $this->sendFailedLoginResponse();
     }
 
+    protected function sendLoginResponse(Request $request)
+    {
+        $request->session()->regenerate();
+
+        $this->clearLoginAttempts($request);
+
+        $email = $request->input($this->username());
+        Cookie::queue('customer_remember_email', $email, 525600);
+
+        $customer = $this->guard()->user();
+
+        $response = apply_filters('customer_login_response', null, $customer, $request);
+
+        if ($response) {
+            return $response;
+        }
+
+        return $this->authenticated($request, $customer)
+            ?: redirect()->intended($this->redirectPath());
+    }
+
     public function logout(Request $request)
     {
         $this->guard()->logout();
 
         $this->loggedOut($request);
 
-        return redirect()->to(route('public.index'));
+        return redirect()->to(BaseHelper::getHomepageUrl());
     }
 
-    protected function attemptLogin(Request $request)
+    protected function attemptLogin(LoginRequest $request)
     {
-        if ($this->guard()->validate($this->credentials($request))) {
+        $credentials = $this->credentials($request);
+
+        if ($this->guard()->validate($credentials)) {
             $customer = $this->guard()->getLastAttempted();
-
-            if (EcommerceHelper::isEnableEmailVerification() && empty($customer->confirmed_at)) {
-                throw ValidationException::withMessages([
-                    'confirmation' => [
-                        __(
-                            'The given email address has not been confirmed. <a href=":resend_link">Resend confirmation link.</a>',
-                            [
-                                'resend_link' => route('customer.resend_confirmation', ['email' => $customer->email]),
-                            ]
-                        ),
-                    ],
-                ]);
-            }
-
-            if ($customer->status->getValue() !== CustomerStatusEnum::ACTIVATED) {
-                throw ValidationException::withMessages([
-                    'email' => [
-                        __('Your account has been locked, please contact the administrator.'),
-                    ],
-                ]);
-            }
-
-            return $this->baseAttemptLogin($request);
+        } else {
+            $customer = $this->findCustomerByPhoneWithoutCountryCode($credentials);
         }
 
-        return false;
+        if (! $customer) {
+            return false;
+        }
+
+        if (EcommerceHelper::isEnableEmailVerification() && empty($customer->confirmed_at)) {
+            throw ValidationException::withMessages([
+                'confirmation' => [
+                    __(
+                        'The given email address has not been confirmed. <a href=":resend_link">Resend confirmation link.</a>',
+                        [
+                            'resend_link' => route('customer.resend_confirmation', ['email' => $customer->email]),
+                        ]
+                    ),
+                ],
+            ]);
+        }
+
+        if ($customer->status->getValue() !== CustomerStatusEnum::ACTIVATED) {
+            throw ValidationException::withMessages([
+                'email' => [
+                    __('Your account has been locked, please contact the administrator.'),
+                ],
+            ]);
+        }
+
+        return $this->guard()->login($customer, $request->filled('remember'));
+    }
+
+    protected function findCustomerByPhoneWithoutCountryCode(array $credentials): ?Customer
+    {
+        $loginOption = EcommerceHelper::getLoginOption();
+
+        if (! in_array($loginOption, ['phone', 'email_or_phone'])) {
+            return null;
+        }
+
+        $phone = $credentials['phone'] ?? null;
+
+        if (! $phone) {
+            return null;
+        }
+
+        $password = $credentials['password'] ?? null;
+
+        $customer = Customer::query()
+            ->wherePhone($phone)
+            ->first();
+
+        if ($customer && Hash::check($password, $customer->password)) {
+            return $customer;
+        }
+
+        return null;
+    }
+
+    public function credentials(LoginRequest $request): array
+    {
+        $usernameKey = match (EcommerceHelper::getLoginOption()) {
+            'phone' => 'phone',
+            'email_or_phone' => $request->isEmail($request->input($this->username())) ? 'email' : 'phone',
+            default => 'email',
+        };
+
+        return [
+            $usernameKey => $request->input($this->username()),
+            'password' => $request->input('password'),
+        ];
     }
 }

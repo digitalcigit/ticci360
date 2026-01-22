@@ -3,43 +3,50 @@
 namespace Botble\ACL\Services;
 
 use Botble\ACL\Models\User;
-use Illuminate\Support\Facades\Auth;
-use Botble\ACL\Repositories\Interfaces\UserInterface;
+use Botble\Base\Facades\BaseHelper;
 use Botble\Support\Services\ProduceServiceInterface;
 use Exception;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Throwable;
 
 class ChangePasswordService implements ProduceServiceInterface
 {
-    public function __construct(protected UserInterface $userRepository)
-    {
-    }
-
-    public function execute(Request $request): Exception|bool|User
+    public function execute(Request $request): bool|User
     {
         $currentUser = $request->user();
 
         if (! $currentUser->isSuperUser()) {
             if (! Hash::check($request->input('old_password'), $currentUser->getAuthPassword())) {
-                return new Exception(trans('core/acl::users.current_password_not_valid'));
+                throw new Exception(trans('core/acl::users.current_password_not_valid'));
             }
         }
 
-        $user = $this->userRepository->findOrFail($request->input('id', $currentUser->getKey()));
+        if (($userId = $request->input('id')) && $userId === $currentUser->getKey()) {
+            $user = $currentUser;
+        } else {
+            $user = User::query()->findOrFail($userId);
+        }
 
         $password = $request->input('password');
 
         $user->password = Hash::make($password);
-        $this->userRepository->createOrUpdate($user);
+        $user->sessions_invalidated_at = Carbon::now();
+        $user->setRememberToken(Str::random(60));
+        $user->save();
 
-        if ($user->id != $currentUser->getKey()) {
+        /**
+         * @var User $user
+         */
+        if ($user->getKey() != $currentUser->getKey()) {
             try {
                 Auth::setUser($user);
                 Auth::logoutOtherDevices($password);
             } catch (Throwable $exception) {
-                info($exception->getMessage());
+                BaseHelper::logError($exception);
             }
         }
 

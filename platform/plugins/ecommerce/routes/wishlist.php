@@ -1,22 +1,19 @@
 <?php
 
+use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Ecommerce\Http\Controllers\Fronts\WishlistController;
+use Botble\Ecommerce\Http\Middleware\CheckWishlistEnabledMiddleware;
+use Botble\Theme\Facades\Theme;
 use Illuminate\Support\Facades\Route;
 
-Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers\Fronts', 'middleware' => ['web', 'core']], function () {
-    Route::group(apply_filters(BASE_FILTER_GROUP_PUBLIC_ROUTE, []), function () {
-        Route::get('wishlist', [
-            'as' => 'public.wishlist',
-            'uses' => 'WishlistController@index',
-        ]);
-
-        Route::post('wishlist/{productId}', [
-            'as' => 'public.wishlist.add',
-            'uses' => 'WishlistController@store',
-        ])->wherePrimaryKey('productId');
-
-        Route::delete('wishlist/{productId}', [
-            'as' => 'public.wishlist.remove',
-            'uses' => 'WishlistController@destroy',
-        ])->wherePrimaryKey('productId');
-    });
+Theme::registerRoutes(function (): void {
+    Route::middleware(CheckWishlistEnabledMiddleware::class)
+        ->controller(WishlistController::class)
+        ->prefix(EcommerceHelper::getPageSlug('wishlist'))
+        ->name('public.')
+        ->group(function (): void {
+            Route::get('/{code?}', 'index')->name('wishlist');
+            Route::post('{productId}', 'store')->name('wishlist.add')->wherePrimaryKey('productId');
+            Route::delete('{productId}', 'destroy')->name('wishlist.remove')->wherePrimaryKey('productId');
+        });
 });

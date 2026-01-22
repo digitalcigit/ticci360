@@ -1,14 +1,11 @@
 @extends(EcommerceHelper::viewPath('customers.master'))
+
+@section('title', trans('plugins/ecommerce::customer-dashboard.return_products'))
+
 @section('content')
-    @php Theme::set('pageName', __('Return Product(s)')) @endphp
-    <div class="card">
-        <div class="card-header">
-            <h4 class="mb-0">{{ __('Return Product(s)') }}</h4>
-        </div>
-        <div class="card-body">
-            <div class="customer-order-detail">
-                @include('plugins/ecommerce::themes.includes.order-return-detail')
-            </div>
-        </div>
-    </div>
-@endsection
+    @php
+        Theme::set('pageName', trans('plugins/ecommerce::customer-dashboard.return_products'));
+    @endphp
+
+    @include(EcommerceHelper::viewPath('includes.order-return-detail'))
+@stop

@@ -2,10 +2,11 @@
 
 namespace Botble\Media\Services;
 
-use Exception;
-use Intervention\Image\ImageManager;
-use Illuminate\Support\Facades\Log;
+use Botble\Base\Facades\BaseHelper;
 use Botble\Media\Facades\RvMedia;
+use Illuminate\Support\Facades\File;
+use Intervention\Image\Encoders\AutoEncoder;
+use Throwable;
 
 class ThumbnailService
 {
@@ -19,20 +20,20 @@ class ThumbnailService
 
     protected string $destinationPath;
 
-    protected int|null $xCoordinate;
+    protected ?int $xCoordinate;
 
-    protected int|null $yCoordinate;
+    protected ?int $yCoordinate;
 
     protected string $fitPosition;
 
     protected string $fileName;
 
-    public function __construct(protected UploadsManager $uploadManager, protected ImageManager $imageManager)
+    public function __construct(protected UploadsManager $uploadManager)
     {
         $this->thumbRate = 0.75;
         $this->xCoordinate = null;
         $this->yCoordinate = null;
-        $this->fitPosition = 'center';
+        $this->fitPosition = setting('media_thumbnail_crop_position', 'center');
     }
 
     public function setImage(string $imagePath): self
@@ -55,13 +56,13 @@ class ThumbnailService
         if (! $height || $height == 'auto') {
             $this->thumbHeight = 0;
         } elseif ($height == 'rate') {
-            $this->thumbHeight = (int)($this->thumbWidth * $this->thumbRate);
+            $this->thumbHeight = (int) ($this->thumbWidth * $this->thumbRate);
         }
 
         if (! $width || $width == 'auto') {
             $this->thumbWidth = 0;
         } elseif ($width == 'rate') {
-            $this->thumbWidth = (int)($this->thumbHeight * $this->thumbRate);
+            $this->thumbWidth = (int) ($this->thumbHeight * $this->thumbRate);
         }
 
         return $this;
@@ -106,11 +107,7 @@ class ThumbnailService
 
     public function save(string $type = 'fit'): bool|string
     {
-        $this->imageManager = $this->imageManager->configure([
-            'driver' => RvMedia::getImageProcessingLibrary(),
-        ]);
-
-        $fileName = pathinfo($this->imagePath, PATHINFO_BASENAME);
+        $fileName = File::basename($this->imagePath);
 
         if ($this->fileName) {
             $fileName = $this->fileName;
@@ -118,7 +115,7 @@ class ThumbnailService
 
         $destinationPath = sprintf('%s/%s', trim($this->destinationPath, '/'), $fileName);
 
-        $thumbImage = $this->imageManager->make($this->imagePath);
+        $thumbImage = RvMedia::imageManager()->read($this->imagePath);
 
         if ($this->thumbWidth && ! $this->thumbHeight) {
             $type = 'width';
@@ -128,48 +125,60 @@ class ThumbnailService
 
         switch ($type) {
             case 'width':
-                $thumbImage->resize($this->thumbWidth, null, function ($constraint) {
-                    $constraint->aspectRatio();
-                    $constraint->upsize();
-                });
+                if (! $this->thumbWidth) {
+                    return $destinationPath;
+                }
+
+                $thumbImage->scale($this->thumbWidth);
 
                 break;
 
             case 'height':
-                $thumbImage->resize(null, $this->thumbHeight, function ($constraint) {
-                    $constraint->aspectRatio();
-                    $constraint->upsize();
-                });
+                if (! $this->thumbHeight) {
+                    return $destinationPath;
+                }
+
+                $thumbImage->scale(null, $this->thumbHeight);
 
                 break;
 
             case 'resize':
+                if (! $this->thumbWidth || ! $this->thumbHeight) {
+                    return $destinationPath;
+                }
+
                 $thumbImage->resize($this->thumbWidth, $this->thumbHeight);
 
                 break;
 
             case 'crop':
+                if (! $this->thumbWidth || ! $this->thumbHeight) {
+                    return $destinationPath;
+                }
+
                 $thumbImage->crop($this->thumbWidth, $this->thumbHeight, $this->xCoordinate, $this->yCoordinate);
 
                 break;
 
             case 'fit':
             default:
-                if (extension_loaded('exif')) {
-                    $thumbImage->orientate();
+                if (! $this->thumbWidth || ! $this->thumbHeight) {
+                    return $destinationPath;
                 }
 
-                $thumbImage->fit($this->thumbWidth, $this->thumbHeight, null, $this->fitPosition);
+                $thumbImage->cover($this->thumbWidth, $this->thumbHeight, $this->fitPosition);
 
                 break;
         }
 
         try {
-            $this->uploadManager->saveFile($destinationPath, $thumbImage->stream()->__toString());
-        } catch (Exception $exception) {
-            Log::error($exception->getMessage());
+            $encodedImage = $thumbImage->encode(new AutoEncoder());
 
-            return false;
+            $this->uploadManager->saveFile($destinationPath, (string) $encodedImage);
+        } catch (Throwable $exception) {
+            BaseHelper::logError($exception);
+
+            throw $exception;
         }
 
         return $destinationPath;

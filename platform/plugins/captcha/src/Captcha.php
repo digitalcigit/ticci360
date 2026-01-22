@@ -3,43 +3,61 @@
 namespace Botble\Captcha;
 
 use Botble\Captcha\Contracts\Captcha as CaptchaContract;
+use Botble\Captcha\Events\CaptchaRendered;
+use Botble\Captcha\Events\CaptchaRendering;
 use Illuminate\Support\Facades\Http;
 
 class Captcha extends CaptchaContract
 {
     protected bool $rendered = false;
 
-    public function display(array $attributes = [], array $options = []): string|null
+    public function display(array $attributes = [], array $options = []): ?string
     {
-        if (! $this->siteKey || ! $this->isEnabled()) {
+        if (! $this->siteKey || ! $this->reCaptchaEnabled()) {
             return null;
         }
 
-        $name = 'captcha_' . md5(uniqid((string)rand(), true));
+        $name = 'captcha_' . md5(uniqid((string) rand(), true));
 
-        $isRendered = $this->rendered;
+        $headContent = $this->headRender();
+        $footerContent = $this->footerRender($name);
 
-        add_filter(THEME_FRONT_FOOTER, function (string|null $html) use ($isRendered, $name): string {
-            $url = self::RECAPTCHA_CLIENT_API_URL . '?' . http_build_query([
-                    'onload' => 'onloadCallback',
-                    'render' => 'explicit',
-                    'hl' => app()->getLocale(),
-                ]);
+        CaptchaRendering::dispatch($attributes, $options, $headContent, $footerContent);
 
-            return $html . view('plugins/captcha::v2.script', compact('url', 'isRendered', 'name'))->render();
+        add_filter(['theme-front-header', 'ecommerce_checkout_header'], function ($html) use ($headContent) {
+            return $html . $headContent;
+        }, 299);
+
+        add_filter(['theme-front-footer', 'ecommerce_checkout_footer'], function (?string $html) use ($footerContent): string {
+            return $html . $footerContent;
+        }, 99);
+
+        add_filter(BASE_FILTER_HEAD_LAYOUT_TEMPLATE, function ($html) use ($headContent) {
+            return $html . $headContent;
+        }, 299);
+
+        add_filter(BASE_FILTER_FOOTER_LAYOUT_TEMPLATE, function (?string $html) use ($footerContent): string {
+            return $html . $footerContent;
         }, 99);
 
         $this->rendered = true;
 
-        return view('plugins/captcha::v2.html', [
-            'name' => $name,
-            'siteKey' => $this->siteKey,
-        ])->render();
+        $captchaContent = view('plugins/captcha::v2.html', ['name' => $name, 'siteKey' => $this->siteKey])->render();
+
+        if (request()->expectsJson()) {
+            $captchaContent .= $footerContent;
+        }
+
+        return
+            tap(
+                $captchaContent,
+                fn (string $rendered) => CaptchaRendered::dispatch($rendered)
+            );
     }
 
-    public function verify(string $response, string $clientIp = null, array $options = []): bool
+    public function verify(string $response, ?string $clientIp = null, array $options = []): bool
     {
-        if (! $this->isEnabled()) {
+        if (! $this->reCaptchaEnabled()) {
             return true;
         }
 
@@ -56,5 +74,23 @@ class Captcha extends CaptchaContract
             ]);
 
         return $response->json('success');
+    }
+
+    protected function headRender(): string
+    {
+        return view('plugins/captcha::header-meta')->render();
+    }
+
+    protected function footerRender(string $name): string
+    {
+        $isRendered = $this->rendered;
+
+        $url = self::RECAPTCHA_CLIENT_API_URL . '?' . http_build_query([
+                'onload' => 'onloadCallback',
+                'render' => 'explicit',
+                'hl' => app()->getLocale(),
+            ]);
+
+        return view('plugins/captcha::v2.script', compact('url', 'isRendered', 'name'))->render();
     }
 }

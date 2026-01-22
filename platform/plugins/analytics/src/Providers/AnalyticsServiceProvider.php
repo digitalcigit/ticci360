@@ -2,53 +2,34 @@
 
 namespace Botble\Analytics\Providers;
 
-use Botble\Analytics\Analytics;
-use Botble\Analytics\AnalyticsClient;
-use Botble\Analytics\AnalyticsClientFactory;
 use Botble\Analytics\Abstracts\AnalyticsAbstract;
-use Botble\Analytics\Facades\Analytics as AnalyticsFacade;
-use Botble\Analytics\GA4\Analytics as AnalyticsGA4;
-use Botble\Base\Traits\LoadAndPublishDataTrait;
-use Illuminate\Foundation\AliasLoader;
-use Illuminate\Support\ServiceProvider;
+use Botble\Analytics\Analytics;
 use Botble\Analytics\Exceptions\InvalidConfiguration;
+use Botble\Analytics\Facades\Analytics as AnalyticsFacade;
+use Botble\Base\Facades\PanelSectionManager;
+use Botble\Base\PanelSections\PanelSectionItem;
+use Botble\Base\Supports\ServiceProvider;
+use Botble\Base\Traits\LoadAndPublishDataTrait;
+use Botble\Setting\PanelSections\SettingOthersPanelSection;
+use Illuminate\Contracts\Support\DeferrableProvider;
+use Illuminate\Foundation\AliasLoader;
 
-class AnalyticsServiceProvider extends ServiceProvider
+class AnalyticsServiceProvider extends ServiceProvider implements DeferrableProvider
 {
     use LoadAndPublishDataTrait;
 
     public function register(): void
     {
-        if (! class_exists('Google\Service\Analytics\GaData')) {
-            return;
-        }
-
-        $this->app->bind(AnalyticsClient::class, function () {
-            return AnalyticsClientFactory::createForConfig(config('plugins.analytics.general'));
-        });
-
         $this->app->bind(AnalyticsAbstract::class, function () {
-            $credentials = setting('analytics_service_account_credentials');
-
-            if (! $credentials) {
+            if (! ($credentials = setting('analytics_service_account_credentials'))) {
                 throw InvalidConfiguration::credentialsIsNotValid();
             }
 
-            if ($propertyId = setting('analytics_property_id')) {
-                if (! is_numeric($propertyId)) {
-                    throw InvalidConfiguration::invalidPropertyId();
-                }
-
-                return new AnalyticsGA4($propertyId, $credentials);
+            if (! ($propertyId = setting('analytics_property_id')) || ! is_numeric($propertyId)) {
+                throw InvalidConfiguration::invalidPropertyId();
             }
 
-            $viewId = setting('analytics_view_id');
-
-            if (empty($viewId)) {
-                throw InvalidConfiguration::propertyIdNotSpecified();
-            }
-
-            return new Analytics($this->app->make(AnalyticsClient::class), $viewId);
+            return new Analytics($propertyId, $credentials);
         });
 
         AliasLoader::getInstance()->alias('Analytics', AnalyticsFacade::class);
@@ -56,15 +37,42 @@ class AnalyticsServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->setNamespace('plugins/analytics')
-            ->loadAndPublishConfigurations(['general', 'permissions'])
+        $this
+            ->setNamespace('plugins/analytics')
+            ->loadAndPublishConfigurations(['general'])
+            ->loadAndPublishConfigurations(['permissions'])
             ->loadRoutes()
             ->loadAndPublishViews()
             ->loadAndPublishTranslations()
+            ->loadMigrations()
             ->publishAssets();
 
-        $this->app->booted(function () {
+        PanelSectionManager::default()->beforeRendering(function (): void {
+            if (! config('plugins.analytics.general.enabled_dashboard_widgets', true)) {
+                return;
+            }
+
+            PanelSectionManager::registerItem(
+                SettingOthersPanelSection::class,
+                fn () => PanelSectionItem::make('analytics')
+                    ->setTitle(trans('plugins/analytics::analytics.settings.title'))
+                    ->withIcon('ti ti-brand-google-analytics')
+                    ->withDescription(trans('plugins/analytics::analytics.settings.description'))
+                    ->withPriority(160)
+                    ->withRoute('analytics.settings')
+            );
+        });
+
+        $this->app->booted(function (): void {
             $this->app->register(HookServiceProvider::class);
         });
+    }
+
+    public function provides(): array
+    {
+        return [
+            AnalyticsAbstract::class,
+            'Analytics',
+        ];
     }
 }

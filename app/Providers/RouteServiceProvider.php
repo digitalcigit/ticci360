@@ -29,6 +29,7 @@ class RouteServiceProvider extends ServiceProvider
         });
 
         $this->routes(function () {
+            // die('DEBUG: Inside routes callback');
             Route::middleware('api')
                 ->prefix('api')
                 ->group(base_path('routes/api.php'));

@@ -3,47 +3,108 @@
 namespace Botble\Ecommerce\Tables;
 
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Enums\BaseStatusEnum;
+use Botble\Base\Facades\Html;
+use Botble\DataSynchronize\Table\HeaderActions\ExportHeaderAction;
+use Botble\DataSynchronize\Table\HeaderActions\ImportHeaderAction;
 use Botble\Ecommerce\Enums\ProductTypeEnum;
 use Botble\Ecommerce\Enums\StockStatusEnum;
-use Botble\Ecommerce\Models\Product;
-use Botble\Ecommerce\Repositories\Interfaces\ProductCategoryInterface;
-use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
-use Botble\Table\Abstracts\TableAbstract;
-use Carbon\Carbon;
 use Botble\Ecommerce\Facades\EcommerceHelper;
-use Botble\Base\Facades\Html;
-use Illuminate\Contracts\Routing\UrlGenerator;
+use Botble\Ecommerce\Models\Brand;
+use Botble\Ecommerce\Models\Product;
+use Botble\Ecommerce\Models\ProductCategory;
+use Botble\Table\Abstracts\TableAbstract;
+use Botble\Table\Actions\DeleteAction;
+use Botble\Table\Actions\EditAction;
+use Botble\Table\Actions\ViewAction;
+use Botble\Table\BulkActions\DeleteBulkAction;
+use Botble\Table\BulkChanges\CreatedAtBulkChange;
+use Botble\Table\BulkChanges\IsFeaturedBulkChange;
+use Botble\Table\BulkChanges\NameBulkChange;
+use Botble\Table\BulkChanges\NumberBulkChange;
+use Botble\Table\BulkChanges\StatusBulkChange;
+use Botble\Table\Columns\Column;
+use Botble\Table\Columns\CreatedAtColumn;
+use Botble\Table\Columns\IdColumn;
+use Botble\Table\Columns\ImageColumn;
+use Botble\Table\Columns\StatusColumn;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\Relations\Relation as EloquentRelation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Auth;
-use Botble\Media\Facades\RvMedia;
 use Symfony\Component\HttpFoundation\Response;
-use Botble\Table\DataTables;
 
 class ProductTable extends TableAbstract
 {
-    protected $hasActions = true;
-
-    protected $hasFilter = true;
-
-    public function __construct(DataTables $table, UrlGenerator $urlGenerator, ProductInterface $productRepository)
+    public function setup(): void
     {
-        parent::__construct($table, $urlGenerator);
-
-        $this->repository = $productRepository;
-
-        if (! Auth::user()->hasAnyPermission(['products.edit', 'products.destroy'])) {
-            $this->hasOperations = false;
-            $this->hasActions = false;
-        }
+        $this
+            ->model(Product::class)
+            ->addActions([
+                ViewAction::make()->route('products.view'),
+                EditAction::make()->route('products.edit'),
+                DeleteAction::make()->route('products.destroy'),
+            ])
+            ->addHeaderActions([
+                ExportHeaderAction::make()
+                    ->route('tools.data-synchronize.export.products.index')
+                    ->permission('ecommerce.export.products.index'),
+                ImportHeaderAction::make()
+                    ->route('tools.data-synchronize.import.products.index')
+                    ->permission('ecommerce.import.products.index'),
+            ])
+            ->addBulkActions([
+                DeleteBulkAction::make()->permission('products.destroy'),
+            ])
+            ->addColumns([
+                IdColumn::make(),
+                ImageColumn::make(),
+                Column::make('name')
+                    ->title(trans('plugins/ecommerce::products.name'))
+                    ->alignStart(),
+                Column::make('price')
+                    ->title(trans('plugins/ecommerce::products.price'))
+                    ->alignStart(),
+                Column::make('stock_status')
+                    ->title(trans('plugins/ecommerce::products.stock_status')),
+                Column::make('quantity')
+                    ->title(trans('plugins/ecommerce::products.quantity'))
+                    ->alignStart(),
+                Column::make('sku')
+                    ->title(trans('plugins/ecommerce::products.sku'))
+                    ->alignStart(),
+                Column::make('order')
+                    ->title(trans('plugins/ecommerce::ecommerce.sort_order'))
+                    ->width(50),
+                CreatedAtColumn::make(),
+                StatusColumn::make(),
+            ])
+            ->queryUsing(function (Builder $query) {
+                return $query
+                    ->select([
+                        'id',
+                        'name',
+                        'order',
+                        'created_at',
+                        'status',
+                        'sku',
+                        'image',
+                        'images',
+                        'price',
+                        'sale_price',
+                        'sale_type',
+                        'start_date',
+                        'end_date',
+                        'quantity',
+                        'with_storehouse_management',
+                        'stock_status',
+                        'product_type',
+                    ])
+                    ->where('is_variation', 0);
+            });
     }
 
     public function ajax(): JsonResponse
@@ -53,35 +114,46 @@ class ProductTable extends TableAbstract
             ->editColumn('name', function (Product $item) {
                 $productType = null;
 
-                if (EcommerceHelper::isEnabledSupportDigitalProducts()) {
+                if (! EcommerceHelper::isDisabledPhysicalProduct() && EcommerceHelper::isEnabledSupportDigitalProducts()) {
                     $productType = Html::tag('small', ' &mdash; ' . $item->product_type->label())->toHtml();
                 }
 
-                if (! Auth::user()->hasPermission('products.edit')) {
+                if (! EcommerceHelper::isDisabledPhysicalProduct() && ! $this->hasPermission('products.edit')) {
                     return BaseHelper::clean($item->name) . $productType;
                 }
 
-                return Html::link(route('products.edit', $item->id), BaseHelper::clean($item->name)) . $productType;
-            })
-            ->editColumn('image', function (Product $item) {
-                if ($this->request()->input('action') == 'csv') {
-                    return RvMedia::getImageUrl($item->image, null, false, RvMedia::getDefaultImage());
-                }
-
-                if ($this->request()->input('action') == 'excel') {
-                    return RvMedia::getImageUrl($item->image, 'thumb', false, RvMedia::getDefaultImage());
-                }
-
-                return $this->displayThumbnail($item->image);
-            })
-            ->editColumn('checkbox', function (Product $item) {
-                return $this->getCheckbox($item->id);
+                return Html::link(
+                    route('products.edit', $item->getKey()),
+                    BaseHelper::clean($item->name)
+                ) . $productType;
             })
             ->editColumn('price', function (Product $item) {
                 return $item->price_in_table;
             })
             ->editColumn('quantity', function (Product $item) {
-                return $item->with_storehouse_management ? $item->quantity : '&#8734;';
+                if (! $item->with_storehouse_management) {
+                    return '&#8734;';
+                }
+
+                if ($item->variations->isEmpty()) {
+                    return $item->quantity;
+                }
+
+                $withStoreHouseManagement = $item->with_storehouse_management;
+
+                $quantity = 0;
+
+                foreach ($item->variations as $variation) {
+                    if (! $variation->product->with_storehouse_management) {
+                        $withStoreHouseManagement = false;
+
+                        break;
+                    }
+
+                    $quantity += $variation->product->quantity;
+                }
+
+                return $withStoreHouseManagement ? $quantity : '&#8734;';
             })
             ->editColumn('sku', function (Product $item) {
                 return BaseHelper::clean($item->sku ?: '&mdash;');
@@ -89,201 +161,83 @@ class ProductTable extends TableAbstract
             ->editColumn('order', function (Product $item) {
                 return view('plugins/ecommerce::products.partials.sort-order', compact('item'))->render();
             })
-            ->editColumn('created_at', function (Product $item) {
-                return BaseHelper::formatDate($item->created_at);
-            })
-            ->editColumn('status', function (Product $item) {
-                return BaseHelper::clean($item->status->toHtml());
-            })
             ->editColumn('stock_status', function (Product $item) {
                 return BaseHelper::clean($item->stock_status_html);
             })
-            ->addColumn('operations', function (Product $item) {
-                return $this->getOperations('products.edit', 'products.destroy', $item);
+            ->filter(function ($query) {
+                return $query->searchByKeyword(request()->input('search.value'));
             });
 
         return $this->toJson($data);
     }
 
-    public function query(): Relation|Builder|QueryBuilder
-    {
-        $query = $this->repository->getModel()
-            ->select([
-                'id',
-                'name',
-                'order',
-                'created_at',
-                'status',
-                'sku',
-                'images',
-                'price',
-                'sale_price',
-                'sale_type',
-                'start_date',
-                'end_date',
-                'quantity',
-                'with_storehouse_management',
-                'stock_status',
-                'product_type',
-            ])
-            ->where('is_variation', 0);
-
-        return $this->applyScopes($query);
-    }
-
     public function htmlDrawCallbackFunction(): ?string
     {
-        return parent::htmlDrawCallbackFunction() . '$(".editable").editable({mode: "inline"});';
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => [
-                'title' => trans('core/base::tables.id'),
-                'width' => '20px',
-            ],
-            'image' => [
-                'name' => 'images',
-                'title' => trans('plugins/ecommerce::products.image'),
-                'width' => '100px',
-                'class' => 'text-center',
-            ],
-            'name' => [
-                'title' => trans('core/base::tables.name'),
-                'class' => 'text-start',
-            ],
-            'price' => [
-                'title' => trans('plugins/ecommerce::products.price'),
-                'class' => 'text-start',
-            ],
-            'stock_status' => [
-                'title' => trans('plugins/ecommerce::products.stock_status'),
-                'class' => 'text-center',
-            ],
-            'quantity' => [
-                'title' => trans('plugins/ecommerce::products.quantity'),
-                'class' => 'text-start',
-            ],
-            'sku' => [
-                'title' => trans('plugins/ecommerce::products.sku'),
-                'class' => 'text-start',
-            ],
-            'order' => [
-                'title' => trans('core/base::tables.order'),
-                'width' => '50px',
-                'class' => 'text-center',
-            ],
-            'created_at' => [
-                'title' => trans('core/base::tables.created_at'),
-                'width' => '100px',
-                'class' => 'text-center',
-            ],
-            'status' => [
-                'title' => trans('core/base::tables.status'),
-                'width' => '100px',
-                'class' => 'text-center',
-            ],
-        ];
+        return parent::htmlDrawCallbackFunction() . 'Botble.initEditable()';
     }
 
     public function buttons(): array
     {
         $buttons = [];
-        if (EcommerceHelper::isEnabledSupportDigitalProducts() && Auth::user()->hasPermission('products.create')) {
+
+        if (EcommerceHelper::isEnabledSupportDigitalProducts() && ! EcommerceHelper::isDisabledPhysicalProduct() && $this->hasPermission('products.create')) {
             $buttons['create'] = [
                 'extend' => 'collection',
                 'text' => view('core/table::partials.create')->render(),
+                'class' => 'btn-primary',
                 'buttons' => [
                     [
                         'className' => 'action-item',
-                        'text' => ProductTypeEnum::PHYSICAL()->toIcon() . ' ' . Html::tag('span', ProductTypeEnum::PHYSICAL()->label(), [
-                            'data-action' => 'physical-product',
-                            'data-href' => route('products.create'),
-                            'class' => 'ms-1',
-                        ])->toHtml(),
+                        'text' => ProductTypeEnum::PHYSICAL()->toIcon() . ' ' . Html::tag(
+                            'span',
+                            ProductTypeEnum::PHYSICAL()->label(),
+                            [
+                                'data-action' => 'physical-product',
+                                'data-href' => route('products.create'),
+                                'class' => 'ms-1',
+                            ]
+                        )->toHtml(),
                     ],
                     [
                         'className' => 'action-item',
-                        'text' => ProductTypeEnum::DIGITAL()->toIcon() . ' ' . Html::tag('span', ProductTypeEnum::DIGITAL()->label(), [
-                            'data-action' => 'digital-product',
-                            'data-href' => route('products.create', ['product_type' => 'digital']),
-                            'class' => 'ms-1',
-                        ])->toHtml(),
+                        'text' => ProductTypeEnum::DIGITAL()->toIcon() . ' ' . Html::tag(
+                            'span',
+                            ProductTypeEnum::DIGITAL()->label(),
+                            [
+                                'data-action' => 'digital-product',
+                                'data-href' => route('products.create', ['product_type' => 'digital']),
+                                'class' => 'ms-1',
+                            ]
+                        )->toHtml(),
                     ],
                 ],
             ];
-        } else {
+        } elseif (! EcommerceHelper::isEnabledSupportDigitalProducts() || EcommerceHelper::isDisabledPhysicalProduct()) {
             $buttons = $this->addCreateButton(route('products.create'), 'products.create');
-        }
-
-        if (Auth::user()->hasPermission('ecommerce.import.products.index')) {
-            $buttons['import'] = [
-                'link' => route('ecommerce.import.products.index'),
-                'text' => '<i class="fas fa-cloud-upload-alt"></i> ' . trans('plugins/ecommerce::bulk-import.import_products'),
-                'class' => 'btn-warning',
-            ];
-        }
-
-        if (Auth::user()->hasPermission('ecommerce.export.products.index')) {
-            $buttons['export'] = [
-                'link' => route('ecommerce.export.products.index'),
-                'text' => '<i class="fas fa-cloud-download-alt"></i> ' . trans('plugins/ecommerce::export.products.name'),
-                'class' => 'btn-warning',
-            ];
         }
 
         return $buttons;
     }
 
-    public function bulkActions(): array
-    {
-        return $this->addDeleteAction(route('products.deletes'), 'products.destroy', parent::bulkActions());
-    }
-
     public function renderTable($data = [], $mergeData = []): View|Factory|Response
     {
-        if ($this->query()->count() === 0 &&
-            ! $this->request()->wantsJson() &&
-            $this->request()->input('filter_table_id') !== $this->getOption('id') && ! $this->request()->ajax()
-        ) {
+        if ($this->isEmpty()) {
             return view('plugins/ecommerce::products.intro');
         }
 
         return parent::renderTable($data, $mergeData);
     }
 
-    public function getDefaultButtons(): array
-    {
-        return [
-            'reload',
-        ];
-    }
-
-    public function getCategories(int|string|null $value = null): array
-    {
-        $categorySelected = [];
-        if ($value) {
-            $category = app(ProductCategoryInterface::class)->findById($value);
-            if ($category) {
-                $categorySelected = [$category->id => $category->name];
-            }
-        }
-
-        return [
-            'url' => route('product-categories.search'),
-            'selected' => $categorySelected,
-            'minimum-input' => 1,
-        ];
-    }
-
     public function getFilters(): array
     {
-        $data = $this->getBulkChanges();
+        $data = parent::getFilters();
 
         $data['category'] = array_merge($data['category'], [
             'type' => 'select-ajax',
-            'class' => 'select-search-ajax',
+        ]);
+
+        $data['brand_id'] = array_merge($data['brand_id'], [
+            'type' => 'select-ajax',
         ]);
 
         $data['stock_status'] = [
@@ -300,52 +254,76 @@ class ProductTable extends TableAbstract
             'validate' => 'required|in:' . implode(',', ProductTypeEnum::values()),
         ];
 
+        $data['sku'] = [
+            'title' => trans('plugins/ecommerce::products.sku'),
+            'type' => 'text',
+        ];
+
         return $data;
     }
 
     public function getBulkChanges(): array
     {
         return [
-            'name' => [
-                'title' => trans('core/base::tables.name'),
-                'type' => 'text',
-                'validate' => 'required|max:120',
-            ],
-            'order' => [
-                'title' => trans('core/base::tables.order'),
-                'type' => 'number',
-                'validate' => 'required|min:0',
-            ],
-            'status' => [
-                'title' => trans('core/base::tables.status'),
-                'type' => 'select',
-                'choices' => BaseStatusEnum::labels(),
-                'validate' => 'required|in:' . implode(',', BaseStatusEnum::values()),
-            ],
+            NameBulkChange::make(),
+            NumberBulkChange::make()
+                ->name('order')
+                ->title(trans('plugins/ecommerce::ecommerce.sort_order')),
             'category' => [
                 'title' => trans('plugins/ecommerce::products.category'),
                 'type' => 'select-ajax',
                 'validate' => 'required',
-                'callback' => 'getCategories',
+                'callback' => function (int|string|null $value = null): array {
+                    $categorySelected = [];
+                    if ($value && $category = ProductCategory::query()->find($value)) {
+                        $categorySelected = [$category->getKey() => $category->name];
+                    }
+
+                    return [
+                        'url' => route('product-categories.search'),
+                        'selected' => $categorySelected,
+                        'minimum-input' => 1,
+                    ];
+                },
             ],
-            'created_at' => [
-                'title' => trans('core/base::tables.created_at'),
-                'type' => 'datePicker',
+            'brand_id' => [
+                'title' => trans('plugins/ecommerce::products.brand'),
+                'type' => 'select-ajax',
+                'validate' => 'required',
+                'callback' => function (int|string|null $value = null): array {
+                    $brandSelected = [];
+                    if ($value && $brand = Brand::query()->find($value)) {
+                        $brandSelected = [$brand->getKey() => $brand->name];
+                    }
+
+                    return [
+                        'url' => route('brands.search'),
+                        'selected' => $brandSelected,
+                        'minimum-input' => 1,
+                    ];
+                },
             ],
+            StatusBulkChange::make(),
+            CreatedAtBulkChange::make(),
+            IsFeaturedBulkChange::make(),
         ];
     }
 
-    public function applyFilterCondition(EloquentBuilder|QueryBuilder|EloquentRelation $query, string $key, string $operator, ?string $value): EloquentRelation|EloquentBuilder|QueryBuilder
-    {
+    public function applyFilterCondition(
+        EloquentBuilder|QueryBuilder|EloquentRelation $query,
+        string $key,
+        string $operator,
+        ?string $value
+    ): EloquentRelation|EloquentBuilder|QueryBuilder {
         switch ($key) {
             case 'created_at':
                 if (! $value) {
                     break;
                 }
 
-                $value = Carbon::createFromFormat(config('core.base.general.date_format.date'), $value)->toDateString();
+                $value = BaseHelper::formatDate($value);
 
-                return $query->whereDate($key, $operator, $value);
+                return $query->whereDate('ec_products.' . $key, $operator, $value);
             case 'category':
                 if (! $value) {
                     break;
@@ -368,7 +346,22 @@ class ProductTable extends TableAbstract
                         ->select($query->getModel()->getTable() . '.*');
                 }
 
-                return $query->where('ec_product_category_product.category_id', $value);
+                $category = ProductCategory::query()->find($value);
+
+                if (! $category) {
+                    break;
+                }
+
+                $categoryIds = ProductCategory::getChildrenIds($category->activeChildren, [$category->getKey()]);
+
+                return $query->whereIn('ec_product_category_product.category_id', $categoryIds);
+
+            case 'brand':
+                if (! $value) {
+                    break;
+                }
+
+                return $query->where('ec_products.brand_id', $operator, $value);
 
             case 'stock_status':
                 if (! $value) {
@@ -381,14 +374,14 @@ class ProductTable extends TableAbstract
 
                 if ($value == StockStatusEnum::OUT_OF_STOCK) {
                     return $query
-                        ->where(function ($query) {
+                        ->where(function ($query): void {
                             $query
-                                ->where(function ($subQuery) {
+                                ->where(function ($subQuery): void {
                                     $subQuery
                                         ->where('with_storehouse_management', 0)
                                         ->where('stock_status', StockStatusEnum::OUT_OF_STOCK);
                                 })
-                                ->orWhere(function ($subQuery) {
+                                ->orWhere(function ($subQuery): void {
                                     $subQuery
                                         ->where('with_storehouse_management', 1)
                                         ->where('allow_checkout_when_out_of_stock', 0)
@@ -401,15 +394,15 @@ class ProductTable extends TableAbstract
                     return $query
                         ->where(function ($query) {
                             return $query
-                                ->where(function ($subQuery) {
+                                ->where(function ($subQuery): void {
                                     $subQuery
                                         ->where('with_storehouse_management', 0)
                                         ->where('stock_status', StockStatusEnum::IN_STOCK);
                                 })
-                                ->orWhere(function ($subQuery) {
+                                ->orWhere(function ($subQuery): void {
                                     $subQuery
                                         ->where('with_storehouse_management', 1)
-                                        ->where(function ($sub) {
+                                        ->where(function ($sub): void {
                                             $sub
                                                 ->where('allow_checkout_when_out_of_stock', 1)
                                                 ->orWhere('quantity', '>', 0);

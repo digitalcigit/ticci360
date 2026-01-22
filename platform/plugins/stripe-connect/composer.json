@@ -1,0 +1,1 @@
+{"name":"botble/stripe-connect","type":"package","autoload":{"psr-4":{"Botble\\StripeConnect\\":"src/"}}}

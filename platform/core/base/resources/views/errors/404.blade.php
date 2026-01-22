@@ -1,17 +1,25 @@
+@php
+    PageTitle::setTitle(trans('core/base::errors.404_page_not_found'));
+@endphp
+
 @extends('core/base::errors.master')
 
 @section('content')
-
-    <div class="m-50">
-        <div class="col-md-10">
-            <h3>{{ trans('core/base::errors.404_title') }}</h3>
-            <p>{{ trans('core/base::errors.reasons') }}</p>
-            <ul>
-                {!! BaseHelper::clean(trans('core/base::errors.404_msg')) !!}
-            </ul>
-
-            <p>{!! BaseHelper::clean(trans('core/base::errors.try_again', ['link' => route('dashboard.index')])) !!}</p>
+    <div class="empty">
+        <div class="empty-header">404</div>
+        <p class="empty-title">{{ trans('core/base::errors.404_page_not_found_description') }}</p>
+        <p class="empty-subtitle text-secondary">
+            {{ trans('core/base::errors.404_description') }}
+        </p>
+        <div class="empty-action">
+            <x-core::button
+                tag="a"
+                href="{{ route('dashboard.index') }}"
+                color="primary"
+                icon="ti ti-arrow-left"
+            >
+                {{ trans('core/base::errors.take_me_home') }}
+            </x-core::button>
         </div>
     </div>
-
-@stop
+@endsection

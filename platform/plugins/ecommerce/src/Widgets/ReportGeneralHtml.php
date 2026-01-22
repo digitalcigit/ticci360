@@ -3,14 +3,19 @@
 namespace Botble\Ecommerce\Widgets;
 
 use Botble\Base\Widgets\Html;
-use Botble\Ecommerce\Repositories\Interfaces\OrderInterface;
-use Carbon\CarbonPeriod;
+use Botble\Ecommerce\Models\Order;
 use Botble\Payment\Enums\PaymentStatusEnum;
+use Carbon\CarbonPeriod;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
 class ReportGeneralHtml extends Html
 {
+    public function getColumns(): int
+    {
+        return 12; // Full width for detailed analytics
+    }
+
     public function getContent(): string
     {
         if (! is_plugin_active('payment')) {
@@ -22,16 +27,23 @@ class ReportGeneralHtml extends Html
             'endDate' => $this->endDate,
         ];
 
-        $revenues = app(OrderInterface::class)
-            ->getModel()
+        $revenues = Order::query()
             ->select([
                 DB::raw('SUM(COALESCE(payments.amount, 0) - COALESCE(payments.refunded_amount, 0)) as revenue'),
                 'payments.status',
             ])
-            ->join('payments', 'payments.id', '=', 'ec_orders.payment_id')
-            ->whereIn('payments.status', [PaymentStatusEnum::COMPLETED, PaymentStatusEnum::PENDING])
-            ->whereDate('payments.created_at', '>=', $this->startDate)
-            ->whereDate('payments.created_at', '<=', $this->endDate)
+            ->leftJoin('payments', 'payments.id', '=', 'ec_orders.payment_id')
+            ->where(function ($q): void {
+                $q->whereIn('payments.status', [PaymentStatusEnum::COMPLETED, PaymentStatusEnum::PENDING])
+                    ->orWhereNull('ec_orders.payment_id');
+            })
+            ->where(function ($q): void {
+                $q->where(function ($subQ): void {
+                    $subQ->whereDate('payments.created_at', '>=', $this->startDate)
+                        ->whereDate('payments.created_at', '<=', $this->endDate);
+                })->orWhereNull('ec_orders.payment_id');
+            })
+            ->where('is_finished', true)
             ->groupBy('payments.status')
             ->get();
 
@@ -41,19 +53,19 @@ class ReportGeneralHtml extends Html
         $count['revenues'] = [
             [
                 'label' => PaymentStatusEnum::COMPLETED()->label(),
-                'value' => $revenueCompleted ? (int)$revenueCompleted->revenue : 0,
+                'value' => $revenueCompleted ? (int) $revenueCompleted->revenue : 0,
                 'status' => true,
                 'color' => '#80bc00',
             ],
             [
                 'label' => PaymentStatusEnum::PENDING()->label(),
-                'value' => $revenuePending ? (int)$revenuePending->revenue : 0,
+                'value' => $revenuePending ? (int) $revenuePending->revenue : 0,
                 'status' => false,
                 'color' => '#E91E63',
             ],
         ];
 
-        $revenues = app(OrderInterface::class)->getRevenueData($this->startDate, $this->endDate);
+        $revenues = Order::getRevenueData($this->startDate, $this->endDate);
 
         $series = [];
         $dates = [];
@@ -92,6 +104,8 @@ class ReportGeneralHtml extends Html
 
         $salesReport = compact('dates', 'series', 'earningSales', 'colors');
 
-        return view('plugins/ecommerce::reports.widgets.revenues', compact('count', 'salesReport'))->render();
+        $revenues = fn (string $key): array => collect($count['revenues'])->pluck($key)->toArray();
+
+        return view('plugins/ecommerce::reports.widgets.revenues', compact('count', 'salesReport', 'revenues'))->render();
     }
 }

@@ -6,50 +6,72 @@ use Botble\Base\Events\AdminNotificationEvent;
 use Botble\Base\Supports\AdminNotificationItem;
 use Botble\Ecommerce\Enums\ShippingStatusEnum;
 use Botble\Ecommerce\Events\ShippingStatusChanged;
-use Botble\Base\Facades\EmailHandler;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Queue\InteractsWithQueue;
 use Botble\Ecommerce\Facades\OrderHelper;
 
-class SendShippingStatusChangedNotification implements ShouldQueue
+class SendShippingStatusChangedNotification
 {
-    use InteractsWithQueue;
-
     public function handle(ShippingStatusChanged $event): void
     {
-        if ($event->shipment->status == ShippingStatusEnum::DELIVERING) {
-            $mailer = EmailHandler::setModule(ECOMMERCE_MODULE_SCREEN_NAME);
-            if ($mailer->templateEnabled('customer_delivery_order')) {
-                $order = $event->shipment->order;
+        $order = $event->shipment->order;
+        $shipment = $event->shipment;
 
-                OrderHelper::setEmailVariables($order);
-                $mailer->sendUsingTemplate(
-                    'customer_delivery_order',
-                    $order->user->email ?: $order->address->email
-                );
-            }
+        $shippingVariables = [
+            'shipping_company_name' => $shipment->shipping_company_name,
+            'tracking_id' => $shipment->tracking_id,
+            'tracking_link' => $shipment->tracking_link,
+        ];
+
+        if ($event->shipment->status == ShippingStatusEnum::DELIVERING) {
+            OrderHelper::sendOrderEmail($order, 'customer_delivery_order', null, $shippingVariables);
         }
 
         if ($event->shipment->status == ShippingStatusEnum::DELIVERED) {
-            event(new AdminNotificationEvent(
-                AdminNotificationItem::make()
-                    ->title(trans('plugins/ecommerce::order.order_completed_notifications.order_completed'))
-                    ->description(trans('plugins/ecommerce::order.order_completed_notifications.description', [
-                        'order' => $event->shipment->order->code,
-                    ]))
-                    ->action(trans('plugins/ecommerce::order.new_order_notifications.view'), route('orders.edit', $event->shipment->order->id))
-            ));
+            OrderHelper::sendOrderEmail($order, 'customer_order_delivered', null, $shippingVariables);
+
+            event(
+                new AdminNotificationEvent(
+                    AdminNotificationItem::make()
+                        ->title(trans('plugins/ecommerce::order.order_completed_notifications.order_completed_with_code', ['code' => $order->code]))
+                        ->description(
+                            trans('plugins/ecommerce::order.order_completed_notifications.description', [
+                                'order' => $order->code,
+                            ])
+                        )
+                        ->action(
+                            trans('plugins/ecommerce::order.new_order_notifications.view'),
+                            route('orders.edit', $order->id)
+                        )
+                )
+            );
         } else {
-            event(new AdminNotificationEvent(
-                AdminNotificationItem::make()
-                    ->title(trans('plugins/ecommerce::order.update_shipping_status_notifications.update_shipping_status'))
-                    ->description(trans('plugins/ecommerce::order.update_shipping_status_notifications.description', [
-                        'order' => $event->shipment->order->code,
-                        'description' => $event->previousShipment ? ' from ' . ShippingStatusEnum::getLabel($event->previousShipment['status']) . ' to ' .
-                            ShippingStatusEnum::getLabel($event->shipment->status) : ' to ' . ShippingStatusEnum::getLabel($event->shipment->status),
-                    ]))
-                    ->action(trans('plugins/ecommerce::order.new_order_notifications.view'), route('orders.edit', $event->shipment->order->id))
-            ));
+            event(
+                new AdminNotificationEvent(
+                    AdminNotificationItem::make()
+                        ->title(
+                            trans(
+                                'plugins/ecommerce::order.update_shipping_status_notifications.update_shipping_status_with_code',
+                                ['code' => $order->code]
+                            )
+                        )
+                        ->description(
+                            trans('plugins/ecommerce::order.update_shipping_status_notifications.description', [
+                                'order' => $order->code,
+                                'description' => $event->previousShipment
+                                    ? trans('plugins/ecommerce::order.update_shipping_status_notifications.changed_from_to', [
+                                        'old_status' => ShippingStatusEnum::getLabel($event->previousShipment['status']),
+                                        'new_status' => ShippingStatusEnum::getLabel($event->shipment->status),
+                                      ])
+                                    : trans('plugins/ecommerce::order.update_shipping_status_notifications.changed_to', [
+                                        'status' => ShippingStatusEnum::getLabel($event->shipment->status),
+                                      ]),
+                            ])
+                        )
+                        ->action(
+                            trans('plugins/ecommerce::order.new_order_notifications.view'),
+                            route('orders.edit', $order->id)
+                        )
+                )
+            );
         }
     }
 }

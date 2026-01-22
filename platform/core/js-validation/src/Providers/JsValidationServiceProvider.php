@@ -2,12 +2,12 @@
 
 namespace Botble\JsValidation\Providers;
 
+use Botble\Base\Supports\ServiceProvider;
 use Botble\Base\Traits\LoadAndPublishDataTrait;
 use Botble\JsValidation\Javascript\ValidatorHandler;
 use Botble\JsValidation\JsValidatorFactory;
 use Botble\JsValidation\RemoteValidationMiddleware;
 use Illuminate\Contracts\Http\Kernel;
-use Illuminate\Support\ServiceProvider;
 
 class JsValidationServiceProvider extends ServiceProvider
 {
@@ -15,7 +15,8 @@ class JsValidationServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->setNamespace('core/js-validation')
+        $this
+            ->setNamespace('core/js-validation')
             ->loadAndPublishConfigurations(['js-validation'])
             ->loadAndPublishViews()
             ->publishAssets();

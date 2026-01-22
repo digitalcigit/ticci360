@@ -1,25 +1,34 @@
-@if ($showLabel && $showField)
-    @if ($options['wrapper'] !== false)
-        <div {!! $options['wrapperAttrs'] !!}>
-    @endif
-@endif
+<x-core::form.field
+    :showLabel="$showLabel"
+    :showField="$showField"
+    :options="$options"
+    :name="$name"
+    :prepend="$prepend ?? null"
+    :append="$append ?? null"
+    :showError="$showError"
+    :nameKey="$nameKey"
+>
+    <x-slot:label>
+        @if ($showLabel && $options['label'] !== false && $options['label_show'])
+            {!! Form::customLabel($name, $options['label'], $options['label_attr']) !!}
+        @endif
+    </x-slot:label>
 
-@if ($showLabel && $options['label'] !== false && $options['label_show'])
-    {!! Form::customLabel($name, $options['label'], $options['label_attr']) !!}
-@endif
-
-@if ($showField)
     @php
-        $emptyVal = $options['empty_value'] ? ['' => $options['empty_value']] : null;
+        if ($options['choices'] instanceof \Illuminate\Contracts\Support\Arrayable) {
+            $options['choices'] = $options['choices']->toArray();
+        }
+
+        // Merge the select-autocomplete class with existing classes
+        $options['attr']['class'] = trim(($options['attr']['class'] ?? '') . ' select-autocomplete');
     @endphp
-    {!! Form::autocomplete($name, (array)$emptyVal + $options['choices'], $options['selected'], $options['attr']) !!}
-    @include('core/base::forms.partials.help-block')
-@endif
 
-@include('core/base::forms.partials.errors')
-
-@if ($showLabel && $showField)
-    @if ($options['wrapper'] !== false)
-        </div>
-    @endif
-@endif
+    {!! Form::customSelect(
+        $name,
+        ($options['empty_value'] ? ['' => $options['empty_value']] : []) + $options['choices'],
+        $options['selected'] !== null ? $options['selected'] : $options['default_value'],
+        $options['attr'],
+        Arr::get($options, 'optionAttrs', []),
+        Arr::get($options, 'optgroupsAttributes', []),
+    ) !!}
+</x-core::form.field>

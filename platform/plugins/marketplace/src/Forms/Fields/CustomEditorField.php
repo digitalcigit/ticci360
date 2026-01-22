@@ -2,13 +2,23 @@
 
 namespace Botble\Marketplace\Forms\Fields;
 
-use Botble\Base\Forms\FormField;
-use Botble\Marketplace\Facades\MarketplaceHelper;
+use Botble\Base\Facades\BaseHelper;
+use Botble\Base\Forms\Fields\TextareaField;
+use Botble\Base\Supports\Editor;
+use Illuminate\Support\Arr;
 
-class CustomEditorField extends FormField
+class CustomEditorField extends TextareaField
 {
-    protected function getTemplate(): string
+    public function render(array $options = [], $showLabel = true, $showField = true, $showError = true): string
     {
-        return MarketplaceHelper::viewPath('dashboard.forms.fields.custom-editor');
+        (new Editor())->registerAssets();
+
+        Arr::set(
+            $options,
+            'attr.class',
+            ltrim(Arr::get($options, 'attr.class') . ' form-control editor-' . BaseHelper::getRichEditor())
+        );
+
+        return parent::render($options, $showLabel, $showField, $showError);
     }
 }

@@ -3,76 +3,82 @@
 namespace Botble\Ecommerce\Http\Controllers\Customers;
 
 use Botble\Base\Http\Controllers\BaseController;
-use Botble\Base\Http\Responses\BaseHttpResponse;
+use Botble\Ecommerce\Forms\Fronts\Customer\AddressForm;
 use Botble\Ecommerce\Http\Requests\CreateAddressFromAdminRequest;
 use Botble\Ecommerce\Models\Address;
-use Botble\Ecommerce\Repositories\Interfaces\AddressInterface;
 
 class AddressController extends BaseController
 {
-    public function __construct(protected AddressInterface $addressRepository)
-    {
-    }
-
-    public function store(CreateAddressFromAdminRequest $request, BaseHttpResponse $response)
+    public function store(CreateAddressFromAdminRequest $request)
     {
         if ($request->boolean('is_default')) {
-            $this->addressRepository->update([
-                'is_default' => 1,
-                'customer_id' => $request->input('customer_id'),
-            ], ['is_default' => 0]);
+            Address::query()
+                ->where([
+                    'is_default' => 1,
+                    'customer_id' => $request->input('customer_id'),
+                ])
+                ->update([
+                    'is_default' => 0,
+                ]);
         }
 
         $request->merge([
             'customer_id' => $request->input('customer_id'),
-            'is_default' => $request->input('is_default', 0),
+            'is_default' => $request->boolean('is_default', 0),
         ]);
 
-        $this->addressRepository->createOrUpdate($request->input());
+        Address::query()->create($request->input());
 
-        return $response
+        return $this
+            ->httpResponse()
             ->setNextUrl(route('customer.address'))
-            ->setMessage(trans('core/base::notices.create_success_message'));
+            ->withCreatedSuccessMessage();
     }
 
-    public function update($id, CreateAddressFromAdminRequest $request, BaseHttpResponse $response)
+    public function update(Address $address, CreateAddressFromAdminRequest $request)
     {
-        if ($request->input('is_default') == 1) {
-            $this->addressRepository->update([
-                'is_default' => $id,
-                'customer_id' => $request->input('customer_id'),
-            ], ['is_default' => 0]);
+        if ($request->boolean('is_default')) {
+            Address::query()
+                ->where([
+                    'is_default' => 1,
+                    'customer_id' => $request->input('customer_id'),
+                ])
+                ->update([
+                    'is_default' => 0,
+                ]);
         }
 
         $request->merge([
             'customer_id' => $request->input('customer_id'),
-            'is_default' => $request->input('is_default', 0),
+            'is_default' => $request->boolean('is_default', 0),
         ]);
 
-        $this->addressRepository->update([
-            'id' => $id,
-        ], $request->input());
+        $address->fill($request->input());
 
-        return $response
+        $address->save();
+
+        return $this
+            ->httpResponse()
             ->setNextUrl(route('customer.address'))
-            ->setMessage(trans('core/base::notices.update_success_message'));
+            ->withUpdatedSuccessMessage();
     }
 
-    public function destroy(int|string $id, BaseHttpResponse $response)
+    public function destroy(Address $address)
     {
-        $address = Address::findOrFail($id);
-
         $address->delete();
 
-        return $response
+        return $this
+            ->httpResponse()
             ->setNextUrl(route('customer.address'))
             ->setMessage(trans('core/base::notices.delete_success_message'));
     }
 
-    public function edit($id)
+    public function edit(Address $address)
     {
-        $address = Address::findOrFail($id);
-
-        return view('plugins/ecommerce::customers.addresses.form-edit', compact('address'))->render();
+        return AddressForm::createFromModel($address)
+            ->setUrl(route('customers.addresses.update', $address->getKey()))
+            ->add('customer_id', 'hidden', ['value' => $address->customer_id])
+            ->remove('submit')
+            ->renderForm();
     }
 }

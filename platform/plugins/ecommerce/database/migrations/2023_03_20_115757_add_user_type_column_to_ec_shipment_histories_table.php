@@ -8,14 +8,16 @@ use Illuminate\Support\Facades\Schema;
 return new class () extends Migration {
     public function up(): void
     {
-        Schema::table('ec_shipment_histories', function (Blueprint $table) {
-            $table->string('user_type', 255)->default(addslashes(User::class));
-        });
+        if (! Schema::hasColumn('ec_shipment_histories', 'user_type')) {
+            Schema::table('ec_shipment_histories', function (Blueprint $table): void {
+                $table->string('user_type')->default(addslashes(User::class));
+            });
+        }
     }
 
     public function down(): void
     {
-        Schema::table('ec_shipment_histories', function (Blueprint $table) {
+        Schema::table('ec_shipment_histories', function (Blueprint $table): void {
             $table->dropColumn('user_type');
         });
     }

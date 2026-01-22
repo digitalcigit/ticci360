@@ -1,85 +1,95 @@
 <?php
 
-use Botble\Base\Facades\BaseHelper;
-use Botble\Blog\Models\Category;
-use Botble\Blog\Models\Post;
-use Botble\Blog\Models\Tag;
-use Botble\Slug\Facades\SlugHelper;
+use Botble\Base\Facades\AdminHelper;
+use Botble\Blog\Http\Controllers\ExportPostController;
+use Botble\Blog\Http\Controllers\ImportPostController;
+use Botble\Theme\Facades\Theme;
 use Illuminate\Support\Facades\Route;
 
-Route::group(['namespace' => 'Botble\Blog\Http\Controllers', 'middleware' => ['web', 'core']], function () {
-    Route::group(['prefix' => BaseHelper::getAdminPrefix() . '/blog', 'middleware' => 'auth'], function () {
-        Route::group(['prefix' => 'posts', 'as' => 'posts.'], function () {
-            Route::resource('', 'PostController')
-                ->parameters(['' => 'post']);
-
-            Route::delete('items/destroy', [
-                'as' => 'deletes',
-                'uses' => 'PostController@deletes',
-                'permission' => 'posts.destroy',
+Route::group(['namespace' => 'Botble\Blog\Http\Controllers'], function (): void {
+    AdminHelper::registerRoutes(function (): void {
+        Route::group(['prefix' => 'blog'], function (): void {
+            Route::get('reports', [
+                'as' => 'blog.reports.index',
+                'uses' => 'ReportController@index',
+                'permission' => 'blog.reports',
             ]);
+            Route::group(['prefix' => 'posts', 'as' => 'posts.'], function (): void {
+                Route::resource('', 'PostController')
+                    ->parameters(['' => 'post']);
 
-            Route::get('widgets/recent-posts', [
-                'as' => 'widget.recent-posts',
-                'uses' => 'PostController@getWidgetRecentPosts',
-                'permission' => 'posts.index',
-            ]);
+                Route::get('widgets/recent-posts', [
+                    'as' => 'widget.recent-posts',
+                    'uses' => 'PostController@getWidgetRecentPosts',
+                    'permission' => 'posts.index',
+                ]);
+            });
+
+            Route::group(['prefix' => 'categories', 'as' => 'categories.'], function (): void {
+                Route::resource('', 'CategoryController')
+                    ->parameters(['' => 'category']);
+
+                Route::put('update-tree', [
+                    'as' => 'update-tree',
+                    'uses' => 'CategoryController@updateTree',
+                    'permission' => 'categories.index',
+                ]);
+
+                Route::get('search', [
+                    'as' => 'search',
+                    'uses' => 'CategoryController@getSearch',
+                    'permission' => 'categories.index',
+                ]);
+            });
+
+            Route::group(['prefix' => 'tags', 'as' => 'tags.'], function (): void {
+                Route::resource('', 'TagController')
+                    ->parameters(['' => 'tag']);
+
+                Route::get('all', [
+                    'as' => 'all',
+                    'uses' => 'TagController@getAllTags',
+                    'permission' => 'tags.index',
+                ]);
+            });
+
+            Route::prefix('tools/data-synchronize')->name('tools.data-synchronize.')->group(function (): void {
+                Route::prefix('export')->name('export.')->group(function (): void {
+                    Route::group(['prefix' => 'posts', 'as' => 'posts.', 'permission' => 'posts.export'], function (): void {
+                        Route::get('/', [ExportPostController::class, 'index'])->name('index');
+                        Route::post('/', [ExportPostController::class, 'store'])->name('store');
+                    });
+                });
+
+                Route::prefix('import')->name('import.')->group(function (): void {
+                    Route::group(['prefix' => 'posts', 'as' => 'posts.', 'permission' => 'posts.import'], function (): void {
+                        Route::get('/', [ImportPostController::class, 'index'])->name('index');
+                        Route::post('/', [ImportPostController::class, 'import'])->name('store');
+                        Route::post('validate', [ImportPostController::class, 'validateData'])->name('validate');
+                        Route::post('download-example', [ImportPostController::class, 'downloadExample'])->name('download-example');
+                    });
+                });
+            });
         });
 
-        Route::group(['prefix' => 'categories', 'as' => 'categories.'], function () {
-            Route::resource('', 'CategoryController')
-                ->parameters(['' => 'category']);
-
-            Route::delete('items/destroy', [
-                'as' => 'deletes',
-                'uses' => 'CategoryController@deletes',
-                'permission' => 'categories.destroy',
-            ]);
-        });
-
-        Route::group(['prefix' => 'tags', 'as' => 'tags.'], function () {
-            Route::resource('', 'TagController')
-                ->parameters(['' => 'tag']);
-
-            Route::delete('items/destroy', [
-                'as' => 'deletes',
-                'uses' => 'TagController@deletes',
-                'permission' => 'tags.destroy',
+        Route::group(['prefix' => 'settings/blog', 'as' => 'blog.settings', 'permission' => 'blog.settings'], function (): void {
+            Route::get('/', [
+                'uses' => 'Settings\BlogSettingController@edit',
             ]);
 
-            Route::get('all', [
-                'as' => 'all',
-                'uses' => 'TagController@getAllTags',
-                'permission' => 'tags.index',
+            Route::put('/', [
+                'as' => '.update',
+                'uses' => 'Settings\BlogSettingController@update',
             ]);
         });
     });
 
     if (defined('THEME_MODULE_SCREEN_NAME')) {
-        Route::group(apply_filters(BASE_FILTER_GROUP_PUBLIC_ROUTE, []), function () {
+        Theme::registerRoutes(function (): void {
             Route::get('search', [
                 'as' => 'public.search',
                 'uses' => 'PublicController@getSearch',
             ]);
-
-            if (SlugHelper::getPrefix(Tag::class, 'tag')) {
-                Route::get(SlugHelper::getPrefix(Tag::class, 'tag') . '/{slug}', [
-                    'as' => 'public.tag',
-                    'uses' => 'PublicController@getTag',
-                ]);
-            }
-
-            if (SlugHelper::getPrefix(Post::class)) {
-                Route::get(SlugHelper::getPrefix(Post::class) . '/{slug}', [
-                    'uses' => 'PublicController@getPost',
-                ]);
-            }
-
-            if (SlugHelper::getPrefix(Category::class)) {
-                Route::get(SlugHelper::getPrefix(Category::class) . '/{slug}', [
-                    'uses' => 'PublicController@getCategory',
-                ]);
-            }
         });
     }
 });

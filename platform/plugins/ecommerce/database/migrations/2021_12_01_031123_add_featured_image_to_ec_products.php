@@ -10,8 +10,8 @@ return new class () extends Migration {
     public function up(): void
     {
         if (! Schema::hasColumn('ec_products', 'image')) {
-            Schema::table('ec_products', function (Blueprint $table) {
-                $table->string('image', 255)->nullable();
+            Schema::table('ec_products', function (Blueprint $table): void {
+                $table->string('image')->nullable();
             });
 
             foreach (Product::query()->where('is_variation', 0)->get() as $product) {
@@ -24,7 +24,7 @@ return new class () extends Migration {
     public function down(): void
     {
         if (Schema::hasColumn('ec_products', 'image')) {
-            Schema::table('ec_products', function (Blueprint $table) {
+            Schema::table('ec_products', function (Blueprint $table): void {
                 $table->dropColumn('image');
             });
         }

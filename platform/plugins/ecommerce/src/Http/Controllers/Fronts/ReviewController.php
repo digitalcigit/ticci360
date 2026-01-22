@@ -3,115 +3,114 @@
 namespace Botble\Ecommerce\Http\Controllers\Fronts;
 
 use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Base\Http\Responses\BaseHttpResponse;
-use Botble\Ecommerce\Enums\OrderStatusEnum;
-use Botble\Ecommerce\Http\Requests\ReviewRequest;
-use Botble\Ecommerce\Models\Product;
-use Botble\Ecommerce\Repositories\Interfaces\OrderInterface;
-use Botble\Ecommerce\Repositories\Interfaces\ReviewInterface;
+use Botble\Base\Events\CreatedContentEvent;
+use Botble\Base\Events\DeletedContentEvent;
+use Botble\Base\Http\Controllers\BaseController;
 use Botble\Ecommerce\Facades\EcommerceHelper;
-use Illuminate\Routing\Controller;
-use Illuminate\Support\Arr;
+use Botble\Ecommerce\Http\Requests\Fronts\ReviewRequest;
+use Botble\Ecommerce\Models\Product;
+use Botble\Ecommerce\Models\Review;
+use Botble\Ecommerce\Traits\CheckReviewConditionTrait;
 use Botble\Media\Facades\RvMedia;
 use Botble\SeoHelper\Facades\SeoHelper;
 use Botble\Slug\Facades\SlugHelper;
 use Botble\Theme\Facades\Theme;
+use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 
-class ReviewController extends Controller
+class ReviewController extends BaseController
 {
-    public function __construct(
-        protected  ReviewInterface $reviewRepository,
-        protected OrderInterface $orderRepository
-    ) {
-    }
+    use CheckReviewConditionTrait;
 
-    public function store(ReviewRequest $request, BaseHttpResponse $response): BaseHttpResponse
+    public function store(ReviewRequest $request)
     {
-        if (! EcommerceHelper::isReviewEnabled()) {
-            abort(404);
-        }
+        abort_unless(EcommerceHelper::isReviewEnabled(), 404);
 
-        $customerId = auth('customer')->id();
         $productId = $request->input('product_id');
+        $check = $this->checkReviewCondition($productId);
 
-        $check = $this->check($productId);
         if (Arr::get($check, 'error')) {
-            return $response->setError()->setMessage(Arr::get($check, 'message', __('Opps!')));
+            return $this
+                ->httpResponse()
+                ->setError()
+                ->setMessage(Arr::get($check, 'message', __('Oops! Something Went Wrong.')));
         }
 
         $results = [];
-        if ($request->hasFile('images')) {
-            $images = (array)$request->file('images', []);
+        if (EcommerceHelper::isCustomerReviewImageUploadEnabled() && $request->hasFile('images')) {
+            $images = (array) $request->file('images', []);
             foreach ($images as $image) {
                 $result = RvMedia::handleUpload($image, 0, 'reviews');
                 if ($result['error']) {
-                    return $response->setError()->setMessage($result['message']);
+                    return $this
+                        ->httpResponse()
+                        ->setError()
+                        ->setMessage($result['message']);
                 }
 
                 $results[] = $result;
             }
         }
 
-        $data = $request->validated();
-        $data = array_merge($data, [
-            'customer_id' => $customerId,
-            'images' => $results ? collect($results)->pluck('data.url')->values()->toArray() : null,
+        $review = Review::query()->create([
+            ...$request->validated(),
+            'customer_id' => auth('customer')->id(),
+            'images' => $results ? collect($results)->pluck('data.url')->values()->all() : null,
+            'status' => get_ecommerce_setting('review_need_to_be_approved', false) ? BaseStatusEnum::PENDING : BaseStatusEnum::PUBLISHED,
         ]);
 
-        $this->reviewRepository->createOrUpdate($data);
+        event(new CreatedContentEvent('review', $request, $review));
 
-        return $response->setMessage(__('Added review successfully!'));
+        return $this
+            ->httpResponse()
+            ->setMessage(__('Added review successfully!'));
     }
 
-    public function destroy(int|string $id, BaseHttpResponse $response)
+    public function destroy(int|string $id, Request $request)
     {
-        if (! EcommerceHelper::isReviewEnabled()) {
-            abort(404);
-        }
+        abort_unless(EcommerceHelper::isReviewEnabled(), 404);
 
-        $review = $this->reviewRepository->findOrFail($id);
+        $review = Review::query()->findOrFail($id);
 
         if (auth()->check() || (auth('customer')->check() && auth('customer')->id() == $review->customer_id)) {
-            $this->reviewRepository->delete($review);
+            event(new DeletedContentEvent('review', $request, $review));
 
-            return $response->setMessage(__('Deleted review successfully!'));
+            $review->delete();
+
+            return $this
+                ->httpResponse()
+                ->setMessage(__('Deleted review successfully!'));
         }
 
         abort(401);
     }
 
-    public function getProductReview(string $key, BaseHttpResponse $response)
+    public function getProductReview(string $key)
     {
-        if (! EcommerceHelper::isReviewEnabled()) {
-            abort(404);
-        }
+        abort_unless(EcommerceHelper::isReviewEnabled(), 404);
 
         $slug = SlugHelper::getSlug($key, SlugHelper::getPrefix(Product::class));
 
-        if (! $slug) {
-            abort(404);
-        }
+        abort_unless($slug, 404);
 
         $condition = [
             'ec_products.id' => $slug->reference_id,
-            'ec_products.status' => BaseStatusEnum::PUBLISHED,
         ];
 
-        $product = get_products(array_merge([
+        $product = get_products([
                 'condition' => $condition,
                 'take' => 1,
-            ], EcommerceHelper::withReviewsParams()));
+            ]);
 
-        if (! $product) {
-            abort(404);
-        }
+        abort_unless($product, 404);
 
-        $check = $this->check($product->id);
+        $check = $this->checkReviewCondition($product->id);
         if (Arr::get($check, 'error')) {
-            return $response
+            return $this
+                ->httpResponse()
                 ->setNextUrl($product->url)
                 ->setError()
-                ->setMessage(Arr::get($check, 'message', __('Ops!')));
+                ->setMessage(Arr::get($check, 'message', __('Oops! Something Went Wrong.')));
         }
 
         Theme::asset()
@@ -122,62 +121,60 @@ class ReviewController extends Controller
         SeoHelper::setTitle(__('Review product ":product"', ['product' => $product->name]))->setDescription($product->description);
 
         Theme::breadcrumb()
-            ->add(__('Home'), route('public.index'))
             ->add(__('Products'), route('public.products'))
             ->add($product->name, $product->url)
             ->add(__('Review'));
 
         do_action(BASE_ACTION_PUBLIC_RENDER_SINGLE, PRODUCT_MODULE_SCREEN_NAME, $product);
 
-        return Theme::scope('ecommerce.product-review', compact('product'), 'plugins/ecommerce::themes.product-review')
+        return Theme::scope('ecommerce.product-review', compact('product'), 'plugins/ecommerce::themes.includes.reviews')
             ->render();
     }
 
-    protected function check(int|string $productId)
+    public function ajaxReviews(int|string $id, Request $request)
     {
-        $customerId = auth('customer')->id();
+        /**
+         * @var Product $product
+         */
+        $product = Product::query()
+            ->wherePublished()
+            ->where([
+                'id' => $id,
+                'is_variation' => false,
+            ])
+            ->with(['variations'])
+            ->firstOrFail();
 
-        $exists = $this->reviewRepository
-            ->count([
-                'customer_id' => $customerId,
-                'product_id' => $productId,
+        $star = $request->integer('star');
+        $perPage = $request->integer('per_page', 10);
+        $search = $request->string('search')->trim();
+        $sortBy = $request->string('sort_by', 'newest');
+
+        $reviews = EcommerceHelper::getProductReviews($product, $star, $perPage, $search, $sortBy);
+
+        if ($star) {
+            $message = __(':total review(s) ":star star" for ":product"', [
+                'total' => $reviews->total(),
+                'product' => $product->name,
+                'star' => $star,
             ]);
-
-        if ($exists > 0) {
-            return [
-                'error' => true,
-                'message' => __('You have reviewed this product already!'),
-            ];
+        } else {
+            $message = __(':total review(s) for ":product"', [
+                'total' => $reviews->total(),
+                'product' => $product->name,
+            ]);
         }
 
-        if (EcommerceHelper::onlyAllowCustomersPurchasedToReview()) {
-            $order = $this->orderRepository
-                ->getModel()
-                ->where([
-                    'user_id' => $customerId,
-                    'status' => OrderStatusEnum::COMPLETED,
-                ])
-                ->join('ec_order_product', function ($query) use ($productId) {
-                    $query
-                        ->on('ec_order_product.order_id', 'ec_orders.id')
-                        ->leftJoin('ec_product_variations', 'ec_product_variations.product_id', 'ec_order_product.product_id')
-                        ->where(function ($query) use ($productId) {
-                            $query->where('ec_product_variations.configurable_product_id', $productId)
-                            ->orWhere('ec_order_product.product_id', $productId);
-                        });
-                })
-                ->count();
-
-            if (! $order) {
-                return [
-                    'error' => true,
-                    'message' => __('Please purchase the product for a review!'),
-                ];
-            }
-        }
-
-        return [
-            'error' => false,
-        ];
+        return $this
+            ->httpResponse()
+            ->setData(
+                Theme::scope(
+                    'ecommerce.includes.review-list',
+                    compact('reviews'),
+                    'plugins/ecommerce::themes.includes.review-list'
+                )->getContent()
+            )
+            ->setMessage($message, false)
+            ->toApiResponse();
     }
 }

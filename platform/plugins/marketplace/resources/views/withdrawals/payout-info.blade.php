@@ -1,28 +1,55 @@
-<div class="note note-info" role="alert">
-    <p class="mb-2 uppercase"><strong>{{ $title ?? __('You will receive money through the information below') }}</strong>:</p>
-    @foreach (\Botble\Marketplace\Enums\PayoutPaymentMethodsEnum::getFields($paymentChannel) as $key => $field)
-        @if (Arr::get($bankInfo, $key))
-            <p>{{ Arr::get($field, 'title') }}: <strong>{{ Arr::get($bankInfo, $key) }}</strong></p>
-        @endif
-    @endforeach
+@php
+    $fields = Botble\Marketplace\Enums\PayoutPaymentMethodsEnum::getFields($paymentChannel);
+@endphp
+
+@if($fields)
+    <x-core::form.fieldset class="mb-3">
+        <h4>{{ $title ?? trans('plugins/marketplace::withdrawal.receive_money_info') }}</h4>
+
+        <x-core::datagrid>
+            @foreach ($fields as $key => $field)
+                @if (Arr::get($bankInfo, $key))
+                    <x-core::datagrid.item>
+                        <x-slot:title>{{ Arr::get($field, 'title') }}</x-slot:title>
+                        {{ Arr::get($bankInfo, $key) }}
+                    </x-core::datagrid.item>
+                @endif
+            @endforeach
+        </x-core::datagrid>
+    </x-core::form.fieldset>
 
     @isset($link)
-        <p>{!! BaseHelper::clean(__('You can change it <a href=":link">here</a>', ['link' => $link])) !!}.</p>
+        <p class="mb-3">{!! BaseHelper::clean(trans('plugins/marketplace::withdrawal.change_info_here', ['link' => $link])) !!}.</p>
     @endisset
+@endif
 
-    @if ($taxInfo && (Arr::get($taxInfo, 'business_name') || Arr::get($taxInfo, 'tax_id') || Arr::get($taxInfo, 'address')))
-        <br>
-        <p class="mb-2 uppercase"><strong>{{ __('Tax info') }}</strong>:</p>
-        @if (Arr::get($taxInfo, 'business_name'))
-            <p>{{ __('Business Name') }}: <strong>{{ Arr::get($taxInfo, 'business_name') }}</strong></p>
-        @endif
+{!! apply_filters('marketplace_withdrawal_payout_info', null) !!}
 
-        @if (Arr::get($taxInfo, 'tax_id'))
-            <p>{{ __('Tax ID') }}: <strong>{{ Arr::get($taxInfo, 'tax_id') }}</strong></p>
-        @endif
+@if ($taxInfo && (Arr::get($taxInfo, 'business_name') || Arr::get($taxInfo, 'tax_id') || Arr::get($taxInfo, 'address')))
+    <x-core::form.fieldset class="mb-3">
+        <h4>{{ trans('plugins/marketplace::marketplace.tax_info') }}</h4>
 
-        @if (Arr::get($taxInfo, 'address'))
-            <p>{{ __('Address') }}: <strong>{{ Arr::get($taxInfo, 'address') }}</strong></p>
-        @endif
-    @endif
-</div>
+        <x-core::datagrid>
+            @if (Arr::get($taxInfo, 'business_name'))
+                <x-core::datagrid.item>
+                    <x-slot:title>{{ trans('plugins/marketplace::marketplace.business_name') }}</x-slot:title>
+                    {{ Arr::get($taxInfo, 'business_name') }}
+                </x-core::datagrid.item>
+            @endif
+
+            @if ($taxId = Arr::get($taxInfo, 'tax_id'))
+                <x-core::datagrid.item>
+                    <x-slot:title>{{ trans('plugins/marketplace::marketplace.tax_id') }}</x-slot:title>
+                    {{ $taxId }}
+                </x-core::datagrid.item>
+            @endif
+
+            @if ($address = Arr::get($taxInfo, 'address'))
+                <x-core::datagrid.item>
+                    <x-slot:title>{{ trans('plugins/marketplace::marketplace.address') }}</x-slot:title>
+                    {{ $address }}
+                </x-core::datagrid.item>
+            @endif
+        </x-core::datagrid>
+    </x-core::form.fieldset>
+@endif

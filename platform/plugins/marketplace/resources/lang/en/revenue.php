@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'name' => 'Revenues',
     'edit' => 'Update wallet balance',
     'view_store' => 'View store ":store"',
     'forms' => [
@@ -23,4 +24,5 @@ return [
     'update_balance_title' => 'Add/Subtract amount of vendor',
     'statements' => 'Statements',
     'products' => 'Products',
+    'items_earning_sales' => 'Items Earning Sales: :amount',
 ];

@@ -6,10 +6,10 @@ use Botble\Base\Models\BaseModel;
 use Botble\Base\Supports\Avatar;
 use Botble\Ecommerce\Enums\OrderAddressTypeEnum;
 use Botble\Ecommerce\Traits\LocationTrait;
+use Botble\Media\Facades\RvMedia;
 use Exception;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Botble\Media\Facades\RvMedia;
 
 class OrderAddress extends BaseModel
 {
@@ -38,15 +38,13 @@ class OrderAddress extends BaseModel
 
     protected function avatarUrl(): Attribute
     {
-        return Attribute::make(
-            get: function () {
-                try {
-                    return (new Avatar())->create($this->name)->toBase64();
-                } catch (Exception) {
-                    return RvMedia::getDefaultImage();
-                }
+        return Attribute::get(function () {
+            try {
+                return (new Avatar())->create($this->name)->toBase64();
+            } catch (Exception) {
+                return RvMedia::getDefaultImage();
             }
-        );
+        });
     }
 
     public function order(): BelongsTo

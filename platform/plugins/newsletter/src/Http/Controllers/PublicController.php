@@ -2,63 +2,115 @@
 
 namespace Botble\Newsletter\Http\Controllers;
 
-use Botble\Base\Http\Responses\BaseHttpResponse;
+use Botble\Base\Facades\BaseHelper;
+use Botble\Base\Forms\FieldOptions\CheckboxFieldOption;
+use Botble\Base\Forms\FieldOptions\EmailFieldOption;
+use Botble\Base\Forms\Fields\CheckboxField;
+use Botble\Base\Forms\Fields\EmailField;
+use Botble\Base\Http\Controllers\BaseController;
 use Botble\Newsletter\Enums\NewsletterStatusEnum;
 use Botble\Newsletter\Events\SubscribeNewsletterEvent;
 use Botble\Newsletter\Events\UnsubscribeNewsletterEvent;
+use Botble\Newsletter\Forms\Fronts\NewsletterForm;
 use Botble\Newsletter\Http\Requests\NewsletterRequest;
-use Botble\Newsletter\Repositories\Interfaces\NewsletterInterface;
+use Botble\Newsletter\Models\Newsletter;
 use Illuminate\Http\Request;
-use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\URL;
 
-class PublicController extends Controller
+class PublicController extends BaseController
 {
-    public function __construct(protected NewsletterInterface $newsletterRepository)
+    public function postSubscribe(NewsletterRequest $request)
     {
-    }
+        do_action('form_extra_fields_validate', $request, NewsletterForm::class);
 
-    public function postSubscribe(NewsletterRequest $request, BaseHttpResponse $response)
-    {
-        $newsletter = $this->newsletterRepository->getFirstBy(['email' => $request->input('email')]);
+        $newsletterForm = NewsletterForm::create();
+        $newsletterForm->setRequest($request);
 
-        if (! $newsletter) {
-            $newsletter = $this->newsletterRepository->createOrUpdate($request->input());
-        } else {
-            $newsletter->status = NewsletterStatusEnum::SUBSCRIBED;
+        $newsletterForm->onlyValidatedData()->saving(function (NewsletterForm $form): void {
+            /**
+             * @var NewsletterRequest $request
+             */
+            $request = $form->getRequest();
+
+            /**
+             * @var Newsletter $newsletter
+             */
+            $newsletter = $form->getModel()->newQuery()->firstOrNew([
+                'email' => $request->input('email'),
+            ], [
+                ...$form->getRequestData(),
+                'status' => NewsletterStatusEnum::SUBSCRIBED,
+            ]);
+
             $newsletter->save();
-        }
 
-        event(new SubscribeNewsletterEvent($newsletter));
+            SubscribeNewsletterEvent::dispatch($newsletter);
+        });
 
-        return $response->setMessage(__('Subscribe to newsletter successfully!'));
+        return $this
+            ->httpResponse()
+            ->setMessage(trans('plugins/newsletter::newsletter.subscribe_success'));
     }
 
-    public function getUnsubscribe(int|string $id, Request $request, BaseHttpResponse $response)
+    public function getUnsubscribe(int|string $id, Request $request)
     {
-        if (! URL::hasValidSignature($request)) {
-            abort(404);
-        }
+        abort_unless(URL::hasValidSignature($request), 404);
 
-        $newsletter = $this->newsletterRepository->getFirstBy([
-            'id' => $id,
-            'status' => NewsletterStatusEnum::SUBSCRIBED,
-        ]);
+        /**
+         * @var Newsletter $newsletter
+         */
+        $newsletter = Newsletter::query()
+            ->where([
+                'id' => $id,
+                'status' => NewsletterStatusEnum::SUBSCRIBED,
+            ])
+            ->first();
 
         if ($newsletter) {
-            $newsletter->status = NewsletterStatusEnum::UNSUBSCRIBED;
-            $this->newsletterRepository->createOrUpdate($newsletter);
+            $newsletter->update(['status' => NewsletterStatusEnum::UNSUBSCRIBED]);
 
-            event(new UnsubscribeNewsletterEvent($newsletter));
+            UnsubscribeNewsletterEvent::dispatch($newsletter);
 
-            return $response
-                ->setNextUrl(route('public.index'))
-                ->setMessage(__('Unsubscribe to newsletter successfully'));
+            return $this
+                ->httpResponse()
+                ->setNextUrl(BaseHelper::getHomepageUrl())
+                ->setMessage(trans('plugins/newsletter::newsletter.unsubscribe_success'));
         }
 
-        return $response
+        return $this
+            ->httpResponse()
             ->setError()
-            ->setNextUrl(route('public.index'))
-            ->setMessage(__('Your email does not exist in the system or you have unsubscribed already!'));
+            ->setNextUrl(BaseHelper::getHomepageUrl())
+            ->setMessage(trans('plugins/newsletter::newsletter.email_not_exist_or_unsubscribed'));
+    }
+
+    public function ajaxLoadPopup()
+    {
+        $newsletterForm = NewsletterForm::create()
+            ->remove(['wrapper_before', 'wrapper_after', 'email'])
+            ->addBefore(
+                'submit',
+                'email',
+                EmailField::class,
+                EmailFieldOption::make()
+                    ->label(trans('plugins/newsletter::newsletter.email_address'))
+                    ->maxLength(-1)
+                    ->placeholder(trans('plugins/newsletter::newsletter.enter_your_email'))
+                    ->required()
+            )
+            ->addAfter(
+                'submit',
+                'dont_show_again',
+                CheckboxField::class,
+                CheckboxFieldOption::make()
+                    ->label(trans('plugins/newsletter::newsletter.dont_show_popup_again'))
+                    ->value(false)
+            );
+
+        return $this
+            ->httpResponse()
+            ->setData([
+                'html' => view('plugins/newsletter::partials.popup', compact('newsletterForm'))->render(),
+            ]);
     }
 }

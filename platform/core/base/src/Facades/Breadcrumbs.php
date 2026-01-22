@@ -6,8 +6,8 @@ use Botble\Base\Supports\BreadcrumbsManager;
 use Illuminate\Support\Facades\Facade;
 
 /**
- * @method static void register(string $name, callable $callback)
- * @method static void for(string $name, callable $callback)
+ * @method static void register(string $name, callable $callback, bool $modify = false)
+ * @method static void for(string $name, callable $callback, bool $modify = false)
  * @method static void before(callable $callback)
  * @method static void after(callable $callback)
  * @method static bool exists(string|null $name = null)
@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Facade;
  * @method static \stdClass|null current()
  * @method static void setCurrentRoute(string $name, ...$params)
  * @method static void clearCurrentRoute()
- * @method static void macro(string $name, object|callable $macro)
+ * @method static void macro(string $name, object|callable $macro, object|callable $macro = null)
  * @method static void mixin(object $mixin, bool $replace = true)
  * @method static bool hasMacro(string $name)
  * @method static void flushMacros()

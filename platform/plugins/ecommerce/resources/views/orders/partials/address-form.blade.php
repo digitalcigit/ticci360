@@ -1,47 +1,79 @@
 <div class="customer-address-payment-form">
-    @if (EcommerceHelper::isEnabledGuestCheckout() && ! auth('customer')->check())
-        <div class="form-group mb-3">
-            <p>{{ __('Already have an account?') }} <a href="{{ route('customer.login') }}">{{ __('Login') }}</a></p>
+    <input type="hidden" name="update-tax-url" id="update-checkout-tax-url" value="{{ route('public.ajax.checkout.update-tax') }}">
+    @if (!EcommerceHelper::isHideCustomerInfoAtCheckout())
+        <div class="mb-3 form-group checkout-login-prompt">
+            @if (auth('customer')->check())
+                <p>{{ __('Account') }}: <strong>{{ auth('customer')->user()->name }}</strong> - {!! Html::email(auth('customer')->user()->email) !!} (<a href="{{ route('customer.logout') }}">{{ __('Logout') }})</a></p>
+            @else
+                <p>{{ __('Already have an account?') }} <a href="{{ route('customer.login') }}">{{ __('Login') }}</a></p>
+            @endif
         </div>
     @endif
 
+    {!! apply_filters('ecommerce_checkout_address_form_before') !!}
+
     @auth('customer')
-        <div class="form-group mb-3">
+        <div class="mb-3 form-group">
             @if ($isAvailableAddress)
-                <label class="control-label mb-2" for="address_id">{{ __('Select available addresses') }}:</label>
+                <label
+                    class="mb-2 form-label"
+                    for="address_id"
+                >{{ __('Select available addresses') }}:</label>
             @endif
             @php
                 $oldSessionAddressId = old('address.address_id', $sessionAddressId);
             @endphp
-            <div class="list-customer-address @if (! $isAvailableAddress) d-none @endif">
+            <div class="list-customer-address @if (!$isAvailableAddress) d-none @endif">
                 <div class="select--arrow">
-                    <select name="address[address_id]" class="form-control" id="address_id">
-                        <option value="new" @selected ($oldSessionAddressId == 'new')>{{ __('Add new address...') }}</option>
+                    <select
+                        class="form-control"
+                        id="address_id"
+                        name="address[address_id]"
+                        @required($isAvailableAddress)
+                    >
+                        <option
+                            value="new"
+                            @selected($oldSessionAddressId == 'new')
+                        >{{ __('Add new address...') }}</option>
                         @if ($isAvailableAddress)
                             @foreach ($addresses as $address)
-                                <option value="{{ $address->id }}" @selected ($oldSessionAddressId == $address->id)>{{ $address->full_address }}</option>
+                                <option
+                                    value="{{ $address->id }}"
+                                    @selected($oldSessionAddressId == $address->id)
+                                >{{ $address->full_address }}</option>
                             @endforeach
                         @endif
                     </select>
-                    <i class="fas fa-angle-down"></i>
+                    <x-core::icon name="ti ti-chevron-down" />
                 </div>
                 <br>
-                <div class="address-item-selected @if (! $sessionAddressId) d-none @endif">
+                <div class="address-item-selected @if (!$sessionAddressId) d-none @endif">
                     @if ($isAvailableAddress && $oldSessionAddressId != 'new')
                         @if ($oldSessionAddressId && $addresses->contains('id', $oldSessionAddressId))
-                            @include('plugins/ecommerce::orders.partials.address-item', ['address' => $addresses->firstWhere('id', $oldSessionAddressId)])
+                            @include('plugins/ecommerce::orders.partials.address-item', [
+                                'address' => $addresses->firstWhere('id', $oldSessionAddressId),
+                            ])
                         @elseif ($defaultAddress = get_default_customer_address())
-                            @include('plugins/ecommerce::orders.partials.address-item', ['address' => $defaultAddress])
+                            @include('plugins/ecommerce::orders.partials.address-item', [
+                                'address' => $defaultAddress,
+                            ])
                         @else
-                            @include('plugins/ecommerce::orders.partials.address-item', ['address' => Arr::first($addresses)])
+                            @include('plugins/ecommerce::orders.partials.address-item', [
+                                'address' => Arr::first($addresses),
+                            ])
                         @endif
                     @endif
                 </div>
                 <div class="list-available-address d-none">
                     @if ($isAvailableAddress)
-                        @foreach($addresses as $address)
-                            <div class="address-item-wrapper" data-id="{{ $address->id }}">
-                                @include('plugins/ecommerce::orders.partials.address-item', compact('address'))
+                        @foreach ($addresses as $address)
+                            <div
+                                class="address-item-wrapper"
+                                data-id="{{ $address->id }}"
+                            >
+                                @include(
+                                    'plugins/ecommerce::orders.partials.address-item',
+                                    compact('address'))
                             </div>
                         @endforeach
                     @endif
@@ -54,45 +86,86 @@
         <div class="form-group mb-3 @error('address.name') has-error @enderror">
             <div class="form-input-wrapper">
                 <input
-                    type="text"
-                    name="address[name]"
-                    id="address_name"
                     class="form-control"
-                    required
+                    id="address_name"
+                    name="address[name]"
+                    autocomplete="family-name"
+                    type="text"
                     value="{{ old('address.name', Arr::get($sessionCheckoutData, 'name')) ?: (auth('customer')->check() ? auth('customer')->user()->name : null) }}"
+                    required
                 >
-                <label for='address_name'>{{ __('Full Name') }}</label>
+                <label for="address_name">{{ __('Full Name') }}</label>
             </div>
             {!! Form::error('address.name', $errors) !!}
         </div>
 
         <div class="row">
-            @if(! in_array('email', EcommerceHelper::getHiddenFieldsAtCheckout()))
-                <div @class(['col-12', 'col-lg-8' => ! in_array('phone', EcommerceHelper::getHiddenFieldsAtCheckout())])>
+            @if (!in_array('email', EcommerceHelper::getHiddenFieldsAtCheckout()))
+                <div @class([
+                    'col-12',
+                    'col-lg-7' => !in_array(
+                        'phone',
+                        EcommerceHelper::getHiddenFieldsAtCheckout()),
+                ])>
                     <div class="form-group mb-3 @error('address.email') has-error @enderror">
                         <div class="form-input-wrapper">
-                            <input type="email" name="address[email]" id="address_email"
+                            <input
                                 class="form-control"
-                               required
-                                value="{{ old('address.email', Arr::get($sessionCheckoutData, 'email')) ?: (auth('customer')->check() ? auth('customer')->user()->email : null) }}">
-                            <label for='address_email'>{{ __('Email') }}</label>
+                                id="address_email"
+                                name="address[email]"
+                                autocomplete="email"
+                                type="email"
+                                value="{{ old('address.email', Arr::get($sessionCheckoutData, 'email')) ?: (auth('customer')->check() ? auth('customer')->user()->email : null) }}"
+                                required
+                            >
+                            <label for="address_email">{{ __('Email') }}</label>
                         </div>
                         {!! Form::error('address.email', $errors) !!}
                     </div>
                 </div>
             @endif
-            @if(! in_array('phone', EcommerceHelper::getHiddenFieldsAtCheckout()))
-                <div @class(['col-12', 'col-lg-4' => ! in_array('email', EcommerceHelper::getHiddenFieldsAtCheckout())])>
+            @if (!in_array('phone', EcommerceHelper::getHiddenFieldsAtCheckout()))
+                @php
+                    $phoneCountryCodeEnabled = setting('phone_number_enable_country_code', true);
+                    $phoneValue = old('address.phone', Arr::get($sessionCheckoutData, 'phone')) ?: (auth('customer')->check() ? auth('customer')->user()->phone : null);
+                @endphp
+                <div @class([
+                    'col-12',
+                    'col-lg-5' => !in_array(
+                        'email',
+                        EcommerceHelper::getHiddenFieldsAtCheckout()),
+                ])>
                     <div class="form-group mb-3 @error('address.phone') has-error @enderror">
-                        <div class="form-input-wrapper">
-                            <input
-                                type="tel"
-                                name="address[phone]"
-                                id="address_phone"
-                                class="form-control"
-                                value="{{ old('address.phone', Arr::get($sessionCheckoutData, 'phone')) ?: (auth('customer')->check() ? auth('customer')->user()->phone : null) }}"
-                            >
-                            <label for='address_phone'>{{ __('Phone') }}</label>
+                        <div class="phone-input-wrapper">
+                            @if ($phoneCountryCodeEnabled)
+                                <input
+                                    class="form-control js-phone-number-mask"
+                                    id="address_phone"
+                                    name="address[phone_display]"
+                                    autocomplete="phone"
+                                    type="tel"
+                                    data-country-code-selection="true"
+                                    value="{{ $phoneValue }}"
+                                >
+                                <input
+                                    type="hidden"
+                                    name="address[phone]"
+                                    id="address_phone-full"
+                                    class="js-phone-number-full"
+                                    data-phone-field="address[phone_display]"
+                                    value="{{ $phoneValue }}"
+                                >
+                            @else
+                                <input
+                                    class="form-control js-phone-number-mask"
+                                    id="address_phone"
+                                    name="address[phone]"
+                                    autocomplete="phone"
+                                    type="tel"
+                                    value="{{ $phoneValue }}"
+                                >
+                            @endif
+                            <label for="address_phone">{{ __('Phone') }}</label>
                         </div>
                         {!! Form::error('address.phone', $errors) !!}
                     </div>
@@ -100,48 +173,84 @@
             @endif
         </div>
 
-        @if(! in_array('country', EcommerceHelper::getHiddenFieldsAtCheckout()))
-            @if (EcommerceHelper::isUsingInMultipleCountries())
-                <div class="form-group mb-3 @error('address.country') has-error @enderror">
-                    <div class="select--arrow form-input-wrapper">
-                        <select name="address[country]" class="form-control" required
-                                data-form-parent=".customer-address-payment-form" id="address_country" data-type="country">
-                            @foreach(EcommerceHelper::getAvailableCountries() as $countryCode => $countryName)
-                                <option value="{{ $countryCode }}" @if (old('address.country', Arr::get($sessionCheckoutData, 'country')) == $countryCode) selected @endif>{{ $countryName }}</option>
-                            @endforeach
-                        </select>
-                        <i class="fas fa-angle-down"></i>
-                        <label for='address_country'>{{ __('Country') }}</label>
-                    </div>
-                    {!! Form::error('address.country', $errors) !!}
+        {!! apply_filters('ecommerce_checkout_address_form_inside', null) !!}
+
+        @if (EcommerceHelper::isUsingInMultipleCountries() && !in_array('country', EcommerceHelper::getHiddenFieldsAtCheckout()))
+            <div class="form-group mb-3 @error('address.country') has-error @enderror">
+                <div class="select--arrow form-input-wrapper">
+                    <select
+                        class="form-control select-search-location"
+                        id="address_country"
+                        name="address[country]"
+                        autocomplete="country"
+                        data-form-parent=".customer-address-payment-form"
+                        data-type="country"
+                        required
+                    >
+                        @foreach (EcommerceHelper::getAvailableCountries() as $countryCode => $countryName)
+                            <option
+                                value="{{ $countryCode }}"
+                                @selected(old('address.country', Arr::get($sessionCheckoutData, 'country', EcommerceHelper::getDefaultCountryId())) == $countryCode)
+                            >
+                                {{ $countryName }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <x-core::icon name="ti ti-chevron-down" />
+                    <label for="address_country">{{ __('Country') }}</label>
                 </div>
-            @else
-                <input type="hidden" name="address[country]" id="address_country" value="{{ EcommerceHelper::getFirstCountryId() }}">
-            @endif
+                {!! Form::error('address.country', $errors) !!}
+            </div>
+        @else
+            <input
+                id="address_country"
+                name="address[country]"
+                type="hidden"
+                value="{{ EcommerceHelper::getFirstCountryId() }}"
+            >
         @endif
 
         <div class="row">
-            @if(! in_array('state', EcommerceHelper::getHiddenFieldsAtCheckout()))
+            @if (!in_array('state', EcommerceHelper::getHiddenFieldsAtCheckout()))
                 <div class="col-sm-6 col-12">
                     <div class="form-group mb-3 @error('address.state') has-error @enderror">
                         @if (EcommerceHelper::loadCountriesStatesCitiesFromPluginLocation())
                             <div class="select--arrow form-input-wrapper">
-                                <select name="address[state]" class="form-control" required
-                                    data-form-parent=".customer-address-payment-form" id="address_state" data-type="state" data-url="{{ route('ajax.states-by-country') }}">
+                                <select
+                                    class="form-control select-search-location"
+                                    id="address_state"
+                                    name="address[state]"
+                                    autocomplete="state"
+                                    data-form-parent=".customer-address-payment-form"
+                                    data-type="state"
+                                    data-url="{{ route('ajax.states-by-country') }}"
+                                    required
+                                >
                                     <option value="">{{ __('Select state...') }}</option>
-                                    @if (old('address.country', Arr::get($sessionCheckoutData, 'country')) || !EcommerceHelper::isUsingInMultipleCountries())
-                                        @foreach(EcommerceHelper::getAvailableStatesByCountry(old('address.country', Arr::get($sessionCheckoutData, 'country'))) as $stateId => $stateName)
-                                            <option value="{{ $stateId }}" @if (old('address.state', Arr::get($sessionCheckoutData, 'state')) == $stateId) selected @endif>{{ $stateName }}</option>
+                                    @if (old('address.country', Arr::get($sessionCheckoutData, 'country') ?: EcommerceHelper::getDefaultCountryId()) || !EcommerceHelper::isUsingInMultipleCountries())
+                                        @foreach (EcommerceHelper::getAvailableStatesByCountry(old('address.country', Arr::get($sessionCheckoutData, 'country') ?: EcommerceHelper::getDefaultCountryId())) as $stateId => $stateName)
+                                            <option
+                                                value="{{ $stateId }}"
+                                                @if (old('address.state', Arr::get($sessionCheckoutData, 'state')) == $stateId) selected @endif
+                                            >{{ $stateName }}</option>
                                         @endforeach
                                     @endif
                                 </select>
-                                <i class="fas fa-angle-down"></i>
-                                <label for='address_state'>{{ __('State') }}</label>
+                                <x-core::icon name="ti ti-chevron-down" />
+                                <label for="address_state">{{ __('State') }}</label>
                             </div>
                         @else
                             <div class="form-input-wrapper">
-                                <input id="address_state" type="text" class="form-control" required name="address[state]" value="{{ old('address.state', Arr::get($sessionCheckoutData, 'state')) }}">
-                                <label for='address_state'>{{ __('State') }}</label>
+                                <input
+                                    class="form-control"
+                                    id="address_state"
+                                    name="address[state]"
+                                    autocomplete="state"
+                                    type="text"
+                                    value="{{ old('address.state', Arr::get($sessionCheckoutData, 'state')) }}"
+                                    required
+                                >
+                                <label for="address_state">{{ __('State') }}</label>
                             </div>
                         @endif
                         {!! Form::error('address.state', $errors) !!}
@@ -149,26 +258,46 @@
                 </div>
             @endif
 
-            @if(! in_array('city', EcommerceHelper::getHiddenFieldsAtCheckout()))
-                <div class="col-sm-6 col-12">
+            @if (!in_array('city', EcommerceHelper::getHiddenFieldsAtCheckout()))
+                <div @class(['col-sm-6 col-12' => ! in_array('state', EcommerceHelper::getHiddenFieldsAtCheckout()), 'col-12' => in_array('state', EcommerceHelper::getHiddenFieldsAtCheckout())])>
                     <div class="form-group mb-3 @error('address.city') has-error @enderror">
-                        @if (EcommerceHelper::loadCountriesStatesCitiesFromPluginLocation())
+                        @if (EcommerceHelper::useCityFieldAsTextField())
+                            <div class="form-input-wrapper">
+                                <input
+                                    class="form-control"
+                                    id="address_city"
+                                    name="address[city]"
+                                    autocomplete="city"
+                                    type="text"
+                                    value="{{ old('address.city', Arr::get($sessionCheckoutData, 'city')) }}"
+                                    required
+                                >
+                                <label for="address_city">{{ __('City') }}</label>
+                            </div>
+                        @else
                             <div class="select--arrow form-input-wrapper">
-                                <select name="address[city]" class="form-control" required id="address_city" data-type="city" data-url="{{ route('ajax.cities-by-state') }}">
+                                <select
+                                    class="form-control select-search-location"
+                                    id="address_city"
+                                    name="address[city]"
+                                    autocomplete="city"
+                                    data-form-parent=".customer-address-payment-form"
+                                    data-type="city"
+                                    data-url="{{ route('ajax.cities-by-state') }}"
+                                    required
+                                >
                                     <option value="">{{ __('Select city...') }}</option>
-                                    @if (old('address.state', Arr::get($sessionCheckoutData, 'state')))
-                                        @foreach(EcommerceHelper::getAvailableCitiesByState(old('address.state', Arr::get($sessionCheckoutData, 'state'))) as $cityId => $cityName)
-                                            <option value="{{ $cityId }}" @if (old('address.city', Arr::get($sessionCheckoutData, 'city')) == $cityId) selected @endif>{{ $cityName }}</option>
+                                    @if (old('address.state', Arr::get($sessionCheckoutData, 'state')) || in_array('state', EcommerceHelper::getHiddenFieldsAtCheckout()))
+                                        @foreach (EcommerceHelper::getAvailableCitiesByState(old('address.state', Arr::get($sessionCheckoutData, 'state')), old('address.country', Arr::get($sessionCheckoutData, 'country'))) as $cityId => $cityName)
+                                            <option
+                                                value="{{ $cityId }}"
+                                                @if (old('address.city', Arr::get($sessionCheckoutData, 'city')) == $cityId) selected @endif
+                                            >{{ $cityName }}</option>
                                         @endforeach
                                     @endif
                                 </select>
-                                <i class="fas fa-angle-down"></i>
-                                <label for='address_city'>{{ __('City') }}</label>
-                            </div>
-                        @else
-                            <div class="form-input-wrapper">
-                                <input id="address_city" type="text" class="form-control" required name="address[city]" value="{{ old('address.city', Arr::get($sessionCheckoutData, 'city')) }}">
-                                <label for='address_city'>{{ __('City') }}</label>
+                                <x-core::icon name="ti ti-chevron-down" />
+                                <label for="address_city">{{ __('City') }}</label>
                             </div>
                         @endif
                         {!! Form::error('address.city', $errors) !!}
@@ -177,11 +306,21 @@
             @endif
         </div>
 
-        @if(! in_array('address', EcommerceHelper::getHiddenFieldsAtCheckout()))
+        {!! apply_filters('ecommerce_checkout_address_form_after_city_field', null, $sessionCheckoutData) !!}
+
+        @if (!in_array('address', EcommerceHelper::getHiddenFieldsAtCheckout()))
             <div class="form-group mb-3 @error('address.address') has-error @enderror">
                 <div class="form-input-wrapper">
-                    <input id="address_address" type="text" class="form-control" required name="address[address]" value="{{ old('address.address', Arr::get($sessionCheckoutData, 'address')) }}" autocomplete="false">
-                    <label for='address_address'>{{ __('Address') }}</label>
+                    <input
+                        class="form-control"
+                        id="address_address"
+                        name="address[address]"
+                        autocomplete="address"
+                        type="text"
+                        value="{{ old('address.address', Arr::get($sessionCheckoutData, 'address')) }}"
+                        required
+                    >
+                    <label for="address_address">{{ __('Address') }}</label>
                 </div>
                 {!! Form::error('address.address', $errors) !!}
             </div>
@@ -190,45 +329,81 @@
         @if (EcommerceHelper::isZipCodeEnabled())
             <div class="form-group mb-3 @error('address.zip_code') has-error @enderror">
                 <div class="form-input-wrapper">
-                    <input id="address_zip_code" type="text"
-                        class="form-control" name="address[zip_code]"
-                       required
-                        value="{{ old('address.zip_code', Arr::get($sessionCheckoutData, 'zip_code')) }}">
-                    <label for='address_zip_code'>{{ __('Zip code') }}</label>
+                    <input
+                        class="form-control"
+                        id="address_zip_code"
+                        name="address[zip_code]"
+                        autocomplete="postal-code"
+                        type="text"
+                        value="{{ old('address.zip_code', Arr::get($sessionCheckoutData, 'zip_code')) }}"
+                        required
+                    >
+                    <label for="address_zip_code">{{ __('Zip code') }}</label>
                 </div>
                 {!! Form::error('address.zip_code', $errors) !!}
             </div>
         @endif
     </div>
 
-    @if (! auth('customer')->check())
-        <div class="form-group mb-3">
-            <input type="checkbox" name="create_account" value="1" id="create_account" @if (old('create_account') == 1) checked @endif>
-            <label for="create_account" class="control-label ps-2">{{ __('Register an account with above information?') }}</label>
-        </div>
+    @if (!auth('customer')->check())
+        <div id="register-an-account-wrapper">
+            <div class="mb-3">
+                <label class="form-check">
+                    <input
+                        id="create_account"
+                        name="create_account"
+                        type="checkbox"
+                        value="1"
+                        class="form-check-input"
+                        @if (old('create_account') == 1) checked @endif
+                    >
+                    <span
+                        class="form-check-label"
+                    >{{ __('Register an account with above information?') }}</span>
+                </label>
+            </div>
 
-        <div class="password-group @if (! $errors->has('password') && ! $errors->has('password_confirmation')) d-none @endif">
-            <div class="row">
-                <div class="col-md-6 col-12">
-                    <div class="form-group  @error('password') has-error @enderror">
-                        <div class="form-input-wrapper">
-                            <input id="password" type="password" class="form-control" name="password" autocomplete="password">
-                            <label for='password'>{{ __('Password') }}</label>
+            <div class="password-group @if (!$errors->has('password') && !$errors->has('password_confirmation')) d-none @endif">
+                <div class="row">
+                    <div class="col-md-6 col-12">
+                        <div class="form-group  @error('password') has-error @enderror">
+                            <div class="form-input-wrapper">
+                                <input
+                                    class="form-control"
+                                    id="password"
+                                    name="password"
+                                    type="password"
+                                    autocomplete="new-password"
+                                >
+                                <label for="password">{{ __('Password') }}</label>
+                            </div>
+                            {!! Form::error('password', $errors) !!}
                         </div>
-                        {!! Form::error('password', $errors) !!}
                     </div>
-                </div>
 
-                <div class="col-md-6 col-12">
-                    <div class="form-group @error('password_confirmation') has-error @enderror">
-                        <div class="form-input-wrapper">
-                            <input id="password-confirm" type="password" class="form-control" autocomplete="password-confirmation" name="password_confirmation">
-                            <label for='password-confirm'>{{ __('Password confirmation') }}</label>
+                    <div class="col-md-6 col-12">
+                        <div class="form-group @error('password_confirmation') has-error @enderror">
+                            <div class="form-input-wrapper">
+                                <input
+                                    class="form-control"
+                                    id="password-confirm"
+                                    name="password_confirmation"
+                                    type="password"
+                                    autocomplete="password-confirmation"
+                                >
+                                <label for="password-confirm">{{ __('Password confirmation') }}</label>
+                            </div>
+                            {!! Form::error('password_confirmation', $errors) !!}
                         </div>
-                        {!! Form::error('password_confirmation', $errors) !!}
                     </div>
                 </div>
             </div>
         </div>
     @endif
+
+    {!! apply_filters('ecommerce_checkout_address_form_after', null, $sessionCheckoutData) !!}
 </div>
+
+@once
+    @include('core/base::forms.fields.phone-number-script')
+@endonce

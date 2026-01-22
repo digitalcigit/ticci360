@@ -16,7 +16,7 @@ class HookServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
-        add_filter('handle_shipping_fee', [$this, 'handleShippingFee'], 11, 3);
+        add_filter('handle_shipping_fee', [$this, 'handleShippingFee'], 11, 2);
 
         add_filter(SHIPPING_METHODS_SETTINGS_PAGE, [$this, 'addSettings'], 2);
 
@@ -52,7 +52,7 @@ class HookServiceProvider extends ServiceProvider
                 $rates = Arr::get($results, 'shipment.rates') ?: [];
                 foreach ($rates as &$rate) {
                     $rate['disabled'] = true;
-                    $rate['error_message'] = __('Not available in COD payment option.');
+                    $rate['error_message'] = trans('plugins/shippo::shippo.not_available_cod');
                 }
 
                 Arr::set($results, 'shipment.rates', $rates);

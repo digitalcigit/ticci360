@@ -4,17 +4,20 @@ namespace Botble\Ecommerce\Supports;
 
 use Botble\Base\Supports\Language;
 use Botble\Ecommerce\Models\Currency;
-use Botble\Ecommerce\Repositories\Interfaces\CurrencyInterface;
 use Botble\Ecommerce\Services\ExchangeRates\ExchangeRateInterface;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Locale;
+use Throwable;
 
 class CurrencySupport
 {
     protected ?Currency $currency = null;
 
     protected ?Currency $defaultCurrency = null;
+
+    protected ?Currency $forcedCurrency = null;
 
     protected Collection|array $currencies = [];
 
@@ -29,8 +32,27 @@ class CurrencySupport
         session(['currency' => $currency->title]);
     }
 
+    public function forceCurrentCurrency(Currency $currency): void
+    {
+        $this->forcedCurrency = $currency;
+    }
+
+    public function getForcedCurrency(): ?Currency
+    {
+        return $this->forcedCurrency;
+    }
+
+    public function clearForcedCurrency(): void
+    {
+        $this->forcedCurrency = null;
+    }
+
     public function getApplicationCurrency(): ?Currency
     {
+        if ($this->forcedCurrency) {
+            return $this->forcedCurrency;
+        }
+
         $currency = $this->currency;
 
         if (! empty($currency)) {
@@ -43,7 +65,7 @@ class CurrencySupport
 
         if (session('currency')) {
             $currency = $this->currencies->where('title', session('currency'))->first();
-        } elseif ((int)get_ecommerce_setting('enable_auto_detect_visitor_currency', 0) == 1) {
+        } elseif ((int) get_ecommerce_setting('enable_auto_detect_visitor_currency', 0) == 1) {
             $currency = $this->currencies->where('title', $this->detectedCurrencyCode())->first();
         }
 
@@ -51,7 +73,9 @@ class CurrencySupport
             $currency = $this->getDefaultCurrency();
         }
 
-        $this->currency = $this->setCurrencyExchangeRate($currency);
+        if (! $currency->is_default) {
+            $this->currency = $this->setCurrencyExchangeRate($currency);
+        }
 
         return $currency;
     }
@@ -69,11 +93,11 @@ class CurrencySupport
         }
 
         if (! $currency) {
-            $currency = app(CurrencyInterface::class)->getFirstBy(['is_default' => 1]);
+            $currency = Currency::query()->where('is_default', 1)->first();
         }
 
         if (! $currency) {
-            $currency = app(CurrencyInterface::class)->getFirstBy([]);
+            $currency = new Currency();
         }
 
         if (! $currency) {
@@ -99,8 +123,10 @@ class CurrencySupport
             $this->currencies = collect();
         }
 
-        if ($this->currencies->count() == 0) {
-            $this->currencies = app(CurrencyInterface::class)->getAllCurrencies();
+        if ($this->currencies->isEmpty()) {
+            $this->currencies = Cache::remember('currencies', 3600, function () {
+                return Currency::query()->oldest('order')->get();
+            });
         }
 
         return $this->currencies;
@@ -130,7 +156,9 @@ class CurrencySupport
             $httpAcceptLanguage = substr($_SERVER['HTTP_ACCEPT_LANGUAGE'], 0, 2);
         }
 
-        return Arr::get($currencies, strtoupper(substr($httpAcceptLanguage, 0, 2)));
+        $detectedCurrencyCode = Arr::get($currencies, strtoupper(substr($httpAcceptLanguage, 0, 2)));
+
+        return apply_filters('cms_currency_detected_currency', $detectedCurrencyCode);
     }
 
     public function countryCurrencies(): array
@@ -578,13 +606,20 @@ class CurrencySupport
 
     protected function setCurrencyExchangeRate(Currency $currency): Currency
     {
-        if (! get_ecommerce_setting('use_exchange_rate_from_api')) {
+        if (
+            ! get_ecommerce_setting('use_exchange_rate_from_api') ||
+            ! get_ecommerce_setting('exchange_rate_api_provider') ||
+            (! get_ecommerce_setting('api_layer_api_key') && ! get_ecommerce_setting('open_exchange_app_id'))
+        ) {
             return $currency;
         }
 
-        $rates = app(ExchangeRateInterface::class)->cacheExchangeRates();
+        try {
+            $rates = app(ExchangeRateInterface::class)->cacheExchangeRates();
 
-        $currency->exchange_rate = $rates[$currency->title];
+            $currency->exchange_rate = $rates[$currency->title];
+        } catch (Throwable) {
+        }
 
         return $currency;
     }

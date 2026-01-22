@@ -2,18 +2,18 @@
 
 namespace Botble\Blog\Http\Controllers\API;
 
+use Botble\Api\Http\Controllers\BaseApiController;
 use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Base\Http\Responses\BaseHttpResponse;
+use Botble\Base\Facades\BaseHelper;
 use Botble\Blog\Http\Resources\ListPostResource;
 use Botble\Blog\Http\Resources\PostResource;
 use Botble\Blog\Models\Post;
 use Botble\Blog\Repositories\Interfaces\PostInterface;
 use Botble\Blog\Supports\FilterPost;
-use Illuminate\Http\Request;
-use Illuminate\Routing\Controller;
 use Botble\Slug\Facades\SlugHelper;
+use Illuminate\Http\Request;
 
-class PostController extends Controller
+class PostController extends BaseApiController
 {
     public function __construct(protected PostInterface $postRepository)
     {
@@ -23,8 +23,32 @@ class PostController extends Controller
      * List posts
      *
      * @group Blog
+     *
+     * @queryParam per_page integer The number of items to return per page (default: 10).
+     * @queryParam page integer The page number to retrieve (default: 1).
+     *
+     * @response 200 {
+     *   "error": false,
+     *   "data": [
+     *     {
+     *       "id": 1,
+     *       "title": "Sample Post",
+     *       "slug": "sample-post",
+     *       "excerpt": "This is a sample post excerpt",
+     *       "content": "Full post content here...",
+     *       "published_at": "2023-01-01T00:00:00.000000Z",
+     *       "author": {
+     *         "id": 1,
+     *         "name": "John Doe"
+     *       },
+     *       "categories": [],
+     *       "tags": []
+     *     }
+     *   ],
+     *   "message": null
+     * }
      */
-    public function index(Request $request, BaseHttpResponse $response)
+    public function index(Request $request)
     {
         $data = $this->postRepository
             ->advancedGet([
@@ -36,7 +60,8 @@ class PostController extends Controller
                 ],
             ]);
 
-        return $response
+        return $this
+            ->httpResponse()
             ->setData(ListPostResource::collection($data))
             ->toApiResponse();
     }
@@ -44,13 +69,34 @@ class PostController extends Controller
     /**
      * Search post
      *
+     * @group Blog
+     *
      * @bodyParam q string required The search keyword.
      *
-     * @group Blog
+     * @response 200 {
+     *   "error": false,
+     *   "data": {
+     *     "items": [
+     *       {
+     *         "id": 1,
+     *         "title": "Sample Post",
+     *         "slug": "sample-post",
+     *         "excerpt": "This is a sample post excerpt"
+     *       }
+     *     ],
+     *     "query": "sample",
+     *     "count": 1
+     *   }
+     * }
+     *
+     * @response 400 {
+     *   "error": true,
+     *   "message": "No search result"
+     * }
      */
-    public function getSearch(Request $request, PostInterface $postRepository, BaseHttpResponse $response)
+    public function getSearch(Request $request, PostInterface $postRepository)
     {
-        $query = $request->input('q');
+        $query = BaseHelper::stringify($request->input('q'));
         $posts = $postRepository->getSearch($query);
 
         $data = [
@@ -60,10 +106,13 @@ class PostController extends Controller
         ];
 
         if ($data['count'] > 0) {
-            return $response->setData(apply_filters(BASE_FILTER_SET_DATA_SEARCH, $data));
+            return $this
+                ->httpResponse()
+                ->setData(apply_filters(BASE_FILTER_SET_DATA_SEARCH, $data));
         }
 
-        return $response
+        return $this
+            ->httpResponse()
             ->setError()
             ->setMessage(trans('core/base::layouts.no_search_result'));
     }
@@ -89,13 +138,14 @@ class PostController extends Controller
      * @queryParam tags_exclude         Limit result set to all items except those that have the specified term assigned in the tags taxonomy.
      * @queryParam featured             Limit result set to items that are sticky.
      */
-    public function getFilters(Request $request, BaseHttpResponse $response)
+    public function getFilters(Request $request)
     {
         $filters = FilterPost::setFilters($request->input());
 
         $data = $this->postRepository->getFilters($filters);
 
-        return $response
+        return $this
+            ->httpResponse()
             ->setData(ListPostResource::collection($data))
             ->toApiResponse();
     }
@@ -106,24 +156,35 @@ class PostController extends Controller
      * @group Blog
      * @queryParam slug Find by slug of post.
      */
-    public function findBySlug(string $slug, BaseHttpResponse $response)
+    public function findBySlug(string $slug)
     {
         $slug = SlugHelper::getSlug($slug, SlugHelper::getPrefix(Post::class));
 
         if (! $slug) {
-            return $response->setError()->setCode(404)->setMessage('Not found');
+            return $this
+                ->httpResponse()
+                ->setError()
+                ->setCode(404)
+                ->setMessage('Not found');
         }
 
-        $post = $this->postRepository->getFirstBy([
-            'id' => $slug->reference_id,
-            'status' => BaseStatusEnum::PUBLISHED,
-        ]);
+        $post = Post::query()
+            ->where([
+                'id' => $slug->reference_id,
+                'status' => BaseStatusEnum::PUBLISHED,
+            ])
+            ->first();
 
         if (! $post) {
-            return $response->setError()->setCode(404)->setMessage('Not found');
+            return $this
+                ->httpResponse()
+                ->setError()
+                ->setCode(404)
+                ->setMessage('Not found');
         }
 
-        return $response
+        return $this
+            ->httpResponse()
             ->setData(new PostResource($post))
             ->toApiResponse();
     }

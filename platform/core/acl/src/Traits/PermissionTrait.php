@@ -6,11 +6,15 @@ use Illuminate\Support\Str;
 
 trait PermissionTrait
 {
-    protected array|null $preparedPermissions = null;
+    protected ?array $preparedPermissions = null;
 
-    public function updatePermission(string $permission, bool $value = true, bool $create = false): self
+    public function updatePermission(string $permission, bool $value = true, bool $create = false): static
     {
-        if (array_key_exists($permission, (array)$this->permissions)) {
+        if (! $this->permissions) {
+            $this->addPermission($permission, $value);
+        }
+
+        if (array_key_exists($permission, (array) $this->permissions)) {
             $permissions = $this->permissions;
 
             $permissions[$permission] = $value;
@@ -23,18 +27,28 @@ trait PermissionTrait
         return $this;
     }
 
-    public function addPermission(string $permission, bool $value = true): self
+    public function addPermission(string $permission, bool $value = true): static
     {
-        if (! array_key_exists($permission, (array)$this->permissions)) {
+        if (! $this->permissions) {
+            $this->permissions = [$permission => $value];
+
+            return $this;
+        }
+
+        if (! array_key_exists($permission, (array) $this->permissions)) {
             $this->permissions = array_merge($this->permissions, [$permission => $value]);
         }
 
         return $this;
     }
 
-    public function removePermission(string $permission): self
+    public function removePermission(string $permission): static
     {
-        if (array_key_exists($permission, (array)$this->permissions)) {
+        if (! $this->permissions) {
+            return $this;
+        }
+
+        if (array_key_exists($permission, (array) $this->permissions)) {
             $permissions = $this->permissions;
 
             unset($permissions[$permission]);
@@ -45,7 +59,7 @@ trait PermissionTrait
         return $this;
     }
 
-    public function hasAccess(string|array $permissions): bool
+    public function hasPermission(string|array $permissions): bool
     {
         if (is_string($permissions)) {
             $permissions = func_get_args();
@@ -87,7 +101,7 @@ trait PermissionTrait
         foreach ($permissions as $keys => $value) {
             foreach ($this->extractClassPermissions($keys) as $key) {
                 // If the value is not in the array, we're opting in
-                if (! array_key_exists($key, (array)$prepared)) {
+                if (! array_key_exists($key, $prepared)) {
                     $prepared[$key] = $value;
 
                     continue;
@@ -108,7 +122,7 @@ trait PermissionTrait
     protected function extractClassPermissions(string $key): array
     {
         if (! Str::contains($key, '@')) {
-            return (array)$key;
+            return (array) $key;
         }
 
         $keys = [];
@@ -140,7 +154,7 @@ trait PermissionTrait
         return false;
     }
 
-    public function hasAnyAccess(array|string $permissions): bool
+    public function hasAnyPermission(array|string $permissions): bool
     {
         if (is_string($permissions)) {
             $permissions = func_get_args();

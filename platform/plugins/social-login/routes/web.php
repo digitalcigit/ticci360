@@ -1,34 +1,47 @@
 <?php
 
-use Botble\Base\Facades\BaseHelper;
-use Botble\SocialLogin\Facades\SocialService;
+use Botble\Base\Facades\AdminHelper;
 use Illuminate\Support\Facades\Route;
 
-Route::group(['namespace' => 'Botble\SocialLogin\Http\Controllers', 'middleware' => ['web', 'core']], function () {
-    Route::group(['prefix' => BaseHelper::getAdminPrefix(), 'middleware' => 'auth'], function () {
-        Route::group(['prefix' => 'social-login'], function () {
-            Route::get('settings', [
+Route::group(['namespace' => 'Botble\SocialLogin\Http\Controllers'], function (): void {
+    AdminHelper::registerRoutes(function (): void {
+        Route::group(['prefix' => 'settings'], function (): void {
+            Route::get('social-login', [
                 'as' => 'social-login.settings',
-                'uses' => 'SocialLoginController@getSettings',
+                'uses' => 'Settings\SocialLoginSettingController@edit',
             ]);
 
-            Route::post('settings', [
-                'as' => 'social-login.settings.post',
+            Route::put('social-login', [
+                'as' => 'social-login.settings.update',
+                'uses' => 'Settings\SocialLoginSettingController@update',
                 'permission' => 'social-login.settings',
-                'uses' => 'SocialLoginController@postSettings',
             ]);
         });
     });
 
-    $providers = collect(SocialService::getProviderKeys())->implode('|');
+    Route::group(['middleware' => ['web', 'core']], function (): void {
+        Route::get('auth/{provider}', [
+            'as' => 'auth.social',
+            'uses' => 'SocialLoginController@redirectToProvider',
+        ]);
 
-    Route::get('auth/{provider}', [
-        'as' => 'auth.social',
-        'uses' => 'SocialLoginController@redirectToProvider',
-    ])->where('provider', $providers);
+        Route::get('auth/callback/{provider}', [
+            'as' => 'auth.social.callback',
+            'uses' => 'SocialLoginController@handleProviderCallback',
+        ]);
+    });
 
-    Route::get('auth/callback/{provider}', [
-        'as' => 'auth.social.callback',
-        'uses' => 'SocialLoginController@handleProviderCallback',
-    ])->where('provider', $providers);
+    Route::match(['get', 'post'], 'facebook/data-deletion-request-callback', [
+        'as' => 'facebook-data-deletion-request-callback',
+        'uses' => 'FacebookDataDeletionRequestCallbackController@handle',
+    ]);
+
+    Route::match(['get', 'post'], 'facebook-data-deletion-request-callback', [
+        'uses' => 'FacebookDataDeletionRequestCallbackController@redirect',
+    ]);
+
+    Route::get('facebook-deletion-status/{id}', [
+        'as' => 'facebook-deletion-status',
+        'uses' => 'FacebookDataDeletionRequestCallbackController@show',
+    ]);
 });

@@ -2,230 +2,181 @@
 
 namespace Botble\Blog\Tables;
 
-use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Blog\Exports\PostExport;
-use Botble\Blog\Models\Post;
-use Botble\Blog\Repositories\Interfaces\CategoryInterface;
-use Botble\Blog\Repositories\Interfaces\PostInterface;
-use Botble\Table\Abstracts\TableAbstract;
 use Botble\Base\Facades\Html;
-use Illuminate\Contracts\Routing\UrlGenerator;
+use Botble\Base\Models\BaseQueryBuilder;
+use Botble\Blog\Models\Category;
+use Botble\Blog\Models\Post;
+use Botble\Table\Abstracts\TableAbstract;
+use Botble\Table\Actions\DeleteAction;
+use Botble\Table\Actions\EditAction;
+use Botble\Table\BulkActions\DeleteBulkAction;
+use Botble\Table\BulkChanges\CreatedAtBulkChange;
+use Botble\Table\BulkChanges\IsFeaturedBulkChange;
+use Botble\Table\BulkChanges\NameBulkChange;
+use Botble\Table\BulkChanges\SelectBulkChange;
+use Botble\Table\BulkChanges\StatusBulkChange;
+use Botble\Table\Columns\CreatedAtColumn;
+use Botble\Table\Columns\FormattedColumn;
+use Botble\Table\Columns\IdColumn;
+use Botble\Table\Columns\ImageColumn;
+use Botble\Table\Columns\NameColumn;
+use Botble\Table\Columns\StatusColumn;
+use Botble\Table\HeaderActions\CreateHeaderAction;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\Relation as EloquentRelation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Auth;
-use Botble\Table\DataTables;
 
 class PostTable extends TableAbstract
 {
-    protected $hasActions = true;
-
-    protected $hasFilter = true;
-
-    protected string $exportClass = PostExport::class;
-
-    protected int $defaultSortColumn = 6;
-
-    public function __construct(
-        DataTables $table,
-        UrlGenerator $urlGenerator,
-        PostInterface $postRepository,
-        protected CategoryInterface $categoryRepository
-    ) {
-        parent::__construct($table, $urlGenerator);
-
-        $this->repository = $postRepository;
-
-        if (! Auth::user()->hasAnyPermission(['posts.edit', 'posts.destroy'])) {
-            $this->hasOperations = false;
-            $this->hasActions = false;
-        }
-    }
-
-    public function ajax(): JsonResponse
+    public function setup(): void
     {
-        $data = $this->table
-            ->eloquent($this->query())
-            ->editColumn('name', function (Post $item) {
-                if (! Auth::user()->hasPermission('posts.edit')) {
-                    return BaseHelper::clean($item->name);
-                }
+        $this->defaultSortColumnName = 'created_at';
 
-                return Html::link(route('posts.edit', $item->id), BaseHelper::clean($item->name));
-            })
-            ->editColumn('image', function (Post $item) {
-                return $this->displayThumbnail($item->image);
-            })
-            ->editColumn('checkbox', function (Post $item) {
-                return $this->getCheckbox($item->id);
-            })
-            ->editColumn('created_at', function (Post $item) {
-                return BaseHelper::formatDate($item->created_at);
-            })
-            ->editColumn('updated_at', function (Post $item) {
-                $categories = '';
-                foreach ($item->categories as $category) {
-                    $categories .= Html::link(route('categories.edit', $category->id), $category->name) . ', ';
-                }
-
-                return rtrim($categories, ', ');
-            })
-            ->editColumn('author_id', function (Post $item) {
-                return $item->author && $item->author->name ? BaseHelper::clean($item->author->name) : '&mdash;';
-            })
-            ->editColumn('status', function (Post $item) {
-                if ($this->request()->input('action') === 'excel') {
-                    return $item->status->getValue();
-                }
-
-                return BaseHelper::clean($item->status->toHtml());
-            })
-            ->addColumn('operations', function (Post $item) {
-                return $this->getOperations('posts.edit', 'posts.destroy', $item);
-            });
-
-        return $this->toJson($data);
-    }
-
-    public function query(): Relation|Builder|QueryBuilder
-    {
-        $query = $this->repository->getModel()
-            ->with([
-                'categories' => function ($query) {
-                    $query->select(['categories.id', 'categories.name']);
-                },
-                'author',
+        $this
+            ->model(Post::class)
+            ->addHeaderAction(CreateHeaderAction::make()->route('posts.create'))
+            ->addActions([
+                EditAction::make()->route('posts.edit'),
+                DeleteAction::make()->route('posts.destroy'),
             ])
-            ->select([
-                'id',
-                'name',
-                'image',
-                'created_at',
-                'status',
-                'updated_at',
-                'author_id',
-                'author_type',
-            ]);
+            ->addColumns([
+                IdColumn::make(),
+                ImageColumn::make(),
+                NameColumn::make()->route('posts.edit'),
+                FormattedColumn::make('categories_name')
+                    ->title(trans('plugins/blog::posts.categories'))
+                    ->width(150)
+                    ->orderable(false)
+                    ->searchable(false)
+                    ->getValueUsing(function (FormattedColumn $column) {
+                        $categories = $column
+                            ->getItem()
+                            ->categories
+                            ->sortBy('name')
+                            ->map(function (Category $category) {
+                                return Html::link(route('categories.edit', $category->getKey()), $category->name, ['target' => '_blank']);
+                            })
+                            ->all();
 
-        return $this->applyScopes($query);
-    }
+                        return implode(', ', $categories);
+                    })
+                    ->withEmptyState(),
+                FormattedColumn::make('author_id')
+                    ->title(trans('plugins/blog::posts.author'))
+                    ->width(150)
+                    ->orderable(false)
+                    ->searchable(false)
+                    ->getValueUsing(function (FormattedColumn $column) {
+                        return $column->getItem()->author_name;
+                    })
+                    ->renderUsing(function (FormattedColumn $column) {
+                        $url = $column->getItem()->author_url;
 
-    public function columns(): array
-    {
-        return [
-            'id' => [
-                'title' => trans('core/base::tables.id'),
-                'width' => '20px',
-            ],
-            'image' => [
-                'title' => trans('core/base::tables.image'),
-                'width' => '70px',
-            ],
-            'name' => [
-                'title' => trans('core/base::tables.name'),
-                'class' => 'text-start',
-            ],
-            'updated_at' => [
-                'title' => trans('plugins/blog::posts.categories'),
-                'width' => '150px',
-                'class' => 'no-sort text-center',
-                'orderable' => false,
-            ],
-            'author_id' => [
-                'title' => trans('plugins/blog::posts.author'),
-                'width' => '150px',
-                'class' => 'no-sort text-center',
-                'orderable' => false,
-            ],
-            'created_at' => [
-                'title' => trans('core/base::tables.created_at'),
-                'width' => '100px',
-                'class' => 'text-center',
-            ],
-            'status' => [
-                'title' => trans('core/base::tables.status'),
-                'width' => '100px',
-                'class' => 'text-center',
-            ],
-        ];
-    }
+                        if (! $url) {
+                            return null;
+                        }
 
-    public function buttons(): array
-    {
-        return $this->addCreateButton(route('posts.create'), 'posts.create');
-    }
+                        return Html::link($url, $column->getItem()->author_name, ['target' => '_blank']);
+                    })
+                    ->withEmptyState(),
+                FormattedColumn::make('views')
+                    ->title(trans('plugins/blog::posts.views'))
+                    ->width(80)
+                    ->alignCenter()
+                    ->getValueUsing(function (FormattedColumn $column) {
+                        return number_format($column->getItem()->views);
+                    }),
+                CreatedAtColumn::make(),
+                StatusColumn::make(),
+            ])
+            ->addBulkActions([
+                DeleteBulkAction::make()->permission('posts.destroy'),
+            ])
+            ->addBulkChanges([
+                NameBulkChange::make(),
+                StatusBulkChange::make(),
+                CreatedAtBulkChange::make(),
+                SelectBulkChange::make()
+                    ->name('category')
+                    ->title(trans('plugins/blog::posts.category'))
+                    ->searchable()
+                    ->choices(fn () => Category::query()->pluck('name', 'id')->all()),
+                IsFeaturedBulkChange::make(),
+            ])
+            ->queryUsing(function (Builder $query) {
+                return $query
+                    ->with([
+                        'categories' => function (BelongsToMany $query): void {
+                            $query->select(['categories.id', 'categories.name']);
+                        },
+                        'author',
+                    ])
+                    ->select([
+                        'id',
+                        'name',
+                        'image',
+                        'created_at',
+                        'status',
+                        'updated_at',
+                        'author_id',
+                        'author_type',
+                        'views',
+                    ]);
+            })
+            ->onAjax(function (self $table) {
+                return $table->toJson(
+                    $table
+                        ->table
+                        ->eloquent($table->query())
+                        ->filter(function ($query) {
+                            if ($keyword = $this->request->input('search.value')) {
+                                $keyword = '%' . $keyword . '%';
 
-    public function bulkActions(): array
-    {
-        return $this->addDeleteAction(route('posts.deletes'), 'posts.destroy', parent::bulkActions());
-    }
+                                return $query
+                                    ->where('name', 'LIKE', $keyword)
+                                    ->orWhereHas('categories', function ($subQuery) use ($keyword) {
+                                        return $subQuery
+                                            ->where('name', 'LIKE', $keyword);
+                                    })
+                                    ->orWhereHas('author', function ($subQuery) use ($keyword) {
+                                        return $subQuery
+                                            ->where('first_name', 'LIKE', $keyword)
+                                            ->orWhere('last_name', 'LIKE', $keyword)
+                                            ->orWhereRaw('concat(first_name, " ", last_name) LIKE ?', $keyword);
+                                    });
+                            }
 
-    public function getBulkChanges(): array
-    {
-        return [
-            'name' => [
-                'title' => trans('core/base::tables.name'),
-                'type' => 'text',
-                'validate' => 'required|max:120',
-            ],
-            'status' => [
-                'title' => trans('core/base::tables.status'),
-                'type' => 'customSelect',
-                'choices' => BaseStatusEnum::labels(),
-                'validate' => 'required|in:' . implode(',', BaseStatusEnum::values()),
-            ],
-            'category' => [
-                'title' => trans('plugins/blog::posts.category'),
-                'type' => 'select-search',
-                'validate' => 'required|string',
-                'callback' => 'getCategories',
-            ],
-            'created_at' => [
-                'title' => trans('core/base::tables.created_at'),
-                'type' => 'datePicker',
-                'validate' => 'required|string|date',
-            ],
-        ];
-    }
+                            return $query;
+                        })
+                );
+            })
+            ->onFilterQuery(
+                function (
+                    EloquentBuilder|QueryBuilder|EloquentRelation $query,
+                    string $key,
+                    string $operator,
+                    ?string $value
+                ) {
+                    if (! $value || $key !== 'category') {
+                        return false;
+                    }
 
-    public function getCategories(): array
-    {
-        return $this->categoryRepository->pluck('name', 'id');
-    }
+                    return $query->whereHas(
+                        'categories',
+                        fn (BaseQueryBuilder $query) => $query->where('categories.id', $value)
+                    );
+                }
+            )
+            ->onSavingBulkChangeItem(function (Post $item, string $inputKey, ?string $inputValue) {
+                if ($inputKey !== 'category') {
+                    return null;
+                }
 
-    public function applyFilterCondition(EloquentBuilder|QueryBuilder|EloquentRelation $query, string $key, string $operator, string|null $value): EloquentRelation|EloquentBuilder|QueryBuilder
-    {
-        if ($key === 'category' && $value) {
-            return $query->whereHas('categories', fn ($query) => $query->where('categories.id', $value));
-        }
+                $item->categories()->sync([$inputValue]);
 
-        return parent::applyFilterCondition($query, $key, $operator, $value);
-    }
-
-    public function saveBulkChangeItem(Model|Post $item, string $inputKey, string|null $inputValue): Model|bool
-    {
-        if ($inputKey === 'category') {
-            /**
-             * @var Post $item
-             */
-            $item->categories()->sync([$inputValue]);
-
-            return $item;
-        }
-
-        return parent::saveBulkChangeItem($item, $inputKey, $inputValue);
-    }
-
-    public function getDefaultButtons(): array
-    {
-        return [
-            'export',
-            'reload',
-        ];
+                return $item;
+            });
     }
 }

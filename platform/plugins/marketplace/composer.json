@@ -1,0 +1,1 @@
+{"name":"botble/marketplace","type":"package","autoload":{"psr-4":{"Botble\\Marketplace\\":"src/"}}}

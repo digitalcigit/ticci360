@@ -7,10 +7,13 @@
                 </div>
 
                 <div class="rp-card__content">
-                    <sales-reports-chart url="{{ route('ecommerce.report.revenue', [
-                        'date_from' => $count['startDate']->format('Y-m-d'),
-                        'date_to'   => $count['endDate']->format('Y-m-d')
-                    ]) }}"></sales-reports-chart>
+                    <div id='sales-report-chart'>
+                        <sales-reports-chart
+                            url="{{ route('marketplace.vendor.chart.month') }}"
+                            date_from='{{ $count['startDate']->toDateString() }}'
+                            date_to='{{ $count['endDate']->toDateString() }}'
+                        ></sales-reports-chart>
+                    </div>
                 </div>
             </div>
         </div>
@@ -23,7 +26,8 @@
                     @if (collect($count['revenues'])->count())
                         <div class="rp-card-chart position-relative">
                             <revenue-chart
-                                :data="{{ json_encode(collect($count['revenues'])->map(function ($value) { return Arr::only($value, ['label', 'value', 'color']); })) }}"></revenue-chart>
+                                :data="{{ json_encode(collect($count['revenues'])->map(function ($value) {return Arr::only($value, ['label', 'value', 'color']);})) }}"
+                            ></revenue-chart>
                             <div class="rp-card-information">
                                 <i class="fas fa-wallet"></i>
                                 @foreach (collect($count['revenues'])->where('status') as $item)
@@ -36,7 +40,10 @@
                             @foreach ($count['revenues'] as $item)
                                 <p>
                                     <small>
-                                        <small><i class="fas fa-circle mr-2" style="color: {{ Arr::get($item, 'color') }}"></i></small>
+                                        <small><i
+                                                class="fas fa-circle me-2"
+                                                style="color: {{ Arr::get($item, 'color') }}"
+                                            ></i></small>
                                     </small>
                                     <strong>{{ format_price($item['value']) }}</strong>
                                     <span>{{ $item['label'] }}</span>
@@ -61,22 +68,27 @@
         <div class="rp-card-content row row-cols-md-2 row-cols-lg-1 row-cols-1">
             <div class="col my-2">
                 <div class="d-flex rounded px-2 py-3 h-100 position-relative bg-yellow-opacity">
-                    <div class="block-left d-flex mr-1">
-                        <span class="align-self-center bg-white p-1"><i class="fas fa-shopping-bag fa-2x m-2"></i></span>
+                    <div class="block-left d-flex me-1">
+                        <span class="align-self-center bg-white p-1"><i
+                                class="fas fa-shopping-bag fa-2x m-2"></i></span>
                     </div>
-                        <div class="block-content mx-3">
+                    <div class="block-content mx-3">
                         <p class="mb-1">{{ trans('plugins/ecommerce::reports.orders') }}</p>
                         <h5>{{ $count['orders'] }}</h5>
                     </div>
                     @if (Auth::user()->hasPermission('orders.index'))
-                        <a href="{{ route('orders.index') }}" class="stretched-link"></a>
+                        <a
+                            class="stretched-link"
+                            href="{{ route('orders.index') }}"
+                        ></a>
                     @endif
                 </div>
             </div>
             <div class="col my-2">
                 <div class="d-flex rounded px-2 py-3 h-100 bg-blue-opacity">
-                    <div class="block-left d-flex mr-1">
-                        <span class="align-self-center bg-white p-1"><i class="fas fa-hand-holding-usd fa-2x m-2"></i></span>
+                    <div class="block-left d-flex me-1">
+                        <span class="align-self-center bg-white p-1"><i
+                                class="fas fa-hand-holding-usd fa-2x m-2"></i></span>
                     </div>
                     <div class="block-content mx-3">
                         <p class="mb-1">{{ trans('plugins/ecommerce::reports.revenue') }}</p>
@@ -86,7 +98,7 @@
             </div>
             <div class="col my-2">
                 <div class=" d-flex rounded px-2 py-3 h-100 position-relative bg-green-opacity">
-                    <div class="block-left d-flex mr-1">
+                    <div class="block-left d-flex me-1">
                         <span class="align-self-center bg-white p-1"><i class="fas fa-database fa-2x m-2"></i></span>
                     </div>
                     <div class="block-content mx-3">
@@ -94,13 +106,16 @@
                         <h5>{{ $count['products'] }}</h5>
                     </div>
                     @if (Auth::user()->hasPermission('products.index'))
-                        <a href="{{ route('products.index') }}" class="stretched-link"></a>
+                        <a
+                            class="stretched-link"
+                            href="{{ route('products.index') }}"
+                        ></a>
                     @endif
                 </div>
             </div>
             <div class="col my-2">
                 <div class="d-flex rounded px-2 py-3 h-100 position-relative bg-red-pink-opacity">
-                    <div class="block-left d-flex mr-1">
+                    <div class="block-left d-flex me-1">
                         <span class="align-self-center bg-white p-1"><i class="fas fa-users fa-2x m-2"></i></span>
                     </div>
                     <div class="block-content mx-3">
@@ -108,7 +123,10 @@
                         <h5>{{ $count['customers'] }}</h5>
                     </div>
                     @if (Auth::user()->hasPermission('customers.index'))
-                        <a href="{{ route('customers.index') }}" class="stretched-link"></a>
+                        <a
+                            class="stretched-link"
+                            href="{{ route('customers.index') }}"
+                        ></a>
                     @endif
                 </div>
             </div>

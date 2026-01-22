@@ -10,6 +10,9 @@ use Illuminate\Support\HtmlString;
 use Illuminate\Support\Traits\Macroable;
 use stdClass;
 
+/**
+ * @deprecated use Breadcrumb::class instead
+ */
 class BreadcrumbsManager
 {
     use Macroable;
@@ -20,7 +23,7 @@ class BreadcrumbsManager
 
     protected array $after = [];
 
-    protected array|null $route;
+    protected ?array $route;
 
     public function __construct(
         protected BreadcrumbsGenerator $generator,
@@ -29,14 +32,14 @@ class BreadcrumbsManager
     ) {
     }
 
-    public function register(string $name, callable $callback): void
+    public function register(string $name, callable $callback, bool $modify = false): void
     {
-        $this->for($name, $callback);
+        $this->for($name, $callback, $modify);
     }
 
-    public function for(string $name, callable $callback): void
+    public function for(string $name, callable $callback, bool $modify = false): void
     {
-        if (! isset($this->callbacks[$name])) {
+        if (! isset($this->callbacks[$name]) || $modify) {
             $this->callbacks[$name] = $callback;
         }
     }
@@ -51,7 +54,7 @@ class BreadcrumbsManager
         $this->after[] = $callback;
     }
 
-    public function exists(string $name = null): bool
+    public function exists(?string $name = null): bool
     {
         if (empty($name)) {
             try {
@@ -64,7 +67,7 @@ class BreadcrumbsManager
         return isset($this->callbacks[$name]);
     }
 
-    protected function getCurrentRoute(): array|null
+    protected function getCurrentRoute(): ?array
     {
         // Manually set route
         if ($this->route) {
@@ -91,12 +94,12 @@ class BreadcrumbsManager
         return [$name, $params];
     }
 
-    public function render(string $name = null, ...$params): string
+    public function render(?string $name = null, ...$params): string
     {
         return $this->view('core/base::layouts.partials.breadcrumbs', $name, ...$params)->toHtml();
     }
 
-    public function view(string $view, string $name = null, ...$params): HtmlString
+    public function view(string $view, ?string $name = null, ...$params): HtmlString
     {
         $breadcrumbs = $this->generate($name, ...$params);
 
@@ -105,21 +108,21 @@ class BreadcrumbsManager
         return new HtmlString($html);
     }
 
-    public function generate(string $name = null, ...$params): Collection
+    public function generate(?string $name = null, ...$params): Collection
     {
         // Route-bound breadcrumbs
         if ($name === null) {
             try {
                 [$name, $params] = $this->getCurrentRoute();
             } catch (Exception) {
-                return new Collection();
+                return collect();
             }
         }
 
         try {
             return $this->generator->generate($this->callbacks, $this->before, $this->after, $name, $params);
         } catch (Exception) {
-            return new Collection();
+            return collect();
         }
     }
 

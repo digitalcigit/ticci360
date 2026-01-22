@@ -1,0 +1,1 @@
+{"name":"botble/newsletter","type":"package","autoload":{"psr-4":{"Botble\\Newsletter\\":"src/"}}}

@@ -1,3 +1,4 @@
-<li class="nav-item">
-    <a href="#tab_tax_info" class="nav-link" data-bs-toggle="tab">{{ __('Tax info') }} </a>
-</li>
+<x-core::tab.item
+    id="tab_tax_info"
+    :label="trans('plugins/marketplace::marketplace.tax_info')"
+/>

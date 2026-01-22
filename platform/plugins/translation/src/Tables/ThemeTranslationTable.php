@@ -2,65 +2,72 @@
 
 namespace Botble\Translation\Tables;
 
-use Botble\Base\Supports\Language;
-use Illuminate\Http\JsonResponse;
-use Botble\Table\Abstracts\TableAbstract;
-use Botble\Translation\Manager;
+use Botble\Base\Facades\Assets;
 use Botble\Base\Facades\Html;
-use Illuminate\Contracts\Routing\UrlGenerator;
+use Botble\Base\Supports\Language;
+use Botble\DataSynchronize\Table\HeaderActions\ExportHeaderAction;
+use Botble\DataSynchronize\Table\HeaderActions\ImportHeaderAction;
+use Botble\Table\Abstracts\TableAbstract;
+use Botble\Table\Columns\Column;
+use Botble\Translation\Manager;
 use Illuminate\Support\Arr;
-use Botble\Table\DataTables;
 
 class ThemeTranslationTable extends TableAbstract
 {
-    protected $view = 'core/table::simple-table';
+    protected string $locale = 'en';
 
-    protected $hasCheckbox = false;
-
-    protected $hasOperations = false;
-
-    protected int $pageLength = 100;
-
-    public function __construct(
-        DataTables $table,
-        UrlGenerator $urlGenerator,
-        protected Manager $manager,
-        protected string $locale = 'en'
-    ) {
-        parent::__construct($table, $urlGenerator);
-    }
-
-    public function ajax(): JsonResponse
+    public function setup(): void
     {
-        $table = $this->table
-            ->of($this->manager->getTranslationData($this->locale))
-            ->editColumn('key', fn (array $item) => $this->formatKeyAndValue($item['key']))
-            ->editColumn(
-                $this->locale,
-                fn (array $item) => Html::link('#edit', $this->formatKeyAndValue($item['value']), [
-                    'class' => 'editable' . ($item['key'] === $item['value'] ? ' text-info' : ''),
-                    'data-locale' => $this->locale,
-                    'data-name' => $item['key'],
-                    'data-type' => 'textarea',
-                    'data-pk' => $this->locale,
-                    'data-title' => trans('plugins/translation::translation.edit_title'),
-                    'data-url' => route('translations.theme-translations.post'),
-                ])
-            );
+        parent::setup();
 
-        return $this->toJson($table);
+        $this->setView('core/table::base-table');
+        $this->pageLength = 100;
+        $this->hasOperations = false;
+
+        Assets::addScripts(['bootstrap-editable'])
+            ->addStyles(['bootstrap-editable']);
+
+        $this
+            ->addHeaderActions([
+                ExportHeaderAction::make()
+                    ->route('tools.data-synchronize.export.theme-translations.index')
+                    ->permission('theme-translations.export'),
+                ImportHeaderAction::make()
+                    ->route('tools.data-synchronize.import.theme-translations.index')
+                    ->permission('other-translations.import'),
+            ])
+            ->onAjax(function () {
+                $translations = collect(app(Manager::class)->getThemeTranslations($this->locale))
+                    ->transform(fn ($value, $key) => compact('key', 'value'));
+
+                $table = $this->table
+                    ->of($translations)
+                    ->editColumn('key', fn (array $item) => $this->formatKeyAndValue($item['key']))
+                    ->editColumn(
+                        $this->locale,
+                        fn (array $item) => Html::link('#edit', $this->formatKeyAndValue($item['value']), [
+                            'class' => 'editable' . ($item['key'] === $item['value'] ? ' text-info' : ''),
+                            'data-locale' => $this->locale,
+                            'data-name' => $item['key'],
+                            'data-type' => 'textarea',
+                            'data-pk' => $this->locale,
+                            'data-title' => trans('plugins/translation::translation.edit_title'),
+                            'data-url' => route('translations.theme-translations.post'),
+                        ])
+                    );
+
+                return $this->toJson($table);
+            });
     }
 
     public function columns(): array
     {
         return [
-            'key' => [
-                'class' => 'text-start',
-            ],
-            $this->locale => [
-                'title' => Arr::get(Language::getAvailableLocales(), $this->locale . '.name', $this->locale),
-                'class' => 'text-start',
-            ],
+            Column::make('key')
+                ->alignStart(),
+            Column::make($this->locale)
+                ->title(Arr::get(Language::getAvailableLocales(), $this->locale . '.name', $this->locale))
+                ->alignStart(),
         ];
     }
 
@@ -71,13 +78,18 @@ class ThemeTranslationTable extends TableAbstract
         return $this;
     }
 
-    protected function formatKeyAndValue(string|null $value): string|null
+    protected function formatKeyAndValue(?string $value): ?string
     {
         return htmlentities($value, ENT_QUOTES, 'UTF-8', false);
     }
 
-    public function htmlDrawCallbackFunction(): string|null
+    public function htmlDrawCallbackFunction(): ?string
     {
-        return parent::htmlDrawCallbackFunction() . '$(".editable").editable({mode: "inline"});';
+        return parent::htmlDrawCallbackFunction() . 'Botble.initEditable()';
+    }
+
+    public function isSimpleTable(): bool
+    {
+        return false;
     }
 }

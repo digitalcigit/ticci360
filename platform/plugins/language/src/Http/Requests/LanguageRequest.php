@@ -10,23 +10,21 @@ class LanguageRequest extends Request
 {
     public function rules(): array
     {
-        $languages = collect(Language::getListLanguages());
-
         return [
-            'lang_name' => 'required|string|max:30|min:2',
+            'lang_name' => ['required', 'string', 'max:30', 'min:2'],
             'lang_code' => [
                 'required',
                 'string',
-                Rule::in($languages->pluck('1')->unique()->all()),
+                Rule::in(Language::getLanguageCodes()),
             ],
             'lang_locale' => [
                 'required',
                 'string',
-                Rule::in($languages->pluck('0')->unique()->all()),
+                Rule::in(Language::getLocaleKeys()),
             ],
-            'lang_flag' => 'required|string',
-            'lang_is_rtl' => 'required|string',
-            'lang_order' => 'required|numeric',
+            'lang_flag' => ['required', 'string'],
+            'lang_is_rtl' => ['required', 'boolean'],
+            'lang_order' => ['required', 'numeric'],
         ];
     }
 }

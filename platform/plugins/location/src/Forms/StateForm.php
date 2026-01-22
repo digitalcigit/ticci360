@@ -2,69 +2,57 @@
 
 namespace Botble\Location\Forms;
 
+use Botble\Base\Forms\FieldOptions\IsDefaultFieldOption;
+use Botble\Base\Forms\FieldOptions\MediaImageFieldOption;
+use Botble\Base\Forms\FieldOptions\NameFieldOption;
+use Botble\Base\Forms\FieldOptions\SortOrderFieldOption;
+use Botble\Base\Forms\FieldOptions\StatusFieldOption;
+use Botble\Base\Forms\Fields\MediaImageField;
+use Botble\Base\Forms\Fields\NumberField;
+use Botble\Base\Forms\Fields\OnOffField;
+use Botble\Base\Forms\Fields\SelectField;
+use Botble\Base\Forms\Fields\TextField;
 use Botble\Base\Forms\FormAbstract;
-use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Location\Repositories\Interfaces\CountryInterface;
 use Botble\Location\Http\Requests\StateRequest;
+use Botble\Location\Models\Country;
 use Botble\Location\Models\State;
 
 class StateForm extends FormAbstract
 {
-    public function __construct(protected CountryInterface $countryRepository)
+    public function setup(): void
     {
-        parent::__construct();
-    }
-
-    public function buildForm(): void
-    {
-        $countries = $this->countryRepository->pluck('countries.name', 'countries.id');
+        $countries = Country::query()->pluck('name', 'id')->all();
 
         $this
-            ->setupModel(new State())
+            ->model(State::class)
             ->setValidatorClass(StateRequest::class)
-            ->withCustomFields()
-            ->add('name', 'text', [
-                'label' => trans('core/base::forms.name'),
-                'label_attr' => ['class' => 'control-label required'],
+            ->add('name', TextField::class, NameFieldOption::make()->required())
+            ->add('slug', TextField::class, [
+                'label' => trans('plugins/location::location.slug'),
                 'attr' => [
-                    'placeholder' => trans('core/base::forms.name_placeholder'),
+                    'placeholder' => trans('plugins/location::location.slug'),
                     'data-counter' => 120,
                 ],
             ])
-            ->add('abbreviation', 'text', [
+            ->add('abbreviation', TextField::class, [
                 'label' => trans('plugins/location::location.abbreviation'),
-                'label_attr' => ['class' => 'control-label'],
                 'attr' => [
                     'placeholder' => trans('plugins/location::location.abbreviation_placeholder'),
                     'data-counter' => 10,
                 ],
             ])
-            ->add('country_id', 'customSelect', [
+            ->add('country_id', SelectField::class, [
                 'label' => trans('plugins/location::state.country'),
-                'label_attr' => ['class' => 'control-label required'],
+                'required' => true,
                 'attr' => [
                     'class' => 'select-search-full',
                 ],
                 'choices' => [0 => trans('plugins/location::state.select_country')] + $countries,
             ])
-            ->add('order', 'number', [
-                'label' => trans('core/base::forms.order'),
-                'label_attr' => ['class' => 'control-label'],
-                'attr' => [
-                    'placeholder' => trans('core/base::forms.order_by_placeholder'),
-                ],
-                'default_value' => 0,
-            ])
-            ->add('is_default', 'onOff', [
-                'label' => trans('core/base::forms.is_default'),
-                'label_attr' => ['class' => 'control-label'],
-                'default_value' => false,
-            ])
-            ->add('status', 'customSelect', [
-                'label' => trans('core/base::tables.status'),
-                'label_attr' => ['class' => 'control-label required'],
-                'choices' => BaseStatusEnum::labels(),
-            ])
+            ->add('order', NumberField::class, SortOrderFieldOption::make())
+            ->add('is_default', OnOffField::class, IsDefaultFieldOption::make())
+            ->add('status', SelectField::class, StatusFieldOption::make())
+            ->add('image', MediaImageField::class, MediaImageFieldOption::make())
             ->setBreakFieldPoint('status');
     }
 }

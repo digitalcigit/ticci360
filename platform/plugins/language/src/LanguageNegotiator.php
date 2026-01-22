@@ -113,7 +113,7 @@ class LanguageNegotiator
                 $option = array_map('trim', explode(';', $option));
                 $la = $option[0];
                 if (isset($option[1])) {
-                    $qa = (float)str_replace('q=', '', $option[1]);
+                    $qa = (float) str_replace('q=', '', $option[1]);
                 } else {
                     $qa = null;
                     // Assign default low weight for generic values
@@ -130,7 +130,7 @@ class LanguageNegotiator
 
                 //If for some reason the Accept-Language header only sends language with country
                 //we should make the language without country an accepted option, with a value
-                //less than it's parent.
+                //less than its parent.
                 $lOps = explode('-', $la);
                 array_pop($lOps);
                 while (! empty($lOps)) {

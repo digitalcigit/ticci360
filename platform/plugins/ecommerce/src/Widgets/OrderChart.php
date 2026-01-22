@@ -2,8 +2,8 @@
 
 namespace Botble\Ecommerce\Widgets;
 
-use Botble\Ecommerce\Repositories\Interfaces\OrderInterface;
 use Botble\Base\Widgets\Chart;
+use Botble\Ecommerce\Models\Order;
 use Botble\Ecommerce\Widgets\Traits\HasCategory;
 
 class OrderChart extends Chart
@@ -19,11 +19,11 @@ class OrderChart extends Chart
 
     public function getOptions(): array
     {
-        $data = app(OrderInterface::class)
-            ->getModel()
+        $data = Order::query()
             ->selectRaw('count(id) as total, date_format(created_at, "' . $this->dateFormat . '") as period')
             ->whereDate('created_at', '>=', $this->startDate)
             ->whereDate('created_at', '<=', $this->endDate)
+            ->where('is_finished', true)
             ->groupBy('period')
             ->pluck('total', 'period')
             ->all();

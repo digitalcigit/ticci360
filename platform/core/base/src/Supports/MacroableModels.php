@@ -3,12 +3,13 @@
 namespace Botble\Base\Supports;
 
 use BadMethodCallException;
-use Botble\Base\Models\BaseModel;
+use Botble\Base\Facades\BaseHelper;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
+use ReflectionException;
 use ReflectionFunction;
 
 class MacroableModels
@@ -27,28 +28,31 @@ class MacroableModels
         if (! isset($this->macros[$name])) {
             $this->macros[$name] = [];
         }
+
         $this->macros[$name][$model] = $closure;
+
         $this->syncMacros($name);
     }
 
     protected function checkModelSubclass(string $model): void
     {
         if (! is_subclass_of($model, Model::class)) {
-            throw new InvalidArgumentException('$model must be a subclass of ' . Model::class);
+            throw new InvalidArgumentException(sprintf('%s must be a subclass of %s', $model, Model::class));
         }
     }
 
     protected function syncMacros(string $name): void
     {
-        $models = $this->macros[$name];
+        $models = $this->macros[$name] ?? [];
+
         Builder::macro($name, function (...$args) use ($name, $models) {
             /**
-             * @var BaseModel $this
+             * @var Builder $this
              */
-            $class = get_class($this->getModel());
+            $class = $this->getModel()::class;
 
             if (! isset($models[$class])) {
-                throw new BadMethodCallException("Call to undefined method $class::$name()");
+                throw new BadMethodCallException(sprintf('Call to undefined method %s::%s()', $class, $name));
             }
 
             $closure = Closure::bind($models[$class], $this->getModel());
@@ -70,9 +74,9 @@ class MacroableModels
             unset($this->macros[$name][$model]);
             if (count($this->macros[$name]) == 0) {
                 unset($this->macros[$name]);
-            } else {
-                $this->syncMacros($name);
             }
+
+            $this->syncMacros($name);
 
             return true;
         }
@@ -103,12 +107,19 @@ class MacroableModels
         $macros = [];
 
         foreach ($this->macros as $macro => $models) {
-            if (in_array($model, array_keys($models))) {
+            if (! in_array($model, array_keys($models))) {
+                continue;
+            }
+
+            try {
                 $params = (new ReflectionFunction($this->macros[$macro][$model]))->getParameters();
+
                 $macros[$macro] = [
                     'name' => $macro,
                     'parameters' => $params,
                 ];
+            } catch (ReflectionException $exception) {
+                BaseHelper::logError($exception);
             }
         }
 

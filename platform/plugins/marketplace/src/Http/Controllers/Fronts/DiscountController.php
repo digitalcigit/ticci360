@@ -2,49 +2,46 @@
 
 namespace Botble\Marketplace\Http\Controllers\Fronts;
 
-use Botble\Base\Facades\Assets;
 use Botble\Base\Events\CreatedContentEvent;
 use Botble\Base\Events\DeletedContentEvent;
-use Botble\Base\Facades\PageTitle;
+use Botble\Base\Facades\Assets;
 use Botble\Base\Http\Controllers\BaseController;
-use Botble\Base\Http\Responses\BaseHttpResponse;
-use Botble\Marketplace\Http\Requests\DiscountRequest;
 use Botble\Ecommerce\Models\Discount;
-use Botble\Ecommerce\Repositories\Interfaces\DiscountInterface;
+use Botble\JsValidation\Facades\JsValidator;
+use Botble\Marketplace\Facades\MarketplaceHelper;
+use Botble\Marketplace\Http\Requests\Fronts\DiscountRequest;
 use Botble\Marketplace\Tables\DiscountTable;
-use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use Botble\Marketplace\Facades\MarketplaceHelper;
 
 class DiscountController extends BaseController
 {
-    public function __construct(protected DiscountInterface $discountRepository)
-    {
-    }
-
     public function index(DiscountTable $table)
     {
-        PageTitle::setTitle(__('Coupons'));
+        $this->pageTitle(trans('plugins/ecommerce::discount.name'));
 
-        return $table->render(MarketplaceHelper::viewPath('dashboard.table.base'));
+        return $table->renderTable();
     }
 
     public function create()
     {
-        PageTitle::setTitle(__('Create coupon'));
+        $this->pageTitle(trans('plugins/ecommerce::discount.create'));
 
         Assets::addStylesDirectly(['vendor/core/plugins/ecommerce/css/ecommerce.css'])
             ->addScriptsDirectly([
                 'vendor/core/plugins/marketplace/js/discount.js',
             ])
-            ->addScripts(['timepicker', 'input-mask', 'blockui'])
+            ->addScripts(['timepicker', 'input-mask'])
             ->addStyles(['timepicker']);
 
         Assets::usingVueJS();
 
-        return MarketplaceHelper::view('dashboard.discounts.create');
+        Assets::addScripts(['form-validation']);
+
+        $jsValidation = JsValidator::formRequest(DiscountRequest::class, '#marketplace-vendor-discount');
+
+        return MarketplaceHelper::view('vendor-dashboard.discounts.create', compact('jsValidation'));
     }
 
     protected function getStore()
@@ -52,97 +49,60 @@ class DiscountController extends BaseController
         return auth('customer')->user()->store;
     }
 
-    public function store(DiscountRequest $request, BaseHttpResponse $response)
+    public function store(DiscountRequest $request)
     {
         $request->merge([
             'can_use_with_promotion' => 0,
+            'display_at_checkout' => false,
         ]);
 
         if ($request->input('is_unlimited')) {
             $request->merge(['quantity' => null]);
         }
 
-        $request->merge([
-            'start_date' => Carbon::parse($request->input('start_date') . ' ' . $request->input('start_time'))
-                ->toDateTimeString(),
-        ]);
+        $discount = new Discount();
 
-        if ($request->has('end_date') && ! $request->has('unlimited_time')) {
-            $request->merge([
-                'end_date' => Carbon::parse($request->input('end_date') . ' ' . $request->input('end_time'))
-                    ->toDateTimeString(),
-            ]);
-        } else {
-            $request->merge([
-                'end_date' => null,
-            ]);
-        }
-
-        /**
-         * @var Discount $discount
-         */
-        $discount = $this->discountRepository->createOrUpdate($request->input());
+        $discount->fill($request->input());
 
         $discount->store_id = $this->getStore()->id;
         $discount->save();
 
         event(new CreatedContentEvent(DISCOUNT_MODULE_SCREEN_NAME, $request, $discount));
 
-        return $response
+        return $this
+            ->httpResponse()
             ->setNextUrl(route('marketplace.vendor.discounts.index'))
-            ->setMessage(trans('core/base::notices.create_success_message'));
+            ->withCreatedSuccessMessage();
     }
 
-    public function destroy(int|string $id, Request $request, BaseHttpResponse $response)
+    public function destroy(Discount $discount, Request $request)
     {
-        try {
-            $discount = $this->discountRepository->findOrFail($id);
-            if ($discount->store_id != $this->getStore()->id) {
-                return $response
-                    ->setError();
-            }
+        abort_if($discount->store_id !== $this->getStore()->id, 403);
 
-            $this->discountRepository->delete($discount);
+        try {
+            $discount->delete();
 
             event(new DeletedContentEvent(DISCOUNT_MODULE_SCREEN_NAME, $request, $discount));
 
-            return $response->setMessage(trans('core/base::notices.delete_success_message'));
+            return $this
+                ->httpResponse()
+                ->setMessage(trans('core/base::notices.delete_success_message'));
         } catch (Exception $exception) {
-            return $response
+            return $this
+                ->httpResponse()
                 ->setError()
                 ->setMessage($exception->getMessage());
         }
     }
 
-    public function deletes(Request $request, BaseHttpResponse $response)
-    {
-        $ids = $request->input('ids');
-        if (empty($ids)) {
-            return $response
-                ->setError()
-                ->setMessage(trans('core/base::notices.no_select'));
-        }
-
-        foreach ($ids as $id) {
-            $discount = $this->discountRepository->findOrFail($id);
-
-            if ($discount->store_id != $this->getStore()->id) {
-                continue;
-            }
-
-            $this->discountRepository->delete($discount);
-            event(new DeletedContentEvent(DISCOUNT_MODULE_SCREEN_NAME, $request, $discount));
-        }
-
-        return $response->setMessage(trans('core/base::notices.delete_success_message'));
-    }
-
-    public function postGenerateCoupon(BaseHttpResponse $response)
+    public function postGenerateCoupon()
     {
         do {
             $code = strtoupper(Str::random(12));
-        } while ($this->discountRepository->count(['code' => $code]) > 0);
+        } while (Discount::query()->where('code', $code)->exists());
 
-        return $response->setData($code);
+        return $this
+            ->httpResponse()
+            ->setData($code);
     }
 }

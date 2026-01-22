@@ -2,11 +2,11 @@
 
 namespace Botble\Language\Commands;
 
-use Botble\Language\LanguageManager;
-use Illuminate\Foundation\Console\RouteCacheCommand as BaseRouteCacheCommand;
-use Botble\Language\Traits\TranslatedRouteCommandContext;
-use Illuminate\Routing\RouteCollection;
 use Botble\Language\Facades\Language;
+use Botble\Language\LanguageManager;
+use Botble\Language\Traits\TranslatedRouteCommandContext;
+use Illuminate\Foundation\Console\RouteCacheCommand as BaseRouteCacheCommand;
+use Illuminate\Routing\RouteCollection;
 
 class RouteCacheCommand extends BaseRouteCacheCommand
 {
@@ -32,32 +32,38 @@ class RouteCacheCommand extends BaseRouteCacheCommand
 
         $this->cacheRoutesPerLocale();
 
-        $this->info('Routes cached successfully for all locales!');
+        $this->components->info('Routes cached successfully for all locales!');
 
         return self::SUCCESS;
     }
 
     protected function cacheRoutesPerLocale(): int
     {
-        // Store the default routes cache,
-        // this way the Application will detect that routes are cached.
         $allLocales = $this->getSupportedLocales();
 
         $allLocales[] = null;
 
+        $defaultLocale = Language::getDefaultLocale();
+
+        $hideDefaultLocale = Language::hideDefaultLocaleInURL();
+
         foreach ($allLocales as $locale) {
-            if (Language::hideDefaultLocaleInURL() && $locale == Language::getDefaultLocale()) {
+            if ($hideDefaultLocale && $locale == $defaultLocale) {
                 continue;
             }
 
             $routes = $this->getFreshApplicationRoutesForLocale($locale);
 
-            if ($locale == null && Language::hideDefaultLocaleInURL()) {
-                $defaultRoutesWithPrefix = $this->getFreshApplicationRoutesForLocale(Language::getDefaultLocale(), true);
+            if ($locale == null && $hideDefaultLocale) {
+                $defaultRoutesWithPrefix = $this->getFreshApplicationRoutesForLocale($defaultLocale, true);
 
                 $newRoutes = new RouteCollection();
 
                 foreach ($defaultRoutesWithPrefix as $defaultRoutesWithPrefixItem) {
+                    if ($defaultRoutesWithPrefixItem->getName()) {
+                        $defaultRoutesWithPrefixItem->name($defaultLocale . '.' . $defaultRoutesWithPrefixItem->getName());
+                    }
+
                     $newRoutes->add($defaultRoutesWithPrefixItem);
                 }
 
@@ -87,19 +93,26 @@ class RouteCacheCommand extends BaseRouteCacheCommand
         return self::SUCCESS;
     }
 
-    protected function getFreshApplicationRoutesForLocale(string|null $locale = null, bool $force = false): RouteCollection
+    protected function getFreshApplicationRoutesForLocale(?string $locale = null, bool $force = false): RouteCollection
     {
-        if ($locale === null || (Language::hideDefaultLocaleInURL() && $locale == Language::getDefaultLocale() && ! $force)) {
+        if (
+            $locale === null ||
+            (Language::hideDefaultLocaleInURL() && $locale == Language::getDefaultLocale() && ! $force)
+        ) {
             return $this->getFreshApplicationRoutes();
         }
 
         $key = LanguageManager::ENV_ROUTE_KEY;
 
-        putenv("{$key}={$locale}");
+        if (function_exists('putenv')) {
+            putenv("{$key}={$locale}");
+        }
 
         $routes = $this->getFreshApplicationRoutes();
 
-        putenv("{$key}=");
+        if (function_exists('putenv')) {
+            putenv("{$key}=");
+        }
 
         return $routes;
     }
@@ -114,7 +127,7 @@ class RouteCacheCommand extends BaseRouteCacheCommand
                 '{{translatedRoutes}}',
             ],
             [
-                base64_encode(serialize($routes)),
+                var_export($routes->compile(), true),
                 $this->getLocalization()->getSerializedTranslatedRoutes(),
             ],
             $stub

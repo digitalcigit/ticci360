@@ -1,75 +1,145 @@
 @extends(EcommerceHelper::viewPath('customers.master'))
-@section('content')
-    @include('plugins/ecommerce::themes.customers.product-reviews.icons')
-    <div class="section-header">
-        <h3>{{ SeoHelper::getTitle() }}</h3>
-    </div>
-    <div class="section-content product-reviews-page">
-        <ul class="nav nav-tabs nav-fill" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link @if (! request()->has('page')) active @endif" id="waiting-tab"
-                    data-toggle="tab" data-target="#waiting-tab-pane" data-bs-toggle="tab" data-bs-target="#waiting-tab-pane" type="button"
-                    role="tab" aria-controls="waiting-tab-pane" aria-selected="true">{{ __('Waiting for your review') }} ({{ $products->count() }})</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link @if (request()->has('page')) active @endif" id="reviewed-tab"
-                    data-toggle="tab" data-target="#reviewed-tab-pane"
-                    data-bs-toggle="tab" data-bs-target="#reviewed-tab-pane" type="button"
-                    role="tab" aria-controls="reviewed-tab-pane" aria-selected="false">{{ __('Reviewed') }} ({{ $reviews->total() }})</button>
-            </li>
-        </ul>
 
-        <div class="tab-content border border-top-0 p-2">
-            <div class="tab-pane fade @if (! request()->has('page')) show active @endif" id="waiting-tab-pane" role="tabpanel" aria-labelledby="waiting-tab" tabindex="0">
-                @if ($products->count())
-                    <div class="row row-cols-md-3 row-cols-1 gx-2">
-                        @foreach ($products as $product)
-                            <div class="col mt-3 ecommerce-product-item" data-id="{{ $product->id }}">
-                                <div class="card mb-3 p-1">
-                                    <div class="row g-1">
-                                        <div class="col-md-4">
-                                            <img src="{{ RvMedia::getImageUrl($product->order_product_image ?: $product->image, 'thumb', false, RvMedia::getDefaultImage())}}"
-                                                class="img-fluid rounded-start ecommerce-product-image" alt="{{ $product->name }}">
+@section('title', SeoHelper::getTitle())
+
+@section('content')
+    <div class="bb-customer-content-wrapper">
+        @if($products->isNotEmpty() || $reviews->isNotEmpty())
+            @include(EcommerceHelper::viewPath('customers.product-reviews.icons'))
+
+            <div class="bb-customer-card-list product-reviews-cards">
+            {{-- Waiting for Review Card --}}
+            @if ($products->isNotEmpty())
+                <div class="bb-customer-card waiting-review-card">
+                    <div class="bb-customer-card-header">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="bg-warning bg-opacity-10 rounded-circle p-2">
+                                    <x-core::icon name="ti ti-clock" class="text-warning" />
+                                </div>
+                                <div>
+                                    <h3 class="bb-customer-card-title h5 mb-0">{{ trans('plugins/ecommerce::customer-dashboard.waiting_for_review') }}</h3>
+                                    <p class="text-muted small mb-0">{{ trans('plugins/ecommerce::customer-dashboard.share_experience_description') }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bb-customer-card-body">
+                        <div class="bb-customer-card-list">
+                            @foreach ($products as $product)
+                                <div class="bb-customer-card-content">
+                                    <div class="row align-items-center g-3">
+                                        <div class="col-auto">
+                                            <div class="bb-customer-card-image">
+                                                {{ RvMedia::image($product->order_product_image ?: $product->image, $product->name, 'thumb', true, ['class' => 'img-fluid rounded']) }}
+                                            </div>
                                         </div>
-                                        <div class="col-md-8">
-                                            <h6 class="card-title ecommerce-product-name">{{ $product->order_product_name ?: $product->name }}</h6>
-                                            @if ($product->order_completed_at)
-                                                <div class="text-secondary">
-                                                    <span>{{ __('Order completed at:') }}</span>
-                                                    <time>{{ Carbon\Carbon::parse($product->order_completed_at)->translatedFormat('M d, Y h:m') }}</time>
-                                                </div>
-                                            @endif
-                                        </div>
-                                        <div class="col-12">
-                                            <div class="d-flex ecommerce-product-star">
-                                                @for ($i = 5; $i >= 1; $i--)
-                                                    <label class="order-{{ $i }}">
-                                                        <span class="ecommerce-icon" data-star="{{ $i }}">
-                                                            <svg> 
-                                                                <use href="#ecommerce-icon-star" xlink:href="#ecommerce-icon-star"></use>
-                                                            </svg>
+                                        <div class="col">
+                                            <div class="bb-customer-card-details">
+                                                <h4 class="bb-customer-card-name h6 mb-1">
+                                                    <a href="{{ $product->url }}" class="text-decoration-none">
+                                                        {!! BaseHelper::clean($product->order_product_name ?: $product->name) !!}
+                                                    </a>
+                                                </h4>
+
+                                                @if ($product->order_completed_at)
+                                                    <div class="bb-customer-card-meta">
+                                                        <span class="text-muted small">
+                                                            <x-core::icon name="ti ti-calendar" class="me-1" />
+                                                            {{ trans('plugins/ecommerce::customer-dashboard.order_completed') }}:
+                                                            <time>{{ Carbon\Carbon::parse($product->order_completed_at)->translatedFormat('M d, Y') }}</time>
                                                         </span>
-                                                    </label>
-                                                @endfor
+                                                    </div>
+                                                @endif
+
+                                                <div class="bb-customer-card-actions mt-2">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <span class="text-muted small">{{ trans('plugins/ecommerce::customer-dashboard.rate_this_product') }}</span>
+                                                        <div class="d-flex ecommerce-product-star ecommerce-product-item" data-id="{{ $product->id }}">
+                                                            @for ($i = 5; $i >= 1; $i--)
+                                                                <label class="order-{{ $i }} cursor-pointer">
+                                                                    <x-core::icon name="ti ti-star-filled" class="ecommerce-icon text-warning" data-star="{{ $i }}" />
+                                                                </label>
+                                                            @endfor
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
+                                @if (!$loop->last)
+                                    <hr class="my-3">
+                                @endif
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+            @endif
+
+            {{-- Reviewed Products Card --}}
+            @if ($reviews->isNotEmpty())
+                <div class="bb-customer-card reviewed-products-card">
+                    <div class="bb-customer-card-header">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="bg-success bg-opacity-10 rounded-circle p-2">
+                                    <x-core::icon name="ti ti-star-filled" class="text-success" />
+                                </div>
+                                <div>
+                                    <h3 class="bb-customer-card-title h5 mb-0">{{ trans('plugins/ecommerce::customer-dashboard.your_reviews') }}</h3>
+                                    <p class="text-muted small mb-0">{{ trans('plugins/ecommerce::customer-dashboard.products_you_reviewed') }}</p>
+                                </div>
                             </div>
-                        @endforeach
+                        </div>
                     </div>
-                @else
-                    <div class="alert alert-info">
-                        <span>{{ __('You do not have any products to review yet. Just shopping!') }}</span>
+                    <div class="bb-customer-card-body">
+                        @include(EcommerceHelper::viewPath('customers.product-reviews.reviewed'))
                     </div>
-                @endif
+                </div>
+            @endif
+
+            {{-- Empty State for Waiting Reviews --}}
+            @if ($products->isEmpty() && $reviews->isNotEmpty())
+                <div class="bb-customer-card waiting-review-card">
+                    <div class="bb-customer-card-header">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="bg-secondary bg-opacity-10 rounded-circle p-2">
+                                <x-core::icon name="ti ti-clock" class="text-secondary" />
+                            </div>
+                            <div>
+                                <h3 class="bb-customer-card-title h5 mb-0">{{ trans('plugins/ecommerce::customer-dashboard.waiting_for_review') }}</h3>
+                                <p class="text-muted small mb-0">{{ trans('plugins/ecommerce::customer-dashboard.no_products_pending_review') }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bb-customer-card-body">
+                        <div class="text-center py-4">
+                            <div class="bg-info bg-opacity-10 rounded-circle p-3 d-inline-flex mb-3">
+                                <x-core::icon name="ti ti-shopping-bag" class="text-info" />
+                            </div>
+                            <h5 class="h6 mb-2">{{ trans('plugins/ecommerce::customer-dashboard.all_caught_up') }}</h5>
+                            <p class="text-muted small mb-3">
+                                {{ trans('plugins/ecommerce::customer-dashboard.no_products_waiting_review_description') }}
+                            </p>
+                            <a href="{{ route('public.products') }}" class="btn btn-outline-primary btn-sm">
+                                <x-core::icon name="ti ti-shopping-bag" class="me-1" />
+                                {{ trans('plugins/ecommerce::customer-dashboard.browse_products') }}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            @endif
             </div>
-            <div class="tab-pane fade @if (request()->has('page')) show active @endif" id="reviewed-tab-pane" role="tabpanel" aria-labelledby="reviewed-tab" tabindex="0">
-                @include('plugins/ecommerce::themes.customers.product-reviews.reviewed')
-            </div>
-        </div>
-        
-        @include('plugins/ecommerce::themes.customers.product-reviews.modal')
+
+            @include(EcommerceHelper::viewPath('customers.product-reviews.modal'))
+        @else
+            @include(EcommerceHelper::viewPath('customers.partials.empty-state'), [
+                'title' => trans('plugins/ecommerce::customer-dashboard.no_reviews_yet'),
+                'subtitle' => trans('plugins/ecommerce::customer-dashboard.start_shopping_and_review_description'),
+                'actionUrl' => route('public.products'),
+                'actionLabel' => trans('plugins/ecommerce::customer-dashboard.start_shopping'),
+            ])
+        @endif
     </div>
-    
 @endsection

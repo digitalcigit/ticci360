@@ -1,12 +1,21 @@
 @once
-    <li class="dropdown dropdown-extended dropdown-inbox">
-        <a href="{{ route('notifications.get-notification') }}" data-href="{{ route('notifications.update-notifications-count') }}" id="open-notification" class="dropdown-toggle dropdown-header-name">
-            <input type="hidden" value="1" class="current-page">
-            <i class="fas fa-bell"></i>
-            @if ($countNotificationUnread)
-                <span class="badge badge-default"> {{ $countNotificationUnread }} </span>
-            @endif
-        </a>
-    </li>
-@endonce
+    <div
+        class="offcanvas offcanvas-end"
+        tabindex="-1"
+        id="notification-sidebar"
+        aria-labelledby="notification-sidebar-label"
+        data-url="{{ route('notifications.index') }}"
+        data-count-url="{{ route('notifications.count-unread') }}"
+    >
+        <button
+            type="button"
+            class="btn-close text-reset"
+            data-bs-dismiss="offcanvas"
+            aria-label="Close"
+        ></button>
 
+        <div class="notification-content"></div>
+    </div>
+
+    <script src="{{ asset('vendor/core/core/base/js/notification.js') }}"></script>
+@endonce

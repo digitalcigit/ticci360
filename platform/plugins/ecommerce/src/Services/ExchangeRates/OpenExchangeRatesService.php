@@ -3,11 +3,11 @@
 namespace Botble\Ecommerce\Services\ExchangeRates;
 
 use Botble\Ecommerce\Facades\Currency;
-use Botble\Ecommerce\Repositories\Interfaces\CurrencyInterface;
+use Botble\Ecommerce\Models\Currency as CurrencyModel;
+use Exception;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-use Exception;
 
 class OpenExchangeRatesService implements ExchangeRateInterface
 {
@@ -16,6 +16,7 @@ class OpenExchangeRatesService implements ExchangeRateInterface
         if (! get_ecommerce_setting('open_exchange_app_id')) {
             throw new Exception(trans('plugins/ecommerce::currency.no_api_key'));
         }
+
         $rates = $this->cacheExchangeRates();
 
         $defaultCurrency = Currency::getDefaultCurrency();
@@ -24,16 +25,19 @@ class OpenExchangeRatesService implements ExchangeRateInterface
             $defaultCurrency->update(['exchange_rate' => 1]);
         }
 
-        $currencies = app(CurrencyInterface::class)
-            ->getModel()
+        $currencies = CurrencyModel::query()
             ->where('is_default', 0)
             ->get();
 
         foreach ($currencies as $currency) {
-            $currency->update(['exchange_rate' => number_format($rates[strtoupper($currency->title)], 8, '.', '')]);
+            if (! isset($rates[$currency->title])) {
+                continue;
+            }
+
+            $currency->update(['exchange_rate' => number_format($rates[$currency->title], 8, '.', '')]);
         }
 
-        return app(CurrencyInterface::class)->getAllCurrencies();
+        return CurrencyModel::query()->get();
     }
 
     public function cacheExchangeRates(): array
@@ -42,7 +46,7 @@ class OpenExchangeRatesService implements ExchangeRateInterface
         $currencies = Currency::currencies()->pluck('title')->all();
 
         $params = [
-            'base' => strtoupper($defaultCurrency->title),
+            'base' => $defaultCurrency->title,
         ];
 
         return Cache::remember('currency_exchange_rate', 86_400, function () use ($params, $currencies) {
@@ -64,7 +68,7 @@ class OpenExchangeRatesService implements ExchangeRateInterface
             ->get('latest.json?' . http_build_query($params));
 
         if ($response->failed()) {
-            throw new Exception($response->json()['description']);
+            throw new Exception($response->json('description') ?: $response->reason());
         }
 
         return $response->json();

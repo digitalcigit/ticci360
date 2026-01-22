@@ -2,12 +2,12 @@
 
 namespace Botble\Theme;
 
-use Botble\Theme\Contracts\Theme as ThemeContract;
-use Exception;
 use Botble\Base\Facades\Html;
+use Botble\Theme\Facades\Theme as ThemeFacade;
+use Exception;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
-use Botble\Theme\Facades\Theme as ThemeFacade;
+use Illuminate\Support\Str;
 
 class AssetContainer
 {
@@ -21,12 +21,12 @@ class AssetContainer
     {
     }
 
-    public function originUrl(string|null $uri): string
+    public function originUrl(?string $uri): string
     {
         return $this->configAssetUrl($uri);
     }
 
-    protected function configAssetUrl(string|null $path): string
+    protected function configAssetUrl(?string $path): string
     {
         return asset($path);
     }
@@ -34,16 +34,28 @@ class AssetContainer
     /**
      * Return asset path with current theme path.
      */
-    public function url(string|null $uri): string
+    public function url(?string $uri): string
     {
         // If path is full, so we just return.
         if (preg_match('#^http|//:#', $uri)) {
             return $uri;
         }
 
-        $path = $this->getCurrentPath() . $uri;
+        $uri = ltrim($uri, '/');
 
-        return $this->configAssetUrl($path);
+        $path = $this->getCurrentPath() . $uri;
+        $filePath = public_path($path);
+        $pathExtension = File::extension($path);
+
+        if (Str::contains($pathExtension, '?')) {
+            $filePath = str_replace($pathExtension, Str::before($pathExtension, '?'), $filePath);
+        }
+
+        if (File::exists($filePath)) {
+            return $this->configAssetUrl($path);
+        }
+
+        return $this->configAssetUrl($this->getInheritPath() . $uri);
     }
 
     /**
@@ -51,7 +63,31 @@ class AssetContainer
      */
     public function getCurrentPath(): string
     {
-        return Asset::$path;
+        $path = Asset::$path;
+
+        return $this->isInheritTheme() ? $this->getInheritPath() : $path;
+    }
+
+    public function getInheritPath(): string
+    {
+        $path = Asset::$path;
+        $inheritTheme = ThemeFacade::getInheritTheme();
+        $theme = ThemeFacade::getThemeName();
+
+        if (! $inheritTheme || $inheritTheme === $theme) {
+            return $path;
+        }
+
+        return str_replace(
+            '//',
+            '/',
+            str_replace($theme, $inheritTheme, $path)
+        );
+    }
+
+    public function isInheritTheme(): bool
+    {
+        return Asset::$isInheritTheme;
     }
 
     /**
@@ -77,7 +113,7 @@ class AssetContainer
         string|array $source,
         array $dependencies = [],
         array $attributes = [],
-        string|null $version = null
+        ?string $version = null
     ): self {
         if (is_array($source)) {
             foreach ($source as $path) {
@@ -124,7 +160,7 @@ class AssetContainer
         string|array $source,
         array $dependencies = [],
         array $attributes = [],
-        string|null $version = null
+        ?string $version = null
     ): self {
         return $this
             ->usePath()
@@ -270,21 +306,26 @@ class AssetContainer
      */
     protected function evaluatePath(string $source): string
     {
-        static $theme;
+        $currentTheme = $this->isInheritTheme()
+            ? ThemeFacade::getInheritTheme()
+            : ThemeFacade::getThemeName();
 
-        // Make theme to use few features.
-        if (! $theme) {
-            $theme = app(ThemeContract::class);
-        }
+        $isLocal = ! Str::startsWith($source, ['http://', 'https://']);
 
-        $currentTheme = ThemeFacade::getThemeName();
-
-        // Switch path to another theme.
-        if (! is_bool($this->usePath) && $theme->exists($this->usePath)) {
+        if (! is_bool($this->usePath) && ThemeFacade::exists($this->usePath)) {
             $source = str_replace($currentTheme, $this->usePath, $source);
         }
 
-        $publicThemeName = ThemeFacade::getPublicThemeName();
+        if (
+            ThemeFacade::hasInheritTheme()
+            && ! $this->isInheritTheme()
+            && $isLocal
+            && ! File::exists(public_path($source))
+        ) {
+            $source = str_replace($currentTheme, ThemeFacade::getInheritTheme(), $source);
+        }
+
+        $publicThemeName = $this->isInheritTheme() ? $currentTheme : ThemeFacade::getPublicThemeName();
 
         if ($publicThemeName != $currentTheme) {
             $source = str_replace($currentTheme, $publicThemeName, $source);
@@ -314,6 +355,10 @@ class AssetContainer
 
             // Reset using path.
             $this->usePath(false);
+        }
+
+        if ($name === 'jquery') {
+            $attributes['data-pagespeed-no-defer'] = true;
         }
 
         $this->register('script', $name, $source, $dependencies, $attributes);
@@ -436,7 +481,7 @@ class AssetContainer
     /**
      * Get the HTML link to a registered asset.
      */
-    protected function asset(string $group, string $name): string|null
+    protected function asset(string $group, string $name): ?string
     {
         if (! isset($this->assets[$group][$name])) {
             return '';
@@ -473,7 +518,7 @@ class AssetContainer
     /**
      * Render asset as HTML.
      */
-    public function html(string $group, string $source, array $attributes): string|null
+    public function html(string $group, string $source, array $attributes): ?string
     {
         switch ($group) {
             case 'script':
@@ -517,7 +562,7 @@ class AssetContainer
     /**
      * Build a single attribute element.
      */
-    protected function attributeElement(string $key, string|null $value): string|null
+    protected function attributeElement(string $key, ?string $value): ?string
     {
         if (is_numeric($key)) {
             return $value;
@@ -542,6 +587,11 @@ class AssetContainer
         }
 
         return $assets;
+    }
+
+    public function getAllAssets(): array
+    {
+        return $this->assets;
     }
 
     protected function assetUrl(string $group, string $name): string

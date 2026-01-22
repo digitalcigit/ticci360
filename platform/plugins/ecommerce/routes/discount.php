@@ -1,18 +1,13 @@
 <?php
 
-use Botble\Base\Facades\BaseHelper;
+use Botble\Base\Facades\AdminHelper;
+use Botble\Theme\Facades\Theme;
 use Illuminate\Support\Facades\Route;
 
-Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'middleware' => ['web', 'core']], function () {
-    Route::group(['prefix' => BaseHelper::getAdminPrefix(), 'middleware' => 'auth'], function () {
-        Route::group(['prefix' => 'discounts', 'as' => 'discounts.'], function () {
-            Route::resource('', 'DiscountController')->parameters(['' => 'discount'])->except(['edit', 'update']);
-
-            Route::delete('items/destroy', [
-                'as' => 'deletes',
-                'uses' => 'DiscountController@deletes',
-                'permission' => 'discounts.destroy',
-            ]);
+AdminHelper::registerRoutes(function (): void {
+    Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'prefix' => 'ecommerce'], function (): void {
+        Route::group(['prefix' => 'discounts', 'as' => 'discounts.'], function (): void {
+            Route::resource('', 'DiscountController')->parameters(['' => 'discount']);
 
             Route::post('generate-coupon', [
                 'as' => 'generate-coupon',
@@ -23,9 +18,9 @@ Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'middleware' =
     });
 });
 
-Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers\Fronts', 'middleware' => ['web', 'core']], function () {
-    Route::group(apply_filters(BASE_FILTER_GROUP_PUBLIC_ROUTE, []), function () {
-        Route::group(['prefix' => 'coupon', 'as' => 'public.coupon.'], function () {
+Theme::registerRoutes(function (): void {
+    Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers\Fronts'], function (): void {
+        Route::group(['prefix' => 'coupon', 'as' => 'public.coupon.'], function (): void {
             Route::post('apply', [
                 'as' => 'apply',
                 'uses' => 'PublicCheckoutController@postApplyCoupon',

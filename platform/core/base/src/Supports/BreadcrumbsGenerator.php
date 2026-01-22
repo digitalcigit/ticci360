@@ -13,7 +13,7 @@ class BreadcrumbsGenerator
 
     public function generate(array $callbacks, array $before, array $after, string $name, array $params): Collection
     {
-        $this->breadcrumbs = new Collection();
+        $this->breadcrumbs = collect();
         $this->callbacks = $callbacks;
 
         foreach ($before as $callback) {
@@ -43,8 +43,8 @@ class BreadcrumbsGenerator
         $this->call($name, $params);
     }
 
-    public function push(string $title, string $url = null, array $data = []): void
+    public function push(string $title, ?string $url = null, array $data = []): void
     {
-        $this->breadcrumbs->push((object)array_merge($data, compact('title', 'url')));
+        $this->breadcrumbs->push((object) array_merge($data, compact('title', 'url')));
     }
 }

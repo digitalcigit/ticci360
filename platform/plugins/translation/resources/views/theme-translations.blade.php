@@ -1,42 +1,58 @@
 @extends(BaseHelper::getAdminMasterLayoutTemplate())
+
 @section('content')
-    <div class="widget meta-boxes">
-        <div class="widget-title">
-            <h4>&nbsp; {{ trans('plugins/translation::translation.theme-translations') }}</h4>
-        </div>
-        <div class="widget-body box-translation" v-pre>
-            @if (count($groups) > 0 && $group)
-                <div class="row">
-                    <div class="col-md-6">
-                        <p>{{ trans('plugins/translation::translation.translate_from') }}
-                            <strong class="text-info">{{ $defaultLanguage ? $defaultLanguage['name'] : 'en' }}</strong>
-                            {{ trans('plugins/translation::translation.to') }}
-                            <strong class="text-info">{{ $group['name'] }}</strong>
-                        </p>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="text-end">
-                            @include('plugins/translation::partials.list-theme-languages-to-translate', compact('groups', 'group'))
-                        </div>
-                    </div>
+    <x-core::alert type="warning">
+        {{ trans('plugins/translation::translation.theme_translations_instruction') }}
+
+        <p class="mt-3 mb-0">
+            {!! BaseHelper::clean(trans('plugins/translation::translation.re_import_alert', [
+                'here' => Html::link('#', trans('plugins/translation::translation.here'), [
+                    'data-bs-toggle' => 'modal',
+                    'data-bs-target' => '#confirm-re-import-modal',
+                ]),
+            ])) !!}
+        </p>
+    </x-core::alert>
+
+    <div class="theme-translation">
+        <div class="row">
+            <div class="col-md-6">
+                <p>{{ trans('plugins/translation::translation.translate_from') }}
+                    <strong class="text-info">{{ $defaultLanguage ? $defaultLanguage['name'] : 'en' }}</strong>
+                    {{ trans('plugins/translation::translation.to') }}
+                    <strong class="text-info">{{ $group['name'] }}</strong>
+                </p>
+            </div>
+            <div class="col-md-6">
+                <div class="text-end">
+                    @include('plugins/translation::partials.list-theme-languages-to-translate', [
+                        'groups' => $groups,
+                        'group' => $group,
+                        'route' => 'translations.theme-translations',
+                    ])
                 </div>
-                <p class="note note-warning" style="margin-bottom: 65px;">{{ trans('plugins/translation::translation.theme_translations_instruction') }}</p>
-
-                {!! apply_filters('translation_theme_translation_header', null, $groups, $group) !!}
-
-                {!! $translationTable->renderTable() !!}
-                <br>
-
-                {!! Form::open(['role' => 'form', 'route' => 'translations.theme-translations.post', 'method' => 'POST']) !!}
-                    <input type="hidden" name="locale" value="{{ $group['locale'] }}">
-                    <div class="form-group mb-3">
-                        <button type="submit" class="btn btn-info button-save-theme-translations">{{ trans('core/base::forms.save') }}</button>
-                    </div>
-                {!! Form::close() !!}
-            @else
-                <p class="text-warning">{{ trans('plugins/translation::translation.no_other_languages') }}</p>
-            @endif
+            </div>
         </div>
-        <div class="clearfix"></div>
+
+        @if (count($groups) < 1)
+            <p class="text-warning">{{ trans('plugins/translation::translation.no_other_languages') }}</p>
+        @endif
+
+        @if (count($groups) > 0 && $group)
+            {!! apply_filters('translation_theme_translation_header', null, $groups, $group) !!}
+
+            {!! $translationTable->renderTable() !!}
+        @endif
     </div>
-@stop
+@endsection
+
+@push('footer')
+    <x-core::modal.action
+        id="confirm-re-import-modal"
+        :title="trans('plugins/translation::translation.import_translations')"
+        :description="trans('plugins/translation::translation.import_translations_description')"
+        type="warning"
+        :submit-button-attrs="['class' => 'button-re-import', 'data-url' => route('translations.theme-translations.re-import')]"
+        :submit-button-label="trans('core/base::base.yes')"
+    />
+@endpush

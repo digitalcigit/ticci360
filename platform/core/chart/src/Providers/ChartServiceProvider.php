@@ -2,8 +2,8 @@
 
 namespace Botble\Chart\Providers;
 
+use Botble\Base\Supports\ServiceProvider;
 use Botble\Base\Traits\LoadAndPublishDataTrait;
-use Illuminate\Support\ServiceProvider;
 
 class ChartServiceProvider extends ServiceProvider
 {
@@ -11,7 +11,8 @@ class ChartServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->setNamespace('core/chart')
+        $this
+            ->setNamespace('core/chart')
             ->loadAndPublishViews();
     }
 }

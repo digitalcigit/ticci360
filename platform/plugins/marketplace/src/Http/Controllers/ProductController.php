@@ -3,22 +3,29 @@
 namespace Botble\Marketplace\Http\Controllers;
 
 use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Base\Http\Controllers\BaseController;
-use Botble\Base\Http\Responses\BaseHttpResponse;
-use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
 use Botble\Base\Facades\EmailHandler;
+use Botble\Base\Http\Controllers\BaseController;
+use Botble\Ecommerce\Models\Product;
 use Botble\Marketplace\Facades\MarketplaceHelper;
 
 class ProductController extends BaseController
 {
-    public function approveProduct(int|string $id, ProductInterface $productRepository, BaseHttpResponse $response)
+    public function approveProduct(int|string $id)
     {
-        $product = $productRepository->findOrFail($id);
+        $product = Product::query()->findOrFail($id);
 
         $product->status = BaseStatusEnum::PUBLISHED;
         $product->approved_by = auth()->id();
 
         $product->save();
+
+        $variationProductIds = $product->variations()->pluck('product_id')->all();
+
+        if ($variationProductIds) {
+            Product::query()
+                ->whereIn('id', $variationProductIds)
+                ->update(['status' => BaseStatusEnum::PUBLISHED]);
+        }
 
         if (MarketplaceHelper::getSetting('enable_product_approval', 1)) {
             $store = $product->store;
@@ -30,6 +37,8 @@ class ProductController extends BaseController
                 ->sendUsingTemplate('product-approved', $store->email);
         }
 
-        return $response->setMessage(trans('plugins/marketplace::store.approve_product_success'));
+        return $this
+            ->httpResponse()
+            ->setMessage(trans('plugins/marketplace::store.approve_product_success'));
     }
 }

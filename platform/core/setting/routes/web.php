@@ -1,115 +1,220 @@
 <?php
 
-use Botble\Base\Facades\BaseHelper;
+use Botble\Base\Facades\AdminHelper;
+use Botble\Setting\Http\Controllers\EmailRuleSettingController;
 use Illuminate\Support\Facades\Route;
 
-Route::group(['namespace' => 'Botble\Setting\Http\Controllers', 'middleware' => ['web', 'core']], function () {
-    Route::group(['prefix' => BaseHelper::getAdminPrefix(), 'middleware' => 'auth'], function () {
-        Route::group(['prefix' => 'settings'], function () {
-            Route::get('general', [
-                'as' => 'settings.options',
-                'uses' => 'SettingController@getOptions',
-                'permission' => 'settings.options',
+Route::group(['namespace' => 'Botble\Setting\Http\Controllers'], function (): void {
+    AdminHelper::registerRoutes(function (): void {
+        Route::prefix('settings')->name('settings.')->group(function (): void {
+            Route::get('/', [
+                'as' => 'index',
+                'uses' => 'HomeSettingController@index',
             ]);
 
-            Route::post('general/edit', [
-                'as' => 'settings.edit',
-                'uses' => 'SettingController@postEdit',
-                'permission' => 'settings.options',
+            Route::get('options', [
+                'as' => 'options',
+                'uses' => 'HomeSettingController@index',
+                'permission' => 'settings.index',
             ]);
 
-            Route::get('media', [
-                'as' => 'settings.media',
-                'uses' => 'SettingController@getMediaSetting',
-            ]);
-
-            Route::post('media', [
-                'as' => 'settings.media.post',
-                'uses' => 'SettingController@postEditMediaSetting',
-                'permission' => 'settings.media',
-                'middleware' => 'preventDemo',
-            ]);
-
-            Route::post('media/generate-thumbnails', [
-                'as' => 'settings.media.generate-thumbnails',
-                'uses' => 'SettingController@generateThumbnails',
-                'permission' => 'settings.media',
-                'middleware' => 'preventDemo',
-            ]);
-
-            Route::get('license/verify', [
-                'as' => 'settings.license.verify',
-                'uses' => 'SettingController@getVerifyLicense',
-                'permission' => false,
-            ]);
-
-            Route::post('license/activate', [
-                'as' => 'settings.license.activate',
-                'uses' => 'SettingController@activateLicense',
-                'middleware' => 'preventDemo',
-                'permission' => 'core.manage.license',
-            ]);
-
-            Route::post('license/deactivate', [
-                'as' => 'settings.license.deactivate',
-                'uses' => 'SettingController@deactivateLicense',
-                'middleware' => 'preventDemo',
-                'permission' => 'core.manage.license',
-            ]);
-
-            Route::post('license/reset', [
-                'as' => 'settings.license.reset',
-                'uses' => 'SettingController@resetLicense',
-                'middleware' => 'preventDemo',
-                'permission' => 'core.manage.license',
-            ]);
-
-            Route::group(['prefix' => 'email', 'permission' => 'settings.email'], function () {
-                Route::get('', [
-                    'as' => 'settings.email',
-                    'uses' => 'SettingController@getEmailConfig',
+            Route::prefix('general')->group(function (): void {
+                Route::get('/', [
+                    'as' => 'general',
+                    'uses' => 'GeneralSettingController@edit',
+                    'permission' => 'settings.options',
                 ]);
 
-                Route::match(['POST', 'GET'], 'templates/preview/{type}/{module}/{template}', [
-                    'as' => 'setting.email.preview',
-                    'uses' => 'SettingController@previewEmailTemplate',
+                Route::put('/', [
+                    'as' => 'general.update',
+                    'uses' => 'GeneralSettingController@update',
+                    'permission' => 'settings.options',
+                ]);
+            });
+
+            Route::prefix('admin-appearance')->group(function (): void {
+                Route::get('/', [
+                    'as' => 'admin-appearance',
+                    'uses' => 'AdminAppearanceSettingController@index',
                 ]);
 
-                Route::get('templates/preview/{type}/{module}/{template}/iframe', [
-                    'as' => 'setting.email.preview.iframe',
-                    'uses' => 'SettingController@previewEmailTemplateIframe',
+                Route::put('/', [
+                    'as' => 'admin-appearance.update',
+                    'uses' => 'AdminAppearanceSettingController@update',
+                    'permission' => 'settings.admin-appearance',
+                ]);
+            });
+
+            Route::prefix('cache')->group(function (): void {
+                Route::get('/', [
+                    'as' => 'cache',
+                    'uses' => 'CacheSettingController@edit',
                 ]);
 
-                Route::post('edit', [
-                    'as' => 'settings.email.edit',
-                    'uses' => 'SettingController@postEditEmailConfig',
+                Route::put('cache', [
+                    'as' => 'cache.update',
+                    'uses' => 'CacheSettingController@update',
+                    'permission' => 'settings.cache',
+                ]);
+            });
+
+            Route::prefix('datatables')->group(function (): void {
+                Route::get('/', [
+                    'as' => 'datatables',
+                    'uses' => 'DataTableSettingController@edit',
                 ]);
 
-                Route::get('templates/edit/{type}/{module}/{template}', [
-                    'as' => 'setting.email.template.edit',
-                    'uses' => 'SettingController@getEditEmailTemplate',
+                Route::put('/', [
+                    'as' => 'datatables.update',
+                    'uses' => 'DataTableSettingController@update',
+                    'permission' => 'settings.datatables',
+                ]);
+            });
+
+            Route::prefix('media')->group(function (): void {
+                Route::get('/', [
+                    'as' => 'media',
+                    'uses' => 'MediaSettingController@edit',
                 ]);
 
-                Route::post('template/edit', [
-                    'as' => 'setting.email.template.store',
-                    'uses' => 'SettingController@postStoreEmailTemplate',
+                Route::put('/', [
+                    'as' => 'media.update',
+                    'uses' => 'MediaSettingController@update',
+                    'permission' => 'settings.media',
                     'middleware' => 'preventDemo',
                 ]);
 
-                Route::post('template/reset-to-default', [
-                    'as' => 'setting.email.template.reset-to-default',
-                    'uses' => 'SettingController@postResetToDefault',
+                Route::post('generate-thumbnails', [
+                    'as' => 'media.generate-thumbnails',
+                    'uses' => 'MediaSettingController@generateThumbnails',
+                    'permission' => 'settings.media',
                     'middleware' => 'preventDemo',
                 ]);
+            });
 
-                Route::post('status', [
-                    'as' => 'setting.email.status.change',
-                    'uses' => 'SettingController@postChangeEmailStatus',
+            Route::prefix('license')->name('license.')->group(function (): void {
+                /**
+                 * @deprecated
+                 */
+                Route::get('verify/old', [
+                    'as' => 'verify',
+                    'uses' => 'GeneralSettingController@getVerifyLicense',
+                    'permission' => false,
+                ]);
+
+                Route::get('verify', [
+                    'as' => 'verify.index',
+                    'uses' => 'GeneralSettingController@getVerifyLicense',
+                    'permission' => false,
+                ]);
+
+                Route::post('activate', [
+                    'as' => 'activate',
+                    'uses' => 'GeneralSettingController@activateLicense',
+                    'middleware' => 'preventDemo',
+                    'permission' => 'core.manage.license',
+                ]);
+
+                Route::post('deactivate', [
+                    'as' => 'deactivate',
+                    'uses' => 'GeneralSettingController@deactivateLicense',
+                    'middleware' => 'preventDemo',
+                    'permission' => 'core.manage.license',
+                ]);
+
+                Route::post('reset', [
+                    'as' => 'reset',
+                    'uses' => 'GeneralSettingController@resetLicense',
+                    'middleware' => 'preventDemo',
+                    'permission' => 'core.manage.license',
+                ]);
+            });
+
+            Route::group(['prefix' => 'email', 'permission' => 'settings.email'], function (): void {
+                Route::get('/', [
+                    'as' => 'email',
+                    'uses' => 'EmailSettingController@edit',
+                ]);
+
+                Route::put('/', [
+                    'as' => 'email.update',
+                    'uses' => 'EmailSettingController@update',
+                    'middleware' => 'preventDemo',
                 ]);
 
                 Route::post('test/send', [
-                    'as' => 'setting.email.send.test',
-                    'uses' => 'SettingController@postSendTestEmail',
+                    'as' => 'email.test.send',
+                    'uses' => 'EmailTestController@__invoke',
+                ]);
+
+                Route::prefix('templates')->name('email.')->group(function (): void {
+                    Route::get('/', [
+                        'as' => 'template',
+                        'uses' => 'EmailTemplateSettingController@index',
+                    ]);
+
+                    Route::put('', [
+                        'as' => 'template.update-settings',
+                        'uses' => 'EmailTemplateSettingController@update',
+                    ]);
+
+                    Route::prefix('{type}/{module}/{template}')->name('template.')->group(function (): void {
+                        Route::post('status', [
+                            'as' => 'status.update',
+                            'uses' => 'EmailTemplateStatusController@__invoke',
+                            'middleware' => 'preventDemo',
+                        ]);
+
+                        Route::get('edit', [
+                            'as' => 'edit',
+                            'uses' => 'EmailTemplateController@index',
+                        ]);
+
+                        Route::put('/', [
+                            'as' => 'update',
+                            'uses' => 'EmailTemplateController@update',
+                            'middleware' => 'preventDemo',
+                        ]);
+
+                        Route::post('restore', [
+                            'as' => 'restore',
+                            'uses' => 'EmailTemplateRestoreController@__invoke',
+                            'middleware' => 'preventDemo',
+                        ]);
+
+                        Route::match(['POST', 'GET'], 'preview', [
+                            'as' => 'preview',
+                            'uses' => 'EmailTemplatePreviewController@__invoke',
+                        ]);
+
+                        Route::get('iframe', [
+                            'as' => 'iframe',
+                            'uses' => 'EmailTemplateIframeController@__invoke',
+                        ]);
+                    });
+                });
+
+                Route::get('rules', [EmailRuleSettingController::class, 'edit'])
+                    ->name('email.rules');
+
+                Route::put('rules', [
+                    'as' => 'rules.update',
+                    'uses' => 'EmailRuleSettingController@update',
+                    'permission' => 'settings.email.rules',
+                ]);
+            });
+
+            Route::prefix('phone-number')->name('phone-number.')->group(function (): void {
+                Route::get('/', [
+                    'as' => 'index',
+                    'uses' => 'PhoneNumberSettingController@edit',
+                    'permission' => 'settings.phone-number',
+                ]);
+
+                Route::put('/', [
+                    'as' => 'update',
+                    'uses' => 'PhoneNumberSettingController@update',
+                    'permission' => 'settings.phone-number',
                 ]);
             });
         });

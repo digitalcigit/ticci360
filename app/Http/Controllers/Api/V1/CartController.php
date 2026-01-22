@@ -7,7 +7,7 @@ use Botble\Ecommerce\Facades\Cart;
 use Botble\Ecommerce\Facades\EcommerceHelper;
 use Botble\Ecommerce\Http\Requests\CartRequest;
 use Botble\Ecommerce\Http\Requests\UpdateCartRequest;
-use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
+use Botble\Ecommerce\Models\Product;
 use Botble\Ecommerce\Services\HandleApplyPromotionsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,10 +16,6 @@ use Botble\Ecommerce\Facades\OrderHelper;
 
 class CartController extends ApiController
 {
-    public function __construct(protected ProductInterface $productRepository)
-    {
-    }
-
     /**
      * Get cart details.
      *
@@ -80,7 +76,7 @@ class CartController extends ApiController
             return $this->error('Cart is disabled', 404);
         }
 
-        $product = $this->productRepository->findById($request->input('id'));
+        $product = Product::find($request->input('id'));
 
         if (! $product) {
             return $this->error('Product not found', 404);

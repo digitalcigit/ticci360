@@ -2,87 +2,243 @@
 
 namespace Botble\Base\Providers;
 
-use App\Http\Middleware\VerifyCsrfToken;
+use Botble\Base\Contracts\GlobalSearchableManager as GlobalSearchableManagerContract;
+use Botble\Base\Contracts\PanelSections\Manager;
 use Botble\Base\Exceptions\Handler;
+use Botble\Base\Facades\AdminAppearance;
+use Botble\Base\Facades\AdminHelper;
 use Botble\Base\Facades\BaseHelper;
+use Botble\Base\Facades\Breadcrumb as BreadcrumbFacade;
 use Botble\Base\Facades\DashboardMenu;
-use Botble\Base\Facades\MetaBox;
 use Botble\Base\Facades\PageTitle;
-use Botble\Base\Forms\Form;
-use Botble\Base\Forms\FormBuilder;
-use Botble\Base\Forms\FormHelper;
-use Botble\Base\Hooks\EmailSettingHooks;
-use Botble\Base\Http\Middleware\CoreMiddleware;
-use Botble\Base\Http\Middleware\DisableInDemoModeMiddleware;
-use Botble\Base\Http\Middleware\HttpsProtocolMiddleware;
-use Botble\Base\Http\Middleware\LocaleMiddleware;
-use Botble\Base\Models\AdminNotification;
-use Botble\Base\Models\MetaBox as MetaBoxModel;
-use Botble\Base\Repositories\Caches\MetaBoxCacheDecorator;
+use Botble\Base\Facades\PanelSectionManager as PanelSectionManagerFacade;
+use Botble\Base\GlobalSearch\GlobalSearchableManager;
+use Botble\Base\Models\BaseModel;
+use Botble\Base\PanelSections\Manager as PanelSectionManager;
+use Botble\Base\PanelSections\System\SystemPanelSection;
 use Botble\Base\Repositories\Eloquent\MetaBoxRepository;
 use Botble\Base\Repositories\Interfaces\MetaBoxInterface;
 use Botble\Base\Supports\Action;
-use Botble\Base\Supports\BreadcrumbsManager;
-use Botble\Base\Supports\Core;
+use Botble\Base\Supports\Breadcrumb;
 use Botble\Base\Supports\CustomResourceRegistrar;
+use Botble\Base\Supports\DashboardMenuItem;
 use Botble\Base\Supports\Database\Blueprint;
+use Botble\Base\Supports\EmailHandler;
 use Botble\Base\Supports\Filter;
 use Botble\Base\Supports\GoogleFonts;
 use Botble\Base\Supports\Helper;
+use Botble\Base\Supports\ServiceProvider;
 use Botble\Base\Traits\LoadAndPublishDataTrait;
 use Botble\Base\Widgets\AdminWidget;
 use Botble\Base\Widgets\Contracts\AdminWidget as AdminWidgetContract;
 use Botble\Setting\Providers\SettingServiceProvider;
 use Botble\Setting\Supports\SettingStore;
-use Botble\Support\Http\Middleware\BaseMiddleware;
 use DateTimeZone;
-use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Config\Repository;
 use Illuminate\Contracts\Debug\ExceptionHandler;
-use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Schema\Builder;
-use Illuminate\Filesystem\FilesystemManager;
 use Illuminate\Foundation\AliasLoader;
-use Illuminate\Foundation\Console\AboutCommand;
+use Illuminate\Foundation\Application;
 use Illuminate\Pagination\Paginator;
-use Illuminate\Routing\Events\RouteMatched;
 use Illuminate\Routing\ResourceRegistrar;
 use Illuminate\Routing\Route;
-use Illuminate\Routing\Router;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
-use Illuminate\Support\ServiceProvider;
-use Throwable;
+use Illuminate\Support\Str;
 
 class BaseServiceProvider extends ServiceProvider
 {
     use LoadAndPublishDataTrait;
 
-    protected bool $defer = true;
-
     public function register(): void
     {
-        $this->app->bind(ResourceRegistrar::class, function ($app) {
+        $this
+            ->setNamespace('core/base')
+            ->loadAndPublishConfigurations('general')
+            ->loadHelpers();
+
+        $this->app->instance('core.middleware', []);
+
+        config()->set(['session.cookie' => 'new_app_session']);
+
+        $this->app->bind(ResourceRegistrar::class, function (Application $app) {
             return new CustomResourceRegistrar($app['router']);
         });
-
-        $this->setNamespace('core/base')
-            ->loadHelpers()
-            ->loadAndPublishConfigurations(['general']);
 
         $this->app->register(SettingServiceProvider::class);
 
         $this->app->singleton(ExceptionHandler::class, Handler::class);
 
-        $this->app->singleton(BreadcrumbsManager::class, BreadcrumbsManager::class);
+        $this->app->singleton(Breadcrumb::class);
 
-        $this->app->bind(MetaBoxInterface::class, function () {
-            return new MetaBoxCacheDecorator(new MetaBoxRepository(new MetaBoxModel()));
+        $this->app->singleton(Manager::class, PanelSectionManager::class);
+
+        $this->app->singleton(GlobalSearchableManagerContract::class, GlobalSearchableManager::class);
+
+        $this->app->bind(MetaBoxInterface::class, MetaBoxRepository::class);
+
+        $this->app->singleton('core.action', Action::class);
+
+        $this->app->singleton('core.filter', Filter::class);
+
+        $this->app->singleton(AdminWidgetContract::class, AdminWidget::class);
+
+        $this->app->singleton('core.google-fonts', GoogleFonts::class);
+
+        $this->app->singleton(EmailHandler::class);
+
+        $this->registerRouteMacros();
+
+        $this->prepareAliasesIfMissing();
+
+        config()->set(['session.cookie' => Str::slug(config('core.base.general.session_cookie', 'botble_session'), '_')]);
+
+        $this->overrideDefaultConfigs();
+
+        Schema::defaultStringLength(191);
+    }
+
+    public function boot(): void
+    {
+        $this
+            ->loadAndPublishConfigurations(['assets'])
+            ->loadAndPublishConfigurations(['permissions'])
+            ->loadAndPublishViews()
+            ->loadAnonymousComponents()
+            ->loadAndPublishTranslations()
+            ->loadRoutes()
+            ->loadMigrations()
+            ->publishAssets();
+
+        $this->app['blade.compiler']->anonymousComponentPath($this->getViewsPath() . '/components', 'core');
+
+        $this->overridePackagesConfigs();
+
+        $this->app->booted(function (): void {
+            do_action(BASE_ACTION_INIT);
         });
 
-        $this->app['config']->set([
-            'session.cookie' => 'botble_session',
-            'ziggy.except' => ['debugbar.*'],
+        if (BaseHelper::isAdminRequest()) {
+            $this->registerDashboardMenus();
+            $this->registerPanelSections();
+        }
+
+        Paginator::useBootstrap();
+
+        $this->forceSSL();
+
+        $this->configureIni();
+
+        $this->app->extend('db.schema', function (Builder $schema) {
+            $schema->blueprintResolver(function ($table, $callback, $prefix) {
+                return new Blueprint($table, $callback, $prefix);
+            });
+
+            return $schema;
+        });
+    }
+
+    protected function registerDashboardMenus(): void
+    {
+        DashboardMenu::default()->beforeRetrieving(function (): void {
+            DashboardMenu::make()
+                ->registerItem(
+                    DashboardMenuItem::make()
+                        ->id('cms-core-system')
+                        ->priority(10000)
+                        ->name('core/base::layouts.platform_admin')
+                        ->icon('ti ti-user-shield')
+                        ->route('system.index')
+                        ->permission('core.system')
+                )
+                ->registerItem(
+                    DashboardMenuItem::make()
+                        ->id('cms-core-tools')
+                        ->priority(9000)
+                        ->name('core/base::layouts.tools')
+                        ->icon('ti ti-tool')
+                        ->permission('core.tools')
+                );
+        });
+    }
+
+    protected function registerPanelSections(): void
+    {
+        PanelSectionManagerFacade::group('system')->beforeRendering(function (): void {
+            PanelSectionManagerFacade::setGroupName(trans('core/base::layouts.platform_admin'))
+                ->register(SystemPanelSection::class);
+        });
+    }
+
+    protected function configureIni(): void
+    {
+        static $memoryLimit = null;
+        static $maxExecutionTime = null;
+
+        if ($memoryLimit === null) {
+            $memoryLimit = @ini_get('memory_limit');
+        }
+
+        $currentLimitInt = Helper::convertHrToBytes($memoryLimit);
+        $baseConfig = $this->getBaseConfig();
+        $configMemoryLimit = Arr::get($baseConfig, 'memory_limit');
+
+        if (! $configMemoryLimit) {
+            $configMemoryLimit = Helper::isIniValueChangeable('memory_limit') === false
+                ? $memoryLimit
+                : '256M';
+        }
+
+        $limitInt = Helper::convertHrToBytes($configMemoryLimit);
+        if ($currentLimitInt !== -1 && ($limitInt === -1 || $limitInt > $currentLimitInt)) {
+            BaseHelper::iniSet('memory_limit', $configMemoryLimit);
+        }
+
+        if ($maxExecutionTime === null) {
+            $maxExecutionTime = @ini_get('max_execution_time');
+        }
+
+        $configMaxExecutionTime = Arr::get($baseConfig, 'max_execution_time');
+        if ($maxExecutionTime < $configMaxExecutionTime) {
+            BaseHelper::iniSet('max_execution_time', $configMaxExecutionTime);
+        }
+    }
+
+    protected function getConfigValue(string $key, mixed $default = null): mixed
+    {
+        return config("core.base.general.{$key}", $default);
+    }
+
+    protected function forceSSL(): void
+    {
+        $forceUrl = $this->getConfigValue('force_root_url');
+        if (! empty($forceUrl)) {
+            URL::useOrigin($forceUrl);
+        }
+
+        $forceSchema = $this->getConfigValue('force_schema');
+        if (! empty($forceSchema)) {
+            $this->app['request']->server->set('HTTPS', 'on');
+            URL::forceScheme($forceSchema);
+        }
+    }
+
+    protected function getBaseConfig(): array
+    {
+        return $this->getConfig()->get('core.base.general', []);
+    }
+
+    protected function getConfig(): Repository
+    {
+        return $this->app['config'];
+    }
+
+    protected function overrideDefaultConfigs(): void
+    {
+        $config = $this->getConfig();
+
+        $config->set([
             'app.debug_blacklist' => [
                 '_ENV' => [
                     'APP_KEY',
@@ -110,162 +266,23 @@ class BaseServiceProvider extends ServiceProvider
                     'password',
                 ],
             ],
-            'datatables-buttons.pdf_generator' => 'excel',
-            'excel.exports.csv.use_bom' => true,
-            'dompdf.public_path' => public_path(),
-            'debugbar.enabled' => $this->app->hasDebugModeEnabled() && ! $this->app->runningInConsole(
-            ) && ! $this->app->environment(['testing', 'production']),
-            'laravel-form-builder.plain_form_class' => Form::class,
-            'laravel-form-builder.form_builder_class' => FormBuilder::class,
-            'laravel-form-builder.form_helper_class' => FormHelper::class,
-        ]);
-
-        $this->app->singleton('core:action', function () {
-            return new Action();
-        });
-
-        $this->app->singleton('core:filter', function () {
-            return new Filter();
-        });
-
-        $this->app->singleton(AdminWidgetContract::class, AdminWidget::class);
-
-        $this->app->singleton('core:google-fonts', function (Application $app) {
-            return new GoogleFonts(
-                filesystem: $app->make(FilesystemManager::class)->disk('public'),
-                path: 'fonts',
-                inline: true,
-                userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15',
-            );
-        });
-
-        Route::macro('wherePrimaryKey', function (array|string|null $name = 'id') {
-            if (! $name) {
-                $name = 'id';
-            }
-
-            /**
-             * @var Route $this
-             */
-            if (config('core.base.general.using_uuids_for_id')) {
-                return $this->whereUuid($name);
-            }
-
-            if (config('core.base.general.using_ulids_for_id')) {
-                return $this->whereUlid($name);
-            }
-
-            return $this->whereNumber($name);
-        });
-
-        $aliasLoader = AliasLoader::getInstance();
-
-        if (! class_exists('BaseHelper')) {
-            $aliasLoader->alias('BaseHelper', BaseHelper::class);
-            $aliasLoader->alias('DashboardMenu', DashboardMenu::class);
-            $aliasLoader->alias('PageTitle', PageTitle::class);
-        }
-    }
-
-    public function boot(): void
-    {
-        $this
-            ->loadAndPublishConfigurations(['permissions', 'assets'])
-            ->loadAndPublishViews()
-            ->loadAnonymousComponents()
-            ->loadAndPublishTranslations()
-            ->loadRoutes()
-            ->loadMigrations()
-            ->publishAssets();
-
-        Schema::defaultStringLength(191);
-
-        $config = $this->app['config'];
-
-        if (BaseHelper::hasDemoModeEnabled() || $config->get('core.base.general.disable_verify_csrf_token', false)) {
-            $this->app->instance(VerifyCsrfToken::class, new BaseMiddleware());
-        }
-
-        $this->app->booted(function () use ($config) {
-            do_action(BASE_ACTION_INIT);
-            add_action(BASE_ACTION_META_BOXES, [MetaBox::class, 'doMetaBoxes'], 8, 2);
-            add_filter(
-                BASE_FILTER_AFTER_SETTING_EMAIL_CONTENT,
-                [EmailSettingHooks::class, 'addEmailTemplateSettings'],
-                99
-            );
-
-            add_filter(BASE_FILTER_TOP_HEADER_LAYOUT, function ($options) {
-                try {
-                    $countNotificationUnread = AdminNotification::countUnread();
-                } catch (Throwable) {
-                    $countNotificationUnread = 0;
-                }
-
-                return $options . view('core/base::notification.notification', compact('countNotificationUnread'));
-            }, 99);
-
-            add_filter(BASE_FILTER_FOOTER_LAYOUT_TEMPLATE, function ($html) {
-                return $html . view('core/base::notification.notification-content');
-            }, 99);
-
-            $setting = $this->app[SettingStore::class];
-            $timezone = $setting->get('time_zone', $config->get('app.timezone'));
-            $locale = $setting->get('locale', $config->get('core.base.general.locale', $config->get('app.locale')));
-
-            $config->set([
-                'app.locale' => $locale,
-                'app.timezone' => $timezone,
-            ]);
-
-            $this->app->setLocale($locale);
-
-            if (in_array($timezone, DateTimeZone::listIdentifiers())) {
-                date_default_timezone_set($timezone);
-            }
-
-            $this->app->make(Schedule::class)->command('cms:cache:clear-expired')->everyFifteenMinutes();
-        });
-
-        $this->app['events']->listen(RouteMatched::class, function () {
-            $this->registerDefaultMenus();
-
-            /**
-             * @var Router $router
-             */
-            $router = $this->app['router'];
-
-            $router->pushMiddlewareToGroup('web', LocaleMiddleware::class);
-            $router->pushMiddlewareToGroup('web', HttpsProtocolMiddleware::class);
-            $router->aliasMiddleware('preventDemo', DisableInDemoModeMiddleware::class);
-            $router->middlewareGroup('core', [CoreMiddleware::class]);
-        });
-
-        Paginator::useBootstrap();
-
-        $baseConfig = $config->get('core.base.general', []);
-
-        $forceUrl = Arr::get($baseConfig, 'force_root_url');
-        if (! empty($forceUrl)) {
-            URL::forceRootUrl($forceUrl);
-        }
-
-        $forceSchema = Arr::get($baseConfig, 'force_schema');
-        if (! empty($forceSchema)) {
-            $this->app['request']->server->set('HTTPS', 'on');
-
-            URL::forceScheme($forceSchema);
-        }
-
-        $this->configureIni();
-
-        $config->set([
-            'purifier.settings' => array_merge(
-                $config->get('purifier.settings', []),
-                Arr::get($baseConfig, 'purifier', [])
-            ),
-            'laravel-form-builder.defaults.wrapper_class' => 'form-group mb-3',
-            'database.connections.mysql.strict' => Arr::get($baseConfig, 'db_strict_mode'),
+            'debugbar.enabled' => $this->app->hasDebugModeEnabled() &&
+                ! $this->app->runningInConsole() &&
+                ! $this->app->environment(['testing', 'production']),
+            'debugbar.capture_ajax' => false,
+            'debugbar.remote_sites_path' => '',
+            'scribe.type' => 'static',
+            'scribe.assets_directory' => 'vendor/core/packages/api',
+            'scribe.routes' => [
+                [
+                    'match' => [
+                        'prefixes' => ['api/*'],
+                        'domains' => ['*'],
+                    ],
+                    'include' => [],
+                    'exclude' => [],
+                ],
+            ],
         ]);
 
         if (
@@ -280,108 +297,147 @@ class BaseServiceProvider extends ServiceProvider
                 ],
             ]);
         }
-
-        if ($this->app->runningInConsole()) {
-            AboutCommand::add('Core Information', fn () => [
-                'CMS Version' => get_cms_version(),
-                'Core Version' => get_core_version(),
-            ]);
-        }
-
-        $this->app->extend('db.schema', function (Builder $schema) {
-            $schema->blueprintResolver(function ($table, $callback, $prefix) {
-                return new Blueprint($table, $callback, $prefix);
-            });
-
-            return $schema;
-        });
-
-        $this->app->resolving(Core::class, function () {
-            require_once __DIR__ . '/../Supports/Core.php';
-        });
     }
 
-    /**
-     * Add default dashboard menu for core
-     */
-    public function registerDefaultMenus(): void
+    protected function overridePackagesConfigs(): void
     {
-        DashboardMenu::registerItem([
-            'id' => 'cms-core-platform-administration',
-            'priority' => 999,
-            'parent_id' => null,
-            'name' => 'core/base::layouts.platform_admin',
-            'icon' => 'fa fa-user-shield',
-            'url' => null,
-            'permissions' => ['users.index'],
-        ])
-            ->registerItem([
-                'id' => 'cms-core-system-information',
-                'priority' => 5,
-                'parent_id' => 'cms-core-platform-administration',
-                'name' => 'core/base::system.info.title',
-                'icon' => null,
-                'url' => route('system.info'),
-                'permissions' => [ACL_ROLE_SUPER_USER],
-            ])
-            ->registerItem([
-                'id' => 'cms-core-system-cache',
-                'priority' => 6,
-                'parent_id' => 'cms-core-platform-administration',
-                'name' => 'core/base::cache.cache_management',
-                'icon' => null,
-                'url' => route('system.cache'),
-                'permissions' => [ACL_ROLE_SUPER_USER],
-            ]);
+        $config = $this->getConfig();
 
-        if (! config('core.base.general.hide_cleanup_system_menu', false)) {
-            DashboardMenu::registerItem([
-                'id' => 'cms-core-system-cleanup',
-                'priority' => 999,
-                'parent_id' => 'cms-core-platform-administration',
-                'name' => 'core/base::system.cleanup.title',
-                'icon' => null,
-                'url' => route('system.cleanup'),
-                'permissions' => [ACL_ROLE_SUPER_USER],
-            ]);
+        $baseConfig = $this->getBaseConfig();
+
+        /**
+         * @var SettingStore $setting
+         */
+        $setting = $this->app[SettingStore::class];
+
+        $cacheKey = 'core.base.boot_settings';
+        $bootSettings = cache()->remember($cacheKey, 3600, function () use ($setting, $config) {
+            return [
+                'timezone' => $setting->get('time_zone', $config->get('app.timezone')),
+                'locale' => $setting->get('locale', $config->get('app.locale')),
+            ];
+        });
+
+        $timezone = $bootSettings['timezone'];
+        $locale = $bootSettings['locale'];
+
+        $this->app->setLocale($locale);
+
+        if (in_array($timezone, DateTimeZone::listIdentifiers())) {
+            date_default_timezone_set($timezone);
         }
 
-        if (config('core.base.general.enable_system_updater')) {
-            DashboardMenu::registerItem([
-                'id' => 'cms-core-system-updater',
-                'priority' => 999,
-                'parent_id' => 'cms-core-platform-administration',
-                'name' => 'core/base::system.updater',
-                'icon' => null,
-                'url' => route('system.updater'),
-                'permissions' => [ACL_ROLE_SUPER_USER],
-            ]);
-        }
-    }
+        if ($iframeRegex = Arr::get($baseConfig, 'iframe_regex')) {
+            $baseConfig['purifier']['default']['URI.SafeIframeRegexp'] = $iframeRegex;
+        } else {
+            $allowedIframeUrls = [
+                'www.youtube.com/embed/',
+                'player.vimeo.com/video/',
+                'maps.google.com/maps',
+                'www.google.com/maps|docs.google.com/',
+                'drive.google.com/',
+                'view.officeapps.live.com/op/embed.aspx',
+                'onedrive.live.com/embed',
+                'open.spotify.com/embed',
+                'www.googletagmanager.com',
+                'www.facebook.com/plugins',
+                'tiktok.com/embed',
+                parse_url($config->get('app.url'), PHP_URL_HOST),
+            ];
 
-    protected function configureIni(): void
-    {
-        $currentLimit = ini_get('memory_limit');
-        $currentLimitInt = Helper::convertHrToBytes($currentLimit);
+            if ($extraUrl = Arr::get($baseConfig, 'allowed_iframe_urls', [])) {
+                $extraUrls = array_map(
+                    fn ($url) => preg_replace('#^https?://(www\.)?#', '', trim($url)),
+                    explode('|', $extraUrl)
+                );
 
-        $memoryLimit = $this->app['config']->get('core.base.general.memory_limit');
-
-        if (! $memoryLimit) {
-            if (false === Helper::isIniValueChangeable('memory_limit')) {
-                $memoryLimit = $currentLimit;
-            } else {
-                $memoryLimit = '128M';
+                $allowedIframeUrls = [
+                    ...$allowedIframeUrls,
+                    ...$extraUrls,
+                ];
             }
+
+            $allowedIframeUrls = implode('|', apply_filters('core_allowed_iframe_urls', $allowedIframeUrls));
+
+            $baseConfig['purifier']['default']['URI.SafeIframeRegexp'] = '%^(http://|https://|//)(' . $allowedIframeUrls . ')%';
         }
 
-        $limitInt = Helper::convertHrToBytes($memoryLimit);
-        if (-1 !== $currentLimitInt && (-1 === $limitInt || $limitInt > $currentLimitInt)) {
-            BaseHelper::iniSet('memory_limit', $memoryLimit);
-        }
+        $config->set([
+            'app.locale' => $locale,
+            'app.timezone' => $timezone,
+            'purifier.settings' => [
+                ...$config->get('purifier.settings', []),
+                ...Arr::get($baseConfig, 'purifier', []),
+            ],
+            'ziggy.except' => ['debugbar.*'],
+            'datatables-buttons.pdf_generator' => 'excel',
+            'datatables-html.script' => 'core/table::script',
+            'datatables-html.editor' => 'core/table::editor',
+            'excel.exports.csv.use_bom' => true,
+            'dompdf.public_path' => public_path(),
+            'database.connections.mysql.strict' => Arr::get($baseConfig, 'db_strict_mode'),
+            'database.connections.mysql.prefix' => Arr::get($baseConfig, 'db_prefix'),
+            'excel.imports.ignore_empty' => true,
+            'excel.imports.csv.input_encoding' => Arr::get($baseConfig, 'csv_import_input_encoding', 'UTF-8'),
+        ]);
     }
 
-    public function provides(): array
+    protected function registerRouteMacros(): void
     {
-        return [BreadcrumbsManager::class];
+        Route::macro('wherePrimaryKey', function (array|string|null $name = 'id') {
+            if (! $name) {
+                $name = 'id';
+            }
+
+            /**
+             * @var Route $this
+             */
+            if (BaseModel::determineIfUsingUuidsForId()) {
+                return $this->whereUuid($name);
+            }
+
+            if (BaseModel::determineIfUsingUlidsForId()) {
+                return $this->whereUlid($name);
+            }
+
+            return $this->whereNumber($name);
+        });
+
+        Route::macro('permission', function (array|string|bool|null $value) {
+            /**
+             * @var Route $this
+             */
+            $action = $this->getAction();
+            Arr::set($action, 'permission', $value);
+
+            return $this->setAction($action);
+        });
+    }
+
+    protected function prepareAliasesIfMissing(): void
+    {
+        $aliasLoader = AliasLoader::getInstance();
+
+        if (! class_exists('BaseHelper')) {
+            $aliasLoader->alias('BaseHelper', BaseHelper::class);
+            $aliasLoader->alias('DashboardMenu', DashboardMenu::class);
+            $aliasLoader->alias('PageTitle', PageTitle::class);
+        }
+
+        if (! class_exists('Breadcrumb')) {
+            $aliasLoader->alias('Breadcrumb', BreadcrumbFacade::class);
+        }
+
+        if (! class_exists('PanelSectionManager')) {
+            $aliasLoader->alias('PanelSectionManager', PanelSectionManagerFacade::class);
+        }
+
+        if (! class_exists('AdminAppearance')) {
+            $aliasLoader->alias('AdminAppearance', AdminAppearance::class);
+        }
+
+        if (! class_exists('AdminHelper')) {
+            $aliasLoader->alias('AdminHelper', AdminHelper::class);
+        }
     }
 }

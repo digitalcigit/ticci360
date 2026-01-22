@@ -2,62 +2,40 @@
 
 namespace Botble\Ecommerce\Tables;
 
-use Botble\Base\Facades\BaseHelper;
 use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Ecommerce\Repositories\Interfaces\TaxInterface;
+use Botble\Ecommerce\Models\Tax;
 use Botble\Table\Abstracts\TableAbstract;
-use Botble\Base\Facades\Html;
-use Illuminate\Contracts\Routing\UrlGenerator;
+use Botble\Table\Actions\DeleteAction;
+use Botble\Table\Actions\EditAction;
+use Botble\Table\BulkActions\DeleteBulkAction;
+use Botble\Table\Columns\Column;
+use Botble\Table\Columns\CreatedAtColumn;
+use Botble\Table\Columns\IdColumn;
+use Botble\Table\Columns\NameColumn;
+use Botble\Table\Columns\StatusColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Auth;
-use Botble\Table\DataTables;
 
 class TaxTable extends TableAbstract
 {
-    protected $hasActions = true;
-
-    protected $hasFilter = true;
-
-    public function __construct(DataTables $table, UrlGenerator $urlGenerator, TaxInterface $taxRepository)
+    public function setup(): void
     {
-        parent::__construct($table, $urlGenerator);
-
-        $this->repository = $taxRepository;
-
-        if (! Auth::user()->hasAnyPermission(['tax.edit', 'tax.destroy'])) {
-            $this->hasOperations = false;
-            $this->hasActions = false;
-        }
+        $this
+            ->model(Tax::class)
+            ->addActions([
+                EditAction::make()->route('tax.edit'),
+                DeleteAction::make()->route('tax.destroy'),
+            ]);
     }
 
     public function ajax(): JsonResponse
     {
         $data = $this->table
             ->eloquent($this->query())
-            ->editColumn('title', function ($item) {
-                if (! Auth::user()->hasPermission('tax.edit')) {
-                    return BaseHelper::clean($item->title);
-                }
-
-                return Html::link(route('tax.edit', $item->id), BaseHelper::clean($item->title));
-            })
-            ->editColumn('percentage', function ($item) {
-                return $item->percentage . '%';
-            })
-            ->editColumn('checkbox', function ($item) {
-                return $this->getCheckbox($item->id);
-            })
-            ->editColumn('status', function ($item) {
-                return BaseHelper::clean($item->status->toHtml());
-            })
-            ->editColumn('created_at', function ($item) {
-                return BaseHelper::formatDate($item->created_at);
-            })
-            ->addColumn('operations', function ($item) {
-                return $this->getOperations('tax.edit', 'tax.destroy', $item);
+            ->editColumn('percentage', function (Tax $item) {
+                return ($item->percentage + 0) . '%';
             });
 
         return $this->toJson($data);
@@ -65,14 +43,18 @@ class TaxTable extends TableAbstract
 
     public function query(): Relation|Builder|QueryBuilder
     {
-        $query = $this->repository->getModel()->select([
-            'id',
-            'title',
-            'percentage',
-            'priority',
-            'status',
-            'created_at',
-        ]);
+        $query = $this
+            ->getModel()
+            ->query()
+            ->select([
+                'id',
+                'title',
+                'percentage',
+                'priority',
+                'status',
+                'created_at',
+            ])
+            ->withCount(['rules']);
 
         return $this->applyScopes($query);
     }
@@ -80,32 +62,18 @@ class TaxTable extends TableAbstract
     public function columns(): array
     {
         return [
-            'id' => [
-                'title' => trans('core/base::tables.id'),
-                'width' => '20px',
-                'class' => 'text-start',
-            ],
-            'title' => [
-                'title' => trans('core/base::tables.name'),
-                'class' => 'text-start',
-            ],
-            'percentage' => [
-                'title' => trans('plugins/ecommerce::tax.percentage'),
-                'class' => 'text-center',
-            ],
-            'priority' => [
-                'title' => trans('plugins/ecommerce::tax.priority'),
-                'class' => 'text-center',
-            ],
-            'status' => [
-                'title' => trans('core/base::tables.status'),
-                'class' => 'text-center',
-            ],
-            'created_at' => [
-                'title' => trans('core/base::tables.created_at'),
-                'width' => '100px',
-                'class' => 'text-start',
-            ],
+            IdColumn::make(),
+            NameColumn::make('title')->route('tax.edit'),
+            Column::make('percentage')
+                ->title(trans('plugins/ecommerce::tax.percentage')),
+            Column::make('priority')
+                ->title(trans('plugins/ecommerce::tax.priority')),
+            Column::make('rules_count')
+                ->title(trans('plugins/ecommerce::tax.rules'))
+                ->searchable(false)
+                ->orderable(false),
+            StatusColumn::make(),
+            CreatedAtColumn::make(),
         ];
     }
 
@@ -116,7 +84,9 @@ class TaxTable extends TableAbstract
 
     public function bulkActions(): array
     {
-        return $this->addDeleteAction(route('tax.deletes'), 'tax.destroy', parent::bulkActions());
+        return [
+            DeleteBulkAction::make()->permission('tax.destroy'),
+        ];
     }
 
     public function getBulkChanges(): array

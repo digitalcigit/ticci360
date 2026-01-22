@@ -2,8 +2,9 @@
 
 namespace Botble\ACL\Models;
 
-use Illuminate\Support\Facades\Auth;
 use Botble\Base\Models\BaseModel;
+use Botble\Support\Services\Cache\Cache;
+use Illuminate\Support\Facades\Auth;
 
 class UserMeta extends BaseModel
 {
@@ -18,10 +19,10 @@ class UserMeta extends BaseModel
     public static function setMeta(string $key, $value = null, int|string $userId = 0): bool
     {
         if ($userId == 0) {
-            $userId = Auth::id();
+            $userId = Auth::guard()->id();
         }
 
-        $meta = self::firstOrCreate([
+        $meta = self::query()->firstOrCreate([
             'user_id' => $userId,
             'key' => $key,
         ]);
@@ -29,21 +30,35 @@ class UserMeta extends BaseModel
         return $meta->update(['value' => $value]);
     }
 
-    public static function getMeta(string $key, $default = null, int|string $userId = 0): string|null
+    public static function getMeta(string $key, $default = null, int|string $userId = 0): ?string
     {
         if ($userId == 0) {
-            $userId = Auth::id();
+            $userId = Auth::guard()->id();
         }
 
-        $meta = self::where([
-            'user_id' => $userId,
-            'key' => $key,
-        ])->select('value')->first();
+        $meta = self::query()
+            ->where([
+                'user_id' => $userId,
+                'key' => $key,
+            ])
+            ->select('value')
+            ->first();
 
         if (! empty($meta)) {
             return $meta->value;
         }
 
         return $default;
+    }
+
+    protected static function booted(): void
+    {
+        static::saved(function (): void {
+            Cache::make(static::class)->flush();
+        });
+
+        static::deleted(function (): void {
+            Cache::make(static::class)->flush();
+        });
     }
 }

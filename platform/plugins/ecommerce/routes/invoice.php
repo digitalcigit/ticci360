@@ -1,26 +1,20 @@
 <?php
 
-use Botble\Base\Facades\BaseHelper;
+use Botble\Base\Facades\AdminHelper;
 use Illuminate\Support\Facades\Route;
 
-Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'middleware' => ['web', 'core']], function () {
-    Route::group(['prefix' => BaseHelper::getAdminPrefix(), 'middleware' => 'auth'], function () {
-        Route::group(['prefix' => 'ecommerce/invoices', 'as' => 'ecommerce.invoice.'], function () {
+AdminHelper::registerRoutes(function (): void {
+    Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'prefix' => 'ecommerce'], function (): void {
+        Route::group(['prefix' => 'invoices', 'as' => 'ecommerce.invoice.'], function (): void {
             Route::resource('', 'InvoiceController')
                 ->parameters(['' => 'invoice'])
                 ->except(['create', 'store', 'update']);
 
-            Route::delete('items/destroy', [
-                'as' => 'deletes',
-                'uses' => 'InvoiceController@deletes',
-                'permission' => 'ecommerce.invoice.destroy',
-            ]);
-
-            Route::get('generate-invoice/{id}', [
+            Route::get('generate-invoice/{invoice}', [
                 'as' => 'generate-invoice',
                 'uses' => 'InvoiceController@getGenerateInvoice',
                 'permission' => 'ecommerce.invoice.edit',
-            ])->wherePrimaryKey();
+            ])->wherePrimaryKey('invoice');
 
             Route::get('generate-invoices', [
                 'as' => 'generate-invoices',

@@ -9,7 +9,8 @@ class CreateShipmentRequest extends Request
     public function rules(): array
     {
         return [
-            'method' => 'required|string',
+            'method' => ['required', 'string'],
+            'store_id' => ['nullable', 'exists:ec_store_locators,id'],
         ];
     }
 }

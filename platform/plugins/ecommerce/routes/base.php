@@ -1,26 +1,22 @@
 <?php
 
-use Botble\Base\Facades\BaseHelper;
-use Botble\Ecommerce\Models\Brand;
-use Botble\Ecommerce\Models\Product;
-use Botble\Ecommerce\Models\ProductCategory;
-use Botble\Ecommerce\Models\ProductTag;
-use Botble\Slug\Facades\SlugHelper;
+use Botble\Base\Facades\AdminHelper;
+use Botble\Base\Http\Middleware\RequiresJsonRequestMiddleware;
+use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Ecommerce\Http\Controllers\ExportProductCategoryController;
+use Botble\Ecommerce\Http\Controllers\Fronts\GuestPaymentProofController;
+use Botble\Ecommerce\Http\Controllers\Fronts\PublicUpdateCheckoutController;
+use Botble\Ecommerce\Http\Controllers\Fronts\PublicUpdateTaxCheckoutController;
+use Botble\Ecommerce\Http\Controllers\Fronts\QuickShopController;
+use Botble\Ecommerce\Http\Controllers\Fronts\QuickViewController;
+use Botble\Ecommerce\Http\Controllers\ImportProductCategoryController;
+use Botble\Ecommerce\Http\Controllers\OrderExportController;
+use Botble\Theme\Events\ThemeRoutingBeforeEvent;
+use Botble\Theme\Facades\Theme;
 use Illuminate\Support\Facades\Route;
 
-Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'middleware' => ['web', 'core']], function () {
-    Route::group(['prefix' => BaseHelper::getAdminPrefix() . '/ecommerce', 'middleware' => 'auth'], function () {
-        Route::get('settings', [
-            'as' => 'ecommerce.settings',
-            'uses' => 'EcommerceController@getSettings',
-        ]);
-
-        Route::post('settings', [
-            'as' => 'ecommerce.settings.post',
-            'uses' => 'EcommerceController@postSettings',
-            'permission' => 'ecommerce.settings',
-        ]);
-
+AdminHelper::registerRoutes(function (): void {
+    Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'prefix' => 'ecommerce'], function (): void {
         Route::post('update-currencies-from-exchange-api', [
             'as' => 'ecommerce.setting.update-currencies-from-exchange-api',
             'uses' => 'EcommerceController@updateCurrenciesFromExchangeApi',
@@ -33,30 +29,6 @@ Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'middleware' =
             'permission' => 'ecommerce.settings',
         ]);
 
-        Route::get('advanced-settings', [
-            'as' => 'ecommerce.advanced-settings',
-            'uses' => 'EcommerceController@getAdvancedSettings',
-            'permission' => 'ecommerce.settings',
-        ]);
-
-        Route::post('advanced-settings', [
-            'as' => 'ecommerce.advanced-settings.post',
-            'uses' => 'EcommerceController@postAdvancedSettings',
-            'permission' => 'ecommerce.settings',
-        ]);
-
-        Route::get('tracking-settings', [
-            'as' => 'ecommerce.tracking-settings',
-            'uses' => 'EcommerceController@getTrackingSettings',
-            'permission' => 'ecommerce.settings',
-        ]);
-
-        Route::post('tracking-settings', [
-            'as' => 'ecommerce.tracking-settings.post',
-            'uses' => 'EcommerceController@postTrackingSettings',
-            'permission' => 'ecommerce.settings',
-        ]);
-
         Route::get('ajax/countries', [
             'as' => 'ajax.countries.list',
             'uses' => 'EcommerceController@ajaxGetCountries',
@@ -65,42 +37,42 @@ Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'middleware' =
 
         Route::get('store-locators/form/{id?}', [
             'as' => 'ecommerce.store-locators.form',
-            'uses' => 'EcommerceController@getStoreLocatorForm',
+            'uses' => 'StoreLocatorController@edit',
             'permission' => 'ecommerce.settings',
         ]);
 
-        Route::post('store-locators/edit/{id}', [
+        Route::post('store-locators/edit/{locator}', [
             'as' => 'ecommerce.store-locators.edit.post',
-            'uses' => 'EcommerceController@postUpdateStoreLocator',
+            'uses' => 'StoreLocatorController@update',
             'permission' => 'ecommerce.settings',
         ])->wherePrimaryKey();
 
         Route::post('store-locators/create', [
             'as' => 'ecommerce.store-locators.create',
-            'uses' => 'EcommerceController@postCreateStoreLocator',
+            'uses' => 'StoreLocatorController@store',
             'permission' => 'ecommerce.settings',
         ]);
 
-        Route::post('store-locators/delete/{id}', [
+        Route::post('store-locators/delete/{locator}', [
             'as' => 'ecommerce.store-locators.destroy',
-            'uses' => 'EcommerceController@postDeleteStoreLocator',
+            'uses' => 'StoreLocatorController@destroy',
             'permission' => 'ecommerce.settings',
         ])->wherePrimaryKey();
 
         Route::post('store-locators/update-primary-store', [
             'as' => 'ecommerce.store-locators.update-primary-store',
-            'uses' => 'EcommerceController@postUpdatePrimaryStore',
+            'uses' => 'ChangePrimaryStoreController@__invoke',
             'permission' => 'ecommerce.settings',
         ]);
 
-        Route::group(['prefix' => 'product-categories', 'as' => 'product-categories.'], function () {
+        Route::group(['prefix' => 'product-categories', 'as' => 'product-categories.'], function (): void {
             Route::resource('', 'ProductCategoryController')
                 ->parameters(['' => 'product_category']);
 
-            Route::delete('items/destroy', [
-                'as' => 'deletes',
-                'uses' => 'ProductCategoryController@deletes',
-                'permission' => 'product-categories.destroy',
+            Route::put('update-tree', [
+                'as' => 'update-tree',
+                'uses' => 'ProductCategoryController@updateTree',
+                'permission' => 'product-categories.edit',
             ]);
 
             Route::get('search', [
@@ -108,16 +80,17 @@ Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'middleware' =
                 'uses' => 'ProductCategoryController@getSearch',
                 'permission' => 'product-categories.index',
             ]);
+
+            Route::get('get-list-product-categories-for-select', [
+                'as' => 'get-list-product-categories-for-select',
+                'uses' => 'ProductCategoryController@getListForSelect',
+                'permission' => 'product-categories.index',
+            ]);
         });
 
-        Route::group(['prefix' => 'product-tags', 'as' => 'product-tag.'], function () {
+        Route::group(['prefix' => 'product-tags', 'as' => 'product-tag.'], function (): void {
             Route::resource('', 'ProductTagController')
                 ->parameters(['' => 'product-tag']);
-            Route::delete('items/destroy', [
-                'as' => 'deletes',
-                'uses' => 'ProductTagController@deletes',
-                'permission' => 'product-tag.destroy',
-            ]);
 
             Route::get('all', [
                 'as' => 'all',
@@ -126,13 +99,8 @@ Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'middleware' =
             ]);
         });
 
-        Route::group(['prefix' => 'options', 'as' => 'global-option.'], function () {
+        Route::group(['prefix' => 'options', 'as' => 'global-option.'], function (): void {
             Route::resource('', 'ProductOptionController')->parameters(['' => 'option']);
-            Route::delete('items/destroy', [
-                'as' => 'deletes',
-                'uses' => 'ProductOptionController@deletes',
-                'permission' => 'global-options.destroy',
-            ]);
 
             Route::get('ajax', [
                 'as' => 'ajaxInfo',
@@ -141,172 +109,170 @@ Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'middleware' =
             ]);
         });
 
-        Route::group(['prefix' => 'brands', 'as' => 'brands.'], function () {
+        Route::group(['prefix' => 'brands', 'as' => 'brands.'], function (): void {
             Route::resource('', 'BrandController')
                 ->parameters(['' => 'brand']);
 
-            Route::delete('items/destroy', [
-                'as' => 'deletes',
-                'uses' => 'BrandController@deletes',
-                'permission' => 'brands.destroy',
+            Route::get('search', [
+                'as' => 'search',
+                'uses' => 'BrandController@getSearch',
+                'permission' => 'brands.index',
             ]);
         });
 
-        Route::group(['prefix' => 'product-collections', 'as' => 'product-collections.'], function () {
+        Route::group(['prefix' => 'product-collections', 'as' => 'product-collections.'], function (): void {
             Route::resource('', 'ProductCollectionController')
                 ->parameters(['' => 'product_collection']);
-
-            Route::delete('items/destroy', [
-                'as' => 'deletes',
-                'uses' => 'ProductCollectionController@deletes',
-                'permission' => 'product-collections.destroy',
-            ]);
 
             Route::get('get-list-product-collections-for-select', [
                 'as' => 'get-list-product-collections-for-select',
                 'uses' => 'ProductCollectionController@getListForSelect',
                 'permission' => 'product-collections.index',
             ]);
+
+            Route::get('get-product-collection/{productCollection?}', [
+                'as' => 'get-product-collection',
+                'uses' => 'ProductCollectionController@getProductCollection',
+                'permission' => 'product-collections.edit',
+            ])->wherePrimaryKey();
         });
 
-        Route::group(['prefix' => 'product-attribute-sets', 'as' => 'product-attribute-sets.'], function () {
+        Route::group(['prefix' => 'product-attribute-sets', 'as' => 'product-attribute-sets.'], function (): void {
             Route::resource('', 'ProductAttributeSetsController')
                 ->parameters(['' => 'product_attribute_set']);
-
-            Route::delete('items/destroy', [
-                'as' => 'deletes',
-                'uses' => 'ProductAttributeSetsController@deletes',
-                'permission' => 'product-attribute-sets.destroy',
-            ]);
         });
 
-        Route::group(['prefix' => 'reports'], function () {
+        Route::group(['prefix' => 'reports', 'as' => 'ecommerce.report.'], function (): void {
             Route::get('', [
-                'as' => 'ecommerce.report.index',
+                'as' => 'index',
                 'uses' => 'ReportController@getIndex',
             ]);
 
             Route::post('top-selling-products', [
-                'as' => 'ecommerce.report.top-selling-products',
+                'as' => 'top-selling-products',
                 'uses' => 'ReportController@getTopSellingProducts',
                 'permission' => 'ecommerce.report.index',
             ]);
 
             Route::post('recent-orders', [
-                'as' => 'ecommerce.report.recent-orders',
+                'as' => 'recent-orders',
                 'uses' => 'ReportController@getRecentOrders',
                 'permission' => 'ecommerce.report.index',
             ]);
 
             Route::post('trending-products', [
-                'as' => 'ecommerce.report.trending-products',
+                'as' => 'trending-products',
                 'uses' => 'ReportController@getTrendingProducts',
                 'permission' => 'ecommerce.report.index',
             ]);
 
             Route::get('dashboard-general-report', [
-                'as' => 'ecommerce.report.dashboard-widget.general',
+                'as' => 'dashboard-widget.general',
                 'uses' => 'ReportController@getDashboardWidgetGeneral',
                 'permission' => 'ecommerce.report.index',
             ]);
-        });
 
-        Route::group(['prefix' => 'flash-sales', 'as' => 'flash-sale.'], function () {
-            Route::resource('', 'FlashSaleController')->parameters(['' => 'flash-sale']);
-            Route::delete('items/destroy', [
-                'as' => 'deletes',
-                'uses' => 'FlashSaleController@deletes',
-                'permission' => 'flash-sale.destroy',
-            ]);
-        });
-
-        Route::group(['prefix' => 'product-labels', 'as' => 'product-label.'], function () {
-            Route::resource('', 'ProductLabelController')->parameters(['' => 'product-label']);
-            Route::delete('items/destroy', [
-                'as' => 'deletes',
-                'uses' => 'ProductLabelController@deletes',
-                'permission' => 'product-label.destroy',
-            ]);
-        });
-
-        Route::group(['prefix' => 'import', 'as' => 'ecommerce.import.'], function () {
-            Route::group(['prefix' => 'products', 'as' => 'products.'], function () {
-                Route::get('/', [
+            Route::group(['prefix' => 'widget-config', 'as' => 'widget-config.'], function (): void {
+                Route::get('', [
                     'as' => 'index',
-                    'uses' => 'BulkImportController@index',
+                    'uses' => 'ReportWidgetConfigController@index',
+                    'permission' => 'ecommerce.report.index',
                 ]);
 
-                Route::post('/', [
-                    'as' => 'index.post',
-                    'uses' => 'BulkImportController@postImport',
-                    'permission' => 'ecommerce.import.products.index',
+                Route::post('save', [
+                    'as' => 'save',
+                    'uses' => 'ReportWidgetConfigController@store',
+                    'permission' => 'ecommerce.report.index',
                 ]);
 
-                Route::post('/download-template', [
-                    'as' => 'download-template',
-                    'uses' => 'BulkImportController@downloadTemplate',
-                    'permission' => 'ecommerce.import.products.index',
+                Route::get('get', [
+                    'as' => 'get',
+                    'uses' => 'ReportWidgetConfigController@getConfiguration',
+                    'permission' => 'ecommerce.report.index',
                 ]);
             });
         });
 
-        Route::group(['prefix' => 'export', 'as' => 'ecommerce.export.'], function () {
-            Route::group(['prefix' => 'products', 'as' => 'products.'], function () {
-                Route::get('/', [
-                    'as' => 'index',
-                    'uses' => 'ExportController@products',
-                ]);
+        Route::group(['prefix' => 'flash-sales', 'as' => 'flash-sale.'], function (): void {
+            Route::resource('', 'FlashSaleController')->parameters(['' => 'flash-sale']);
+        });
 
-                Route::post('/', [
-                    'as' => 'index.post',
-                    'uses' => 'ExportController@exportProducts',
-                    'permission' => 'ecommerce.export.products.index',
-                ]);
+        Route::group(['prefix' => 'product-labels', 'as' => 'product-label.'], function (): void {
+            Route::resource('', 'ProductLabelController')->parameters(['' => 'product-label']);
+        });
+    });
+
+    Route::prefix('tools/data-synchronize')->name('tools.data-synchronize.')->group(function (): void {
+        Route::prefix('export')->name('export.')->group(function (): void {
+            Route::group(['prefix' => 'product-categories', 'as' => 'product-categories.', 'permission' => 'product-categories.export'], function (): void {
+                Route::get('/', [ExportProductCategoryController::class, 'index'])->name('index');
+                Route::post('/', [ExportProductCategoryController::class, 'store'])->name('store');
+            });
+
+            Route::group(['prefix' => 'orders', 'as' => 'orders.', 'permission' => 'orders.export'], function (): void {
+                Route::get('/', [OrderExportController::class, 'index'])->name('index');
+                Route::post('/', [OrderExportController::class, 'store'])->name('store');
+            });
+        });
+
+        Route::prefix('import')->name('import.')->group(function (): void {
+            Route::group(['prefix' => 'product-categories', 'as' => 'product-categories.', 'permission' => 'product-categories.import'], function (): void {
+                Route::get('/', [ImportProductCategoryController::class, 'index'])->name('index');
+                Route::post('/', [ImportProductCategoryController::class, 'import'])->name('store');
+                Route::post('validate', [ImportProductCategoryController::class, 'validateData'])->name('validate');
+                Route::post('download-example', [ImportProductCategoryController::class, 'downloadExample'])->name('download-example');
             });
         });
     });
 });
 
-Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers\Fronts', 'middleware' => ['web', 'core']], function () {
-    Route::group(apply_filters(BASE_FILTER_GROUP_PUBLIC_ROUTE, []), function () {
-        Route::get(SlugHelper::getPrefix(Product::class, 'products'), [
-            'uses' => 'PublicProductController@getProducts',
-            'as' => 'public.products',
-        ]);
+Theme::registerRoutes(function (): void {
+    app('events')->listen(ThemeRoutingBeforeEvent::class, function (): void {
+        Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers\Fronts'], function (): void {
+            Route::get(EcommerceHelper::getPageSlug('product_listing'), [
+                'uses' => 'PublicProductController@getProducts',
+                'as' => 'public.products',
+            ]);
 
-        Route::get(SlugHelper::getPrefix(Brand::class, 'brands') . '/{slug}', [
-            'uses' => 'PublicProductController@getBrand',
-            'as' => 'public.brand',
-        ]);
+            Route::get('currency/switch/{code?}', [
+                'as' => 'public.change-currency',
+                'uses' => 'PublicEcommerceController@changeCurrency',
+            ]);
 
-        Route::get(SlugHelper::getPrefix(Product::class, 'products') . '/{slug}', [
-            'uses' => 'PublicProductController@getProduct',
-            'as' => 'public.product',
-        ]);
+            Route::get('product-variation/{id}', [
+                'as' => 'public.web.get-variation-by-attributes',
+                'uses' => 'PublicProductController@getProductVariation',
+            ])->wherePrimaryKey();
 
-        Route::get(SlugHelper::getPrefix(ProductCategory::class, 'product-categories') . '/{slug}', [
-            'uses' => 'PublicProductController@getProductCategory',
-            'as' => 'public.product-category',
-        ]);
+            Route::get(EcommerceHelper::getPageSlug('order_tracking'), [
+                'as' => 'public.orders.tracking',
+                'uses' => 'PublicProductController@getOrderTracking',
+            ])->wherePrimaryKey();
 
-        Route::get(SlugHelper::getPrefix(ProductTag::class, 'product-tags') . '/{slug}', [
-            'uses' => 'PublicProductController@getProductTag',
-            'as' => 'public.product-tag',
-        ]);
+            Route::get('ajax/quick-view/{id?}', [QuickViewController::class, 'show'])
+                ->middleware(RequiresJsonRequestMiddleware::class)
+                ->name('public.ajax.quick-view')
+                ->wherePrimaryKey();
 
-        Route::get('currency/switch/{code?}', [
-            'as' => 'public.change-currency',
-            'uses' => 'PublicEcommerceController@changeCurrency',
-        ]);
+            Route::get('ajax/quick-shop/{slug}', [QuickShopController::class, 'show'])
+                ->middleware(RequiresJsonRequestMiddleware::class)
+                ->name('public.ajax.quick-shop')
+                ->wherePrimaryKey();
 
-        Route::get('product-variation/{id}', [
-            'as' => 'public.web.get-variation-by-attributes',
-            'uses' => 'PublicProductController@getProductVariation',
-        ])->wherePrimaryKey();
+            Route::post('ajax/checkout/update', [PublicUpdateCheckoutController::class, '__invoke'])
+                ->middleware(RequiresJsonRequestMiddleware::class)
+                ->name('public.ajax.checkout.update');
 
-        Route::get('orders/tracking', [
-            'as' => 'public.orders.tracking',
-            'uses' => 'PublicProductController@getOrderTracking',
-        ])->wherePrimaryKey();
+            Route::post('ajax/checkout/update-tax', [PublicUpdateTaxCheckoutController::class, '__invoke'])
+                ->middleware(RequiresJsonRequestMiddleware::class)
+                ->name('public.ajax.checkout.update-tax');
+
+            Route::group(['prefix' => 'orders/payment-proof'], function (): void {
+                Route::post('{token}/upload', [GuestPaymentProofController::class, 'upload'])
+                    ->name('public.orders.upload-proof-guest');
+                Route::get('{token}/download', [GuestPaymentProofController::class, 'download'])
+                    ->name('public.orders.download-proof-guest');
+            });
+        });
     });
 });

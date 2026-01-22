@@ -2,76 +2,106 @@
 
 namespace Botble\Ecommerce\Forms;
 
-use Botble\Base\Enums\BaseStatusEnum;
+use Botble\Base\Forms\FieldOptions\ContentFieldOption;
+use Botble\Base\Forms\FieldOptions\CoreIconFieldOption;
+use Botble\Base\Forms\FieldOptions\MediaImageFieldOption;
+use Botble\Base\Forms\FieldOptions\NameFieldOption;
+use Botble\Base\Forms\FieldOptions\OnOffFieldOption;
+use Botble\Base\Forms\FieldOptions\SelectFieldOption;
+use Botble\Base\Forms\FieldOptions\StatusFieldOption;
+use Botble\Base\Forms\FieldOptions\TextFieldOption;
+use Botble\Base\Forms\Fields\CoreIconField;
+use Botble\Base\Forms\Fields\EditorField;
+use Botble\Base\Forms\Fields\MediaImageField;
+use Botble\Base\Forms\Fields\OnOffField;
+use Botble\Base\Forms\Fields\SelectField;
+use Botble\Base\Forms\Fields\TextField;
 use Botble\Base\Forms\FormAbstract;
+use Botble\Ecommerce\Facades\ProductCategoryHelper;
 use Botble\Ecommerce\Http\Requests\ProductCategoryRequest;
 use Botble\Ecommerce\Models\ProductCategory;
-use Botble\Ecommerce\Repositories\Interfaces\ProductCategoryInterface;
-use Botble\Ecommerce\Facades\ProductCategoryHelper;
+use Botble\Support\Services\Cache\Cache;
+use Carbon\Carbon;
 
 class ProductCategoryForm extends FormAbstract
 {
-    public function buildForm(): void
+    public function setup(): void
     {
-        $categories = ProductCategoryHelper::getProductCategoriesWithIndentName();
-        $categories = [0 => trans('plugins/ecommerce::product-categories.none')] + $categories;
+        $cache = Cache::make(ProductCategory::class);
 
-        $maxOrder = app(ProductCategoryInterface::class)->getModel()
+        $cacheKey = 'ecommerce_categories_for_rendering_parent_select' . md5($cache->generateCacheKeyFromInput() . serialize(func_get_args()));
+
+        if ($cache->has($cacheKey) && ($cachedCategories = $cache->get($cacheKey))) {
+            $categories = $cachedCategories;
+        } else {
+            $categories = ProductCategoryHelper::getTreeCategoriesOptions(
+                ProductCategoryHelper::getTreeCategories(false, [
+                    'id',
+                    'name',
+                    'parent_id',
+                    'status',
+                    'order',
+                ])
+            );
+
+            $categories = [0 => trans('plugins/ecommerce::product-categories.none')] + $categories;
+
+            $cache->put($cacheKey, $categories, Carbon::now()->addHours(2));
+        }
+
+        $maxOrder = ProductCategory::query()
             ->whereIn('parent_id', [0, null])
-            ->orderBy('order', 'DESC')
+            ->latest('order')
             ->value('order');
 
         $this
-            ->setupModel(new ProductCategory())
+            ->model(ProductCategory::class)
             ->setValidatorClass(ProductCategoryRequest::class)
-            ->withCustomFields()
-            ->add('name', 'text', [
-                'label' => trans('core/base::forms.name'),
-                'label_attr' => ['class' => 'control-label required'],
-                'attr' => [
-                    'placeholder' => trans('core/base::forms.name_placeholder'),
-                    'data-counter' => 120,
+            ->add(
+                'order',
+                'hidden',
+                TextFieldOption::make()
+                    ->value($this->getModel()->exists ? $this->getModel()->order : $maxOrder + 1)
+            )
+            ->add('name', TextField::class, NameFieldOption::make())
+            ->add(
+                'parent_id',
+                SelectField::class,
+                SelectFieldOption::make()
+                    ->label(trans('core/base::forms.parent'))
+                    ->choices($categories)
+                    ->searchable()
+            )
+            ->add(
+                'description',
+                EditorField::class,
+                ContentFieldOption::make()
+                    ->label(trans('core/base::forms.description'))
+                    ->allowedShortcodes()
+            )
+            ->add('status', SelectField::class, StatusFieldOption::make())
+            ->add('image', MediaImageField::class, MediaImageFieldOption::make())
+            ->add(
+                'icon',
+                CoreIconField::class,
+                CoreIconFieldOption::make()
+            )
+            ->add('icon_image', MediaImageField::class, [
+                'label' => __('Icon image'),
+                'help_block' => [
+                    'text' => __('It will replace Icon Font if it is present.'),
+                ],
+                'wrapper' => [
+                    'style' => 'display: block;',
                 ],
             ])
-            ->add('parent_id', 'customSelect', [
-                'label' => trans('core/base::forms.parent'),
-                'label_attr' => ['class' => 'control-label required'],
-                'attr' => [
-                    'class' => 'select-search-full',
-                ],
-                'choices' => $categories,
-            ])
-            ->add('description', 'editor', [
-                'label' => trans('core/base::forms.description'),
-                'label_attr' => ['class' => 'control-label'],
-                'attr' => [
-                    'rows' => 4,
-                    'placeholder' => trans('core/base::forms.description_placeholder'),
-                    'data-counter' => 500,
-                ],
-            ])
-            ->add('order', 'number', [
-                'label' => trans('core/base::forms.order'),
-                'label_attr' => ['class' => 'control-label'],
-                'attr' => [
-                    'placeholder' => trans('core/base::forms.order_by_placeholder'),
-                ],
-                'default_value' => $maxOrder + 1,
-            ])
-            ->add('status', 'customSelect', [
-                'label' => trans('core/base::tables.status'),
-                'label_attr' => ['class' => 'control-label required'],
-                'choices' => BaseStatusEnum::labels(),
-            ])
-            ->add('image', 'mediaImage', [
-                'label' => trans('core/base::forms.image'),
-                'label_attr' => ['class' => 'control-label'],
-            ])
-            ->add('is_featured', 'onOff', [
-                'label' => trans('core/base::forms.is_featured'),
-                'label_attr' => ['class' => 'control-label'],
-                'default_value' => false,
-            ])
+            ->add(
+                'is_featured',
+                OnOffField::class,
+                OnOffFieldOption::make()
+                    ->label(trans('core/base::forms.is_featured'))
+                    ->defaultValue(false)
+            )
             ->setBreakFieldPoint('status');
     }
 }

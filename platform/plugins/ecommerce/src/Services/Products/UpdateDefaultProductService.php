@@ -6,6 +6,25 @@ use Botble\Ecommerce\Models\Product;
 
 class UpdateDefaultProductService
 {
+    protected array $columns = [
+        'barcode',
+        'sku',
+        'price',
+        'sale_type',
+        'sale_price',
+        'start_date',
+        'end_date',
+        'length',
+        'wide',
+        'height',
+        'weight',
+        'quantity',
+        'allow_checkout_when_out_of_stock',
+        'with_storehouse_management',
+        'stock_status',
+        'price_includes_tax',
+    ];
+
     public function execute(Product $product)
     {
         $parent = $product->original_product;
@@ -21,22 +40,33 @@ class UpdateDefaultProductService
         return $parent;
     }
 
+    public function setColumns(array $columns): static
+    {
+        $this->columns = $columns;
+
+        return $this;
+    }
+
     public function updateColumns(Product $parent, Product $product): Product
     {
-        $data = [
-            'sku',
-            'sale_type',
-            'price',
-            'sale_price',
-            'start_date',
-            'end_date',
-            'length',
-            'wide',
-            'height',
-            'weight',
-        ];
+        $data = $this->columns;
 
         foreach ($data as $item) {
+            if ($item === 'sku' && $parent->sku) {
+                continue;
+            }
+
+            if ($item === 'quantity' && $parent->variations()->exists()) {
+                $totalQuantity = $parent->variations()
+                    ->join('ec_products', 'ec_products.id', '=', 'ec_product_variations.product_id')
+                    ->where('ec_products.with_storehouse_management', 1)
+                    ->sum('ec_products.quantity');
+
+                $parent->quantity = $totalQuantity ?: 0;
+
+                continue;
+            }
+
             $parent->{$item} = $product->{$item};
         }
 
@@ -44,7 +74,7 @@ class UpdateDefaultProductService
             $parent->sale_price = null;
         }
 
-        if ($parent->sale_type == 0) {
+        if ($parent->sale_type === 0) {
             $parent->start_date = null;
             $parent->end_date = null;
         }

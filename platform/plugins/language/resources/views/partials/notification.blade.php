@@ -1,3 +1,8 @@
-<div class="note note-success">
-    <p>{!! BaseHelper::clean(trans('plugins/language::language.current_language_edit_notification', ['language' => $language])) !!}</p>
-</div>
+<x-core::alert
+    type="info"
+    icon="ti ti-info-circle"
+>
+    {!! BaseHelper::clean(
+        trans('plugins/language::language.current_language_edit_notification', ['language' => $language]),
+    ) !!}
+</x-core::alert>

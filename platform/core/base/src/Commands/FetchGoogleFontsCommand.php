@@ -2,29 +2,47 @@
 
 namespace Botble\Base\Commands;
 
+use Botble\Base\Commands\Traits\ValidateCommandInput;
+use Exception;
 use Illuminate\Console\Command;
+
+use function Laravel\Prompts\text;
+
 use Symfony\Component\Console\Attribute\AsCommand;
 
 #[AsCommand('cms:google-fonts:fetch', 'Fetch Google Fonts and store them on a local disk')]
 class FetchGoogleFontsCommand extends Command
 {
+    use ValidateCommandInput;
+
     public function handle(): int
     {
-        $this->info('Start fetching Google Fonts...');
+        $fontName = text(
+            label: 'Google Fonts Name',
+            required: true,
+            validate: $this->validate('string')
+        );
 
-        $font = $this->argument('font');
+        $this->components->info(sprintf('Fetching <comment>%s</comment>...', $fontName));
 
-        $this->components->info(sprintf('Fetching <comment>%s</comment>...', $font));
+        $font = 'https://fonts.googleapis.com/css2?family=' . urlencode($fontName) . '&display=swap';
 
-        app('core:google-fonts')->load($font, forceDownload: true);
+        try {
+            $font = app('core.google-fonts')->load($font, forceDownload: true);
 
-        $this->components->info('All done!');
+            if (! $font) {
+                $this->components->error('Failed to fetch Google Fonts.');
 
-        return self::SUCCESS;
-    }
+                return self::FAILURE;
+            }
 
-    protected function configure(): void
-    {
-        $this->addArgument('font', null, 'The font URL');
+            $this->components->info('Google Fonts <info>' . $fontName . '</info> has been fetched and stored into <comment>' . ltrim(str_replace(url(''), '', $font->url()), '/') . '</comment> successfully.');
+
+            return self::SUCCESS;
+        } catch (Exception $exception) {
+            $this->components->error($exception->getMessage());
+
+            return self::FAILURE;
+        }
     }
 }

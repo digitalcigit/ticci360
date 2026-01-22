@@ -1,155 +1,39 @@
 <!doctype html>
-<html>
+<html {{ html_attributes }}>
 <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     <title>{{ 'plugins/ecommerce::order.invoice_for_order'|trans }} {{ invoice.code }}</title>
 
-    {% if settings.using_custom_font_for_invoice and settings.custom_font_family %}
-        <link href="https://fonts.googleapis.com/css2?family={{ settings.custom_font_family | urlencode }}:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    {% endif %}
+    {{ settings.font_css }}
+
     <style>
+        {{ invoice_css | raw }}
+
         body {
-            font-size: 15px;
             font-family: '{{ settings.font_family }}', Arial, sans-serif !important;
         }
 
-        table {
-            border-collapse: collapse;
-            width: 100%
-        }
-
-        table tr td {
-            padding: 0
-        }
-
-        table tr td:last-child {
-            text-align: right
-        }
-
-        .bold, strong, b, .total, .stamp {
-            font-weight: 700
-        }
-
-        .right {
-            text-align: right
-        }
-
-        .large {
-            font-size: 1.75em
-        }
-
-        .total {
-            color: #fb7578;
-        }
-
-        .logo-container {
-            margin: 20px 0 50px
-        }
-
-        .invoice-info-container {
-            font-size: .875em
-        }
-
-        .invoice-info-container td {
-            padding: 4px 0
-        }
-
-        .line-items-container {
-            font-size: .875em;
-            margin: 70px 0
-        }
-
-        .line-items-container th {
-            border-bottom: 2px solid #ddd;
-            color: #999;
-            font-size: .75em;
-            padding: 10px 0 15px;
-            text-align: left;
-            text-transform: uppercase
-        }
-
-        .line-items-container th:last-child {
-            text-align: right
-        }
-
-        .line-items-container td {
-            padding: 10px 0
-        }
-
-        .line-items-container tbody tr:first-child td {
-            padding-top: 25px
-        }
-
-        .line-items-container.has-bottom-border tbody tr:last-child td {
-            border-bottom: 2px solid #ddd;
-            padding-bottom: 25px
-        }
-
-        .line-items-container th.heading-quantity {
-            width: 50px
-        }
-
-        .line-items-container th.heading-price {
-            text-align: right;
-            width: 100px
-        }
-
-        .line-items-container th.heading-subtotal {
-            width: 100px
-        }
-
-        .payment-info {
-            font-size: .875em;
-            line-height: 1.5;
-            width: 38%
-        }
-
-        small {
-            font-size: 80%
-        }
-
-        .stamp {
-            border: 2px solid #555;
-            color: #555;
-            display: inline-block;
-            font-size: 18px;
-            left: 30%;
-            line-height: 1;
-            opacity: .5;
-            padding: .3rem .75rem;
-            position: fixed;
-            text-transform: uppercase;
-            top: 40%;
-            transform: rotate(-14deg)
-        }
-
-        .is-failed {
-            border-color: #d23;
-            color: #d23
-        }
-
-        .is-completed {
-            border-color: #0a9928;
-            color: #0a9928
-        }
+        {{ settings.extra_css }}
     </style>
+
+    {{ settings.header_html }}
 
     {{ invoice_header_filter | raw }}
 </head>
-<body>
+<body {{ body_attributes }}>
 
 {{ invoice_body_filter | raw }}
 
 {% if (get_ecommerce_setting('enable_invoice_stamp', 1) == 1) %}
     {% if invoice.status == 'canceled' %}
-        <span class="stamp is-failed">
+        <div class="stamp is-failed">
             {{ invoice.status }}
-        </span>
-    {% else %}
-        <span class="stamp {% if payment_status == 'completed' %} is-completed {% else %} is-failed {% endif %}">
-            {{ payment_status }}
-        </span>
+        </div>
+    {% elseif (payment_status_label) %}
+        <div class="stamp {% if payment_status == 'completed' %} is-completed {% else %} is-failed {% endif %}">
+            {{ payment_status_label }}
+        </div>
     {% endif %}
 {% endif %}
 
@@ -165,12 +49,16 @@
         <td>
             {% if invoice.created_at %}
                 <p>
-                    <strong>{{ invoice.created_at|date('F d, Y') }}</strong>
+                    <strong>{{ invoice.created_at|date(settings.date_format) }}</strong>
                 </p>
             {% endif %}
             <p>
-                <strong>{{ 'plugins/ecommerce::order.invoice'|trans }}</strong>
-                {{ invoice.code }}
+                <strong style="display: inline-block">{{ 'plugins/ecommerce::order.invoice'|trans }}: </strong>
+                <span style="display: inline-block">{{ invoice.code }}</span>
+            </p>
+            <p>
+                <strong style="display: inline-block">{{ 'plugins/ecommerce::order.order_id'|trans }}: </strong>
+                <span style="display: inline-block">{{ invoice.reference.code }}</span>
             </p>
         </td>
     </tr>
@@ -196,7 +84,7 @@
             {% endif %}
 
             {% if company_tax_id %}
-                <p>{{ 'plugins/ecommerce::ecommerce.setting.tax_id'|trans }}: {{ company_tax_id }}</p>
+                <p>{{ 'plugins/ecommerce::ecommerce.tax_id'|trans }}: {{ company_tax_id }}</p>
             {% endif %}
         </td>
         <td>
@@ -211,6 +99,9 @@
             {% endif %}
             {% if invoice.customer_phone %}
                 <p>{{ invoice.customer_phone }}</p>
+            {% endif %}
+            {% if invoice.customer_tax_id %}
+                <p>{{ 'plugins/ecommerce::ecommerce.tax_id'|trans }}: {{ invoice.customer_tax_id }}</p>
             {% endif %}
         </td>
     </tr>
@@ -230,25 +121,78 @@
     <thead>
     <tr>
         <th class="heading-description">{{ 'plugins/ecommerce::products.form.product'|trans }}</th>
-        <th class="heading-description">{{ 'plugins/ecommerce::products.form.options'|trans }}</th>
+        <th class="heading-options">{{ 'plugins/ecommerce::products.form.options'|trans }}</th>
         <th class="heading-quantity">{{ 'plugins/ecommerce::products.form.quantity'|trans }}</th>
         <th class="heading-price">{{ 'plugins/ecommerce::products.form.price'|trans }}</th>
+        {% if has_multiple_products %}
+            <th class="heading-tax">{{ 'plugins/ecommerce::products.form.tax'|trans }}</th>
+        {% endif %}
         <th class="heading-subtotal">{{ 'plugins/ecommerce::products.form.total'|trans }}</th>
     </tr>
     </thead>
     <tbody>
     {% for item in invoice.items %}
-        <tr>
-            <td>{{ item.name }}</td>
-            <td>{{ item.options ? item.options.attributes : '' }}</td>
-            <td>{{ item.qty }}</td>
-            <td class="right">{{ item.price|price_format }}</td>
-            <td class="bold">{{ item.sub_total|price_format }}</td>
+        <tr class="product-row">
+            <td class="product-cell">
+                <div class="product-name">{{ item.name }}</div>
+                {% if item.options.sku %}
+                    <div class="product-sku">SKU: {{ item.options.sku }}</div>
+                {% endif %}
+            </td>
+            <td class="options-cell">
+                {% if item.options and (item.options.attributes or item.options.product_options or item.options.license_code) %}
+                    {% if item.options.attributes %}
+                        <div class="option-item">
+                            <small> {{ item.options.attributes }} </small>
+                        </div>
+                    {% endif %}
+                    {% if item.options.product_options %}
+                        <div class="option-item">
+                            <strong>{{ 'plugins/ecommerce::invoice.detail.product_options'|trans }}:</strong> {{ item.options.product_options }}
+                        </div>
+                    {% endif %}
+                    {% if item.options.license_code %}
+                        <div class="option-item">
+                            <strong>{{ 'plugins/ecommerce::invoice.detail.license_code'|trans }}:</strong> {{ item.options.license_code }}
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <span class="text-muted">-</span>
+                {% endif %}
+            </td>
+            <td class="qty-cell">{{ item.qty }}</td>
+            <td class="price-cell">{{ item.price|price_format }}</td>
+            {% if has_multiple_products %}
+                <td class="tax-cell">
+                    {% if item.tax_amount > 0 %}
+                        <div class="tax-amount">{{ item.tax_amount|price_format }}</div>
+                        {% if item.options.taxClasses %}
+                            <div class="tax-details">
+                                {% for taxName, taxRate in item.options.taxClasses %}
+                                    <span class="tax-class">{{ taxName }} ({{ taxRate }}%)</span>{% if not loop.last %}, {% endif %}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+            {% endif %}
+            <td class="total-cell">{{ item.sub_total|price_format }}</td>
         </tr>
     {% endfor %}
 
     <tr>
-        <td colspan="4" class="right">
+        <td colspan="{% if has_multiple_products %}5{% else %}4{% endif %}" class="right">
+            {{ 'plugins/ecommerce::invoice.detail.quantity'|trans }}
+        </td>
+        <td class="bold">
+            {{ total_quantity|number_format }}
+        </td>
+    </tr>
+
+    <tr>
+        <td colspan="{{ summary_colspan }}" class="right">
             {{ 'plugins/ecommerce::products.form.sub_total'|trans }}
         </td>
         <td class="bold">
@@ -256,19 +200,44 @@
         </td>
     </tr>
 
-    {% if is_tax_enabled %}
+    {% if invoice.tax_amount > 0 %}
+        {% if tax_groups %}
+            {% for tax_name, tax_amount in tax_groups %}
+                <tr>
+                    <td colspan="{{ summary_colspan }}" class="right">
+                        {{ 'plugins/ecommerce::products.form.tax'|trans }} <small>({{ tax_name }})</small>
+                    </td>
+                    <td class="bold">
+                        {{ tax_amount|price_format }}
+                    </td>
+                </tr>
+            {% endfor %}
+        {% else %}
+            <tr>
+                <td colspan="{{ summary_colspan }}" class="right">
+                    {{ 'plugins/ecommerce::products.form.tax'|trans }}
+                </td>
+                <td class="bold">
+                    {{ invoice.tax_amount|price_format }}
+                </td>
+            </tr>
+        {% endif %}
+    {% endif %}
+
+    {% if invoice.payment_fee > 0 %}
         <tr>
-            <td colspan="4" class="right">
-                {{ 'plugins/ecommerce::products.form.tax'|trans }}
+            <td colspan="{{ summary_colspan }}" class="right">
+                {{ 'plugins/payment::payment.payment_fee'|trans }}
             </td>
             <td class="bold">
-                {{ invoice.tax_amount|price_format }}
+                {{ invoice.payment_fee|price_format }}
             </td>
         </tr>
     {% endif %}
-    {% if invoice.shipping_amount %}
+
+    {% if invoice.shipping_amount > 0 %}
         <tr>
-            <td colspan="4" class="right">
+            <td colspan="{{ summary_colspan }}" class="right">
                 {{ 'plugins/ecommerce::products.form.shipping_fee'|trans }}
             </td>
             <td class="bold">
@@ -276,9 +245,10 @@
             </td>
         </tr>
     {% endif %}
-    {% if invoice.discount_amount %}
+
+    {% if invoice.discount_amount > 0 %}
         <tr>
-            <td colspan="4" class="right">
+            <td colspan="{{ summary_colspan }}" class="right">
                 {{ 'plugins/ecommerce::products.form.discount'|trans }}
             </td>
             <td class="bold">
@@ -307,7 +277,7 @@
 
             {% if payment_status %}
                 <div>
-                    {{ 'plugins/ecommerce::order.payment_status_label'|trans }}: <strong>{{ payment_status }}</strong>
+                    {{ 'plugins/ecommerce::order.payment_status_label'|trans }}: <strong>{{ payment_status_label }}</strong>
                 </div>
             {% endif %}
 
@@ -316,8 +286,10 @@
                     {{ 'plugins/ecommerce::order.payment_info'|trans }}: <strong>{{ payment_description | raw }}</strong>
                 </div>
             {% endif %}
+
+            {{ invoice_payment_info_filter | raw }}
         </td>
-        <td class="large total">{{ invoice.amount|price_format }}</td>
+        <td class="large total"><p>{{ invoice.amount|price_format }}</p></td>
     </tr>
     </tbody>
 </table>

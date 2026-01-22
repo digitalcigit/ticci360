@@ -2,80 +2,49 @@
 
 namespace Botble\Ecommerce\Tables;
 
-use Botble\Base\Facades\BaseHelper;
 use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Ecommerce\Repositories\Interfaces\ProductAttributeSetInterface;
+use Botble\Ecommerce\Models\ProductAttributeSet;
 use Botble\Table\Abstracts\TableAbstract;
-use Botble\Base\Facades\Html;
-use Illuminate\Contracts\Routing\UrlGenerator;
+use Botble\Table\Actions\DeleteAction;
+use Botble\Table\Actions\EditAction;
+use Botble\Table\BulkActions\DeleteBulkAction;
+use Botble\Table\Columns\Column;
+use Botble\Table\Columns\CreatedAtColumn;
+use Botble\Table\Columns\IdColumn;
+use Botble\Table\Columns\NameColumn;
+use Botble\Table\Columns\StatusColumn;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
-use Botble\Table\DataTables;
 
 class ProductAttributeSetsTable extends TableAbstract
 {
-    protected $hasActions = true;
-
-    protected $hasFilter = true;
-
-    public function __construct(
-        DataTables $table,
-        UrlGenerator $urlGenerator,
-        ProductAttributeSetInterface $productAttributeSetRepository
-    ) {
-        parent::__construct($table, $urlGenerator);
-
-        $this->repository = $productAttributeSetRepository;
-
-        if (! Auth::user()->hasAnyPermission(['product-attribute-sets.edit', 'product-attribute-sets.destroy'])) {
-            $this->hasOperations = false;
-            $this->hasActions = false;
-        }
-    }
-
-    public function ajax(): JsonResponse
+    public function setup(): void
     {
-        $data = $this->table
-            ->eloquent($this->query())
-            ->editColumn('title', function ($item) {
-                if (! Auth::user()->hasPermission('product-attribute-sets.edit')) {
-                    return BaseHelper::clean($item->title);
-                }
-
-                return Html::link(route('product-attribute-sets.edit', $item->id), BaseHelper::clean($item->title));
-            })
-            ->editColumn('checkbox', function ($item) {
-                return $this->getCheckbox($item->id);
-            })
-            ->editColumn('created_at', function ($item) {
-                return BaseHelper::formatDate($item->created_at);
-            })
-            ->editColumn('status', function ($item) {
-                return BaseHelper::clean($item->status->toHtml());
-            })
-            ->addColumn('operations', function ($item) {
-                return $this->getOperations('product-attribute-sets.edit', 'product-attribute-sets.destroy', $item);
-            });
-
-        return $this->toJson($data);
+        $this
+            ->model(ProductAttributeSet::class)
+            ->addActions([
+                EditAction::make()->route('product-attribute-sets.edit'),
+                DeleteAction::make()->route('product-attribute-sets.destroy'),
+            ]);
     }
 
     public function query(): Relation|Builder|QueryBuilder
     {
-        $query = $this->repository->getModel()->select([
-            'id',
-            'created_at',
-            'title',
-            'slug',
-            'order',
-            'status',
-        ]);
+        $query = $this
+            ->getModel()
+            ->query()
+            ->select([
+                'id',
+                'created_at',
+                'title',
+                'slug',
+                'order',
+                'status',
+            ]);
 
         return $this->applyScopes($query);
     }
@@ -83,33 +52,12 @@ class ProductAttributeSetsTable extends TableAbstract
     public function columns(): array
     {
         return [
-            'id' => [
-                'title' => trans('core/base::tables.id'),
-                'width' => '20px',
-                'class' => 'text-center',
-            ],
-            'title' => [
-                'title' => trans('core/base::tables.title'),
-                'class' => 'text-start',
-            ],
-            'slug' => [
-                'title' => trans('core/base::tables.slug'),
-                'class' => 'text-start',
-            ],
-            'order' => [
-                'title' => trans('core/base::tables.order'),
-                'class' => 'text-start',
-            ],
-            'created_at' => [
-                'title' => trans('core/base::tables.created_at'),
-                'width' => '100px',
-                'class' => 'text-start',
-            ],
-            'status' => [
-                'title' => trans('core/base::tables.status'),
-                'width' => '100px',
-                'class' => 'text-start',
-            ],
+            IdColumn::make(),
+            NameColumn::make('title')->route('product-attribute-sets.edit'),
+            Column::make('slug')->title(trans('core/base::tables.slug'))->alignStart(),
+            Column::make('order')->title(trans('plugins/ecommerce::ecommerce.sort_order'))->alignStart(),
+            CreatedAtColumn::make(),
+            StatusColumn::make(),
         ];
     }
 
@@ -120,11 +68,9 @@ class ProductAttributeSetsTable extends TableAbstract
 
     public function bulkActions(): array
     {
-        return $this->addDeleteAction(
-            route('product-attribute-sets.deletes'),
-            'product-attribute-sets.destroy',
-            parent::bulkActions()
-        );
+        return [
+            DeleteBulkAction::make()->permission('product-attribute-sets.destroy'),
+        ];
     }
 
     public function getBulkChanges(): array
@@ -150,10 +96,7 @@ class ProductAttributeSetsTable extends TableAbstract
 
     public function renderTable($data = [], $mergeData = []): View|Factory|Response
     {
-        if ($this->query()->count() === 0 &&
-            ! $this->request()->wantsJson() &&
-            $this->request()->input('filter_table_id') !== $this->getOption('id') && ! $this->request()->ajax()
-        ) {
+        if ($this->isEmpty()) {
             return view('plugins/ecommerce::product-attributes.intro');
         }
 

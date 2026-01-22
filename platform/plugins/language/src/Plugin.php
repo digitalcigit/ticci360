@@ -3,8 +3,8 @@
 namespace Botble\Language;
 
 use Botble\PluginManagement\Abstracts\PluginOperationAbstract;
-use Illuminate\Support\Facades\Schema;
 use Botble\Setting\Facades\Setting;
+use Illuminate\Support\Facades\Schema;
 
 class Plugin extends PluginOperationAbstract
 {
@@ -18,7 +18,7 @@ class Plugin extends PluginOperationAbstract
 
         array_unshift($plugins, 'language');
 
-        Setting::set('activated_plugins', json_encode($plugins))->save();
+        Setting::forceSet('activated_plugins', json_encode($plugins))->save();
     }
 
     public static function remove(): void

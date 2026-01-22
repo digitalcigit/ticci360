@@ -6,6 +6,9 @@ use Botble\Base\Models\BaseModel;
 use Botble\Base\Models\BaseQueryBuilder;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @deprecated
+ */
 interface RepositoryInterface
 {
     public function applyBeforeExecuteQuery($data, bool $isSingle = false);
@@ -34,7 +37,7 @@ interface RepositoryInterface
 
     public function createOrUpdate($data, array $condition = []);
 
-    public function delete(Model $model): bool|null;
+    public function delete(Model $model): ?bool;
 
     public function firstOrCreate(array $data, array $with = []);
 

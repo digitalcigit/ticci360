@@ -3,6 +3,7 @@
 namespace Botble\Base\Models;
 
 use Botble\Base\Casts\SafeContent;
+use Botble\Support\Services\Cache\Cache;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\MassPrunable;
 use Illuminate\Database\Query\Builder;
@@ -40,46 +41,53 @@ class AdminNotification extends BaseModel
 
     public function prunable(): Builder|BaseQueryBuilder
     {
-        return static::where('created_at', '<=', Carbon::now()->subMonth());
+        return static::query()->where('created_at', '<=', Carbon::now()->subMonth());
     }
 
     public static function countUnread(): int
     {
-        return AdminNotification::query()
+        /**
+         * @var AdminNotificationQueryBuilder $adminQuery
+         */
+        $adminQuery = AdminNotification::query();
+
+        /**
+         * @var Builder $query
+         */
+        $query = $adminQuery->hasPermission();
+
+        return $query
             ->whereNull('read_at')
-            ->hasPermission()
             ->select('action_url')
             ->count();
     }
 
-    public function scopeHasPermission(BaseQueryBuilder $query): void
-    {
-        $user = Auth::user();
-
-        if (! $user->isSuperUser()) {
-            $query->where(function (BaseQueryBuilder $query) use ($user) {
-                $query
-                    ->whereNull('permission')
-                    ->orWhereIn('permission', $user->permissions);
-            });
-        }
-    }
-
     public function isAbleToAccess(): bool
     {
-        $user = Auth::user();
+        $user = Auth::guard()->user();
 
         return ! $this->permission || $user->isSuperUser() || $user->hasPermission($this->permission);
     }
 
-    protected static function boot(): void
+    protected static function booted(): void
     {
-        parent::boot();
-
-        static::creating(function (AdminNotification $notification) {
+        static::creating(function (self $notification): void {
             if ($notification->action_url) {
                 $notification->action_url = str_replace(url(''), '', $notification->action_url);
             }
         });
+
+        static::saved(function (): void {
+            Cache::make(static::class)->flush();
+        });
+
+        static::deleted(function (): void {
+            Cache::make(static::class)->flush();
+        });
+    }
+
+    public function newEloquentBuilder($query): AdminNotificationQueryBuilder
+    {
+        return new AdminNotificationQueryBuilder($query);
     }
 }

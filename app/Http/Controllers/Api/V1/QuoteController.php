@@ -3,17 +3,13 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
-use Botble\Contact\Repositories\Interfaces\ContactInterface;
+use Botble\Contact\Models\Contact;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class QuoteController extends ApiController
 {
-    public function __construct(protected ContactInterface $contactRepository)
-    {
-    }
-
     /**
      * Submit a B2B Quote Request.
      *
@@ -45,7 +41,7 @@ class QuoteController extends ApiController
         $content .= $request->input('content');
 
         try {
-            $this->contactRepository->createOrUpdate([
+            Contact::create([
                 'name' => $request->input('name'),
                 'email' => $request->input('email'),
                 'phone' => $request->input('phone'),

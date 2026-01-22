@@ -2,17 +2,18 @@
 
 namespace Botble\Ecommerce\Forms;
 
+use Botble\Base\Forms\FieldOptions\SelectFieldOption;
+use Botble\Base\Forms\Fields\SelectField;
 use Botble\Base\Forms\FormAbstract;
+use Botble\Ecommerce\Facades\EcommerceHelper;
 use Botble\Ecommerce\Http\Requests\AddShippingRegionRequest;
 use Botble\Ecommerce\Models\Shipping;
-use Botble\Ecommerce\Repositories\Interfaces\ShippingInterface;
-use Botble\Ecommerce\Facades\EcommerceHelper;
 
 class AddShippingRegionForm extends FormAbstract
 {
-    public function buildForm(): void
+    public function setup(): void
     {
-        $existedCountries = app(ShippingInterface::class)->pluck('country');
+        $existedCountries = Shipping::query()->pluck('country')->all();
 
         foreach ($existedCountries as &$existedCountry) {
             if (empty($existedCountry)) {
@@ -20,28 +21,24 @@ class AddShippingRegionForm extends FormAbstract
             }
         }
 
-        $countries = ['' => trans('plugins/ecommerce::shipping.all')] + EcommerceHelper::getAvailableCountries();
+        $countries = ['' => trans('plugins/ecommerce::shipping.all_countries')] + EcommerceHelper::getAvailableCountries();
 
         $countries = array_diff_key($countries, array_flip($existedCountries));
 
         $this
-            ->setupModel(new Shipping())
-            ->setFormOptions([
-                'template' => 'core/base::forms.form-content-only',
-                'url' => route('shipping_methods.region.create'),
-            ])
+            ->model(Shipping::class)
+            ->contentOnly()
+            ->setUrl(route('shipping_methods.region.create'))
             ->setTitle(trans('plugins/ecommerce::shipping.add_shipping_region'))
             ->setValidatorClass(AddShippingRegionRequest::class)
-            ->withCustomFields()
-            ->add('region', 'customSelect', [
-                'label' => trans('plugins/ecommerce::shipping.country'),
-                'label_attr' => [
-                    'class' => 'control-label required',
-                ],
-                'attr' => [
-                    'class' => 'select-country-search',
-                ],
-                'choices' => $countries,
-            ]);
+            ->add(
+                'region',
+                SelectField::class,
+                SelectFieldOption::make()
+                    ->label(trans('plugins/ecommerce::shipping.country'))
+                    ->required()
+                    ->searchable()
+                    ->choices($countries)
+            );
     }
 }

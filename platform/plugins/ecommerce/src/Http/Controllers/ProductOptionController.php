@@ -4,114 +4,156 @@ namespace Botble\Ecommerce\Http\Controllers;
 
 use Botble\Base\Events\BeforeEditContentEvent;
 use Botble\Base\Events\CreatedContentEvent;
-use Botble\Base\Events\DeletedContentEvent;
 use Botble\Base\Events\UpdatedContentEvent;
-use Botble\Base\Facades\PageTitle;
-use Botble\Base\Forms\FormBuilder;
-use Botble\Base\Http\Controllers\BaseController;
-use Botble\Base\Http\Responses\BaseHttpResponse;
+use Botble\Base\Http\Actions\DeleteResourceAction;
+use Botble\Base\Supports\Breadcrumb;
+use Botble\Ecommerce\Enums\GlobalOptionEnum;
 use Botble\Ecommerce\Forms\GlobalOptionForm;
 use Botble\Ecommerce\Http\Requests\GlobalOptionRequest;
-use Botble\Ecommerce\Repositories\Interfaces\GlobalOptionInterface;
+use Botble\Ecommerce\Models\GlobalOption;
+use Botble\Ecommerce\Models\GlobalOptionValue;
 use Botble\Ecommerce\Tables\GlobalOptionTable;
-use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 
 class ProductOptionController extends BaseController
 {
-    public function __construct(protected GlobalOptionInterface $globalOptionRepository)
+    protected function breadcrumb(): Breadcrumb
     {
+        return parent::breadcrumb()
+            ->add(trans('plugins/ecommerce::product-option.name'), route('global-option.index'));
     }
 
     public function index(GlobalOptionTable $table)
     {
-        PageTitle::setTitle(trans('plugins/ecommerce::product-option.name'));
+        $this->pageTitle(trans('plugins/ecommerce::product-option.name'));
 
         return $table->renderTable();
     }
 
-    public function create(FormBuilder $formBuilder)
+    public function create()
     {
-        PageTitle::setTitle(trans('plugins/ecommerce::product-option.create'));
+        $this->pageTitle(trans('plugins/ecommerce::product-option.create'));
 
-        return $formBuilder->create(GlobalOptionForm::class)->renderForm();
+        return GlobalOptionForm::create()->renderForm();
     }
 
-    public function store(GlobalOptionRequest $request, BaseHttpResponse $response)
+    public function store(GlobalOptionRequest $request)
     {
-        $option = $this->globalOptionRepository->createOrUpdate($request->input());
+        /**
+         * @var GlobalOption $option
+         */
+        $option = GlobalOption::query()->create($request->only(['name', 'option_type', 'required']));
+
+        $optionValues = $this->formatOptionValue($request->input());
+
+        $option->values()->whereNotIn('id', collect($optionValues)->pluck('id')->all())->delete();
+        $option->values()->saveMany($optionValues);
 
         event(new CreatedContentEvent(GLOBAL_OPTION_MODULE_SCREEN_NAME, $request, $option));
 
-        return $response
+        return $this
+            ->httpResponse()
             ->setPreviousUrl(route('global-option.index'))
-            ->setNextUrl(route('global-option.edit', $option->id))
-            ->setMessage(trans('core/base::notices.create_success_message'));
+            ->setNextUrl(route('global-option.edit', $option->getKey()))
+            ->withCreatedSuccessMessage();
     }
 
-    public function edit(int|string $id, FormBuilder $formBuilder, Request $request)
+    public function edit(int|string $id, Request $request)
     {
-        $option = $this->globalOptionRepository->findOrFail($id, ['values']);
+        /**
+         * @var GlobalOption $option
+         */
+        $option = GlobalOption::query()->with(['values'])->findOrFail($id);
 
         event(new BeforeEditContentEvent($request, $option));
 
-        PageTitle::setTitle(trans('plugins/ecommerce::product-option.edit', ['name' => $option->name]));
+        $this->pageTitle(trans('plugins/ecommerce::product-option.edit', ['name' => $option->name]));
 
-        return $formBuilder->create(GlobalOptionForm::class, ['model' => $option])->renderForm();
+        return GlobalOptionForm::createFromModel($option)->renderForm();
     }
 
-    public function destroy(int|string $id, Request $request, BaseHttpResponse $response)
+    public function destroy(int|string $id)
     {
-        try {
-            $option = $this->globalOptionRepository->findOrFail($id);
+        /**
+         * @var GlobalOption $option
+         */
+        $option = GlobalOption::query()->findOrFail($id);
 
-            $this->globalOptionRepository->delete($option);
-
-            event(new DeletedContentEvent(GLOBAL_OPTION_MODULE_SCREEN_NAME, $request, $option));
-
-            return $response->setMessage(trans('core/base::notices.delete_success_message'));
-        } catch (Exception $exception) {
-            return $response
-                ->setError()
-                ->setMessage($exception->getMessage());
-        }
+        return DeleteResourceAction::make($option);
     }
 
-    public function update(int|string $id, GlobalOptionRequest $request, BaseHttpResponse $response)
+    public function update(int|string $id, GlobalOptionRequest $request)
     {
-        $option = $this->globalOptionRepository->findOrFail($id);
+        /**
+         * @var GlobalOption $option
+         */
+        $option = GlobalOption::query()->findOrFail($id);
 
-        $this->globalOptionRepository->createOrUpdate($request->input(), ['id' => $id]);
+        $option->fill($request->only(['name', 'option_type', 'required']));
+        $option->save();
+
+        $optionValues = $this->formatOptionValue($request->input());
+
+        $option->values()->whereNotIn('id', collect($optionValues)->pluck('id')->all())->delete();
+        $option->values()->saveMany($optionValues);
 
         event(new UpdatedContentEvent(GLOBAL_OPTION_MODULE_SCREEN_NAME, $request, $option));
 
-        return $response
+        return $this
+            ->httpResponse()
             ->setPreviousUrl(route('global-option.index'))
-            ->setMessage(trans('core/base::notices.update_success_message'));
+            ->withUpdatedSuccessMessage();
     }
 
-    public function deletes(Request $request, BaseHttpResponse $response)
+    public function ajaxInfo(Request $request)
     {
-        $ids = $request->input('ids');
-        if (empty($ids)) {
-            return $response
-                ->setError()
-                ->setMessage(trans('core/base::notices.no_select'));
-        }
+        $optionsValues = GlobalOption::query()->with(['values'])->findOrFail($request->input('id'));
 
-        foreach ($ids as $id) {
-            $option = $this->globalOptionRepository->findOrFail($id);
-            $this->globalOptionRepository->delete($option);
-            event(new DeletedContentEvent(GLOBAL_OPTION_MODULE_SCREEN_NAME, $request, $option));
-        }
-
-        return $response->setMessage(trans('core/base::notices.delete_success_message'));
+        return $this
+            ->httpResponse()
+            ->setData($optionsValues);
     }
 
-    public function ajaxInfo(Request $request, BaseHttpResponse $response): BaseHttpResponse
+    protected function formatOptionValue(array $data): array
     {
-        $optionsValues = $this->globalOptionRepository->findOrFail($request->input('id'), ['values']);
+        $type = explode('\\', $data['option_type']);
+        $type = end($type);
+        $values = [];
 
-        return $response->setData($optionsValues);
+        $textTypeArr = ['Field'];
+
+        if (in_array($type, $textTypeArr)) {
+            $globalOptionValue = new GlobalOptionValue();
+            $item['affect_price'] = $data['affect_price'] ?? 0;
+            $item['affect_type'] = $data['affect_type'] ?? GlobalOptionEnum::TYPE_PERCENT;
+            $item['option_value'] = 'n/a';
+            $globalOptionValue->fill($item);
+            $values[] = $globalOptionValue;
+
+            return $values;
+        }
+
+        $index = 0;
+
+        foreach (Arr::get($data, 'options', []) as $item) {
+            $globalOptionValue = null;
+            if (! empty($item['id'])) {
+                $globalOptionValue = GlobalOptionValue::query()->find($item['id']);
+            }
+
+            if (! $globalOptionValue) {
+                $globalOptionValue = new GlobalOptionValue();
+            }
+
+            $item['affect_price'] = ! empty($item['affect_price']) ? $item['affect_price'] : 0;
+            $item['order'] = $index;
+            $globalOptionValue->fill($item);
+            $values[] = $globalOptionValue;
+
+            $index++;
+        }
+
+        return $values;
     }
 }

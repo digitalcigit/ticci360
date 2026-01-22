@@ -2,17 +2,34 @@
 
 namespace Botble\Ecommerce\Http\Requests;
 
+use Botble\Base\Http\Requests\Concerns\HasPhoneFieldValidation;
+use Botble\Base\Rules\EmailRule;
+use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Ecommerce\Models\Customer;
 use Botble\Support\Http\Requests\Request;
+use Illuminate\Validation\Rule;
 
 class CustomerCreateRequest extends Request
 {
+    use HasPhoneFieldValidation;
+
+    protected function prepareForValidation(): void
+    {
+        $this->preparePhoneForValidation();
+    }
+
     public function rules(): array
     {
         return [
-            'name' => 'required|string|max:120|min:2',
-            'email' => 'required|max:60|min:6|email|unique:ec_customers',
-            'password' => 'required|string|min:6',
-            'password_confirmation' => 'required|same:password',
+            'name' => ['required', 'string', 'min:2', 'max:120'],
+            'email' => [
+                'nullable',
+                Rule::requiredIf(! EcommerceHelper::isLoginUsingPhone()),
+                new EmailRule(),
+                Rule::unique((new Customer())->getTable(), 'email'),
+            ],
+            'password' => ['required', 'string', 'min:6', 'confirmed'],
+            'private_notes' => ['nullable', 'string', 'max:1000'],
         ];
     }
 }

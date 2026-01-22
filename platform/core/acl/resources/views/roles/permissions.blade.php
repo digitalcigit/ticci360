@@ -1,54 +1,127 @@
-<ul id='auto-checkboxes' data-name='foo' class="list-unstyled list-feature">
-    <li id="mainNode">
-        <input type="checkbox" id="expandCollapseAllTree">&nbsp;&nbsp;
-        <label for="expandCollapseAllTree" class="label label-default allTree">{{ trans('core/acl::permissions.all') }}</label>
-        <ul>
-            @foreach ($children['root'] as $elementKey => $element)
-                <li class="collapsed" id="node{{ $elementKey }}">
-                    <input type="checkbox" id="checkSelect{{ $elementKey }}" name="flags[]" value="{{ $flags[$element]['flag'] }}" @if (in_array($flags[$element]['flag'], $active)) checked @endif>
-                    <label for="checkSelect{{ $elementKey }}" class="label label-warning" style="margin: 5px;">{{ $flags[$element]['name'] }}</label>
-                    @if (isset($children[$element]))
-                        <ul>
-                            @foreach($children[$element] as $subKey => $subElements)
-                                <li class="collapsed" id="node_sub_{{ $elementKey  }}_{{ $subKey }}">
-                                    <input type="checkbox" id="checkSelect_sub_{{ $elementKey  }}_{{ $subKey }}" name="flags[]" value="{{ $flags[$subElements]['flag'] }}" @if (in_array($flags[$subElements]['flag'], $active)) checked @endif>
-                                    <label for="checkSelect_sub_{{ $elementKey  }}_{{ $subKey }}" class="label label-primary nameMargin">{{ $flags[$subElements]['name'] }}</label>
-                                    @if (isset($children[$subElements]))
-                                        <ul>
-                                            @foreach ($children[$subElements] as $subSubKey => $subSubElements)
-                                                <li class="collapsed" id="node_sub_sub_{{ $subSubKey }}">
-                                                    <input type="checkbox" id="checkSelect_sub_sub{{ $subSubKey }}" name="flags[]" value="{{ $flags[$subSubElements]['flag'] }}" @if (in_array($flags[$subSubElements]['flag'], $active)) checked @endif>
-                                                    <label for="checkSelect_sub_sub{{ $subSubKey }}" class="label label-success nameMargin">{{ $flags[$subSubElements]['name'] }}</label>
-                                                    @if (isset($children[$subSubElements]))
-                                                        <ul>
-                                                            @foreach($children[$subSubElements] as $grandChildrenKey => $grandChildrenElements)
-                                                                <li class="collapsed" id="node_grand_child{{ $grandChildrenKey }}">
-                                                                    <input type="checkbox" id="checkSelect_grand_child{{ $grandChildrenKey }}" name="flags[]" value="{{ $flags[$grandChildrenElements]['flag'] }}" @if (in_array($flags[$grandChildrenElements]['flag'], $active)) checked @endif>
-                                                                    <label for="checkSelect_grand_child{{ $grandChildrenKey }}" class="label label-danger nameMargin">{{ $flags[$grandChildrenElements]['name'] }}</label>
-                                                                    @if (isset($children[$grandChildrenElements]))
-                                                                        <ul>
-                                                                            @foreach ($children[$grandChildrenElements] as $grandChildrenKeySub => $greatGrandChildrenElements)
-                                                                                <li class="collapsed" id="node{{ $grandChildrenKey }}">
-                                                                                    <input type="checkbox" id="checkSelect_grand_child{{ $grandChildrenKeySub }}" name="flags[]" value="{{ $flags[$grandChildrenElements]['flag'] }}" @if (in_array($flags[$grandChildrenElements]['flag'], $active)) checked @endif>
-                                                                                    <label for="checkSelect_grand_child{{ $grandChildrenKeySub }}" class="label label-info nameMargin">{{ $flags[$grandChildrenElements]['name'] }}</label>
-                                                                                </li>
-                                                                            @endforeach
-                                                                        </ul>
-                                                                    @endif
-                                                                </li>
-                                                            @endforeach
-                                                        </ul>
-                                                    @endif
-                                                </li>
-                                            @endforeach
-                                        </ul>
-                                    @endif
-                                </li>
-                            @endforeach
-                        </ul>
-                    @endif
-                </li>
-            @endforeach
+<div
+    class="permissions-tree"
+    id="checkboxes-permisstions"
+    data-name="foo"
+>
+    @foreach ($children['root'] as $keyOne => $elOne)
+        <ul
+            class="parent_tree m-0 p-0 list-unstyled"
+            id="node{{ $keyOne }}"
+        >
+            <li class="permissions-item list-unstyled">
+                <div class="permissions-header">
+                    <x-core::form.checkbox
+                        id="checkbox_one_{{ $keyOne }}"
+                        class="check-success"
+                        name="flags[]"
+                        value="{{ $flags[$elOne]['flag'] }}"
+                        checked="{{ in_array($flags[$elOne]['flag'], $active) }}"
+                    >
+                        <x-slot:label>
+                            <x-core::badge
+                                lite
+                                color="success"
+                                :label="$flags[$elOne]['name']"
+                            />
+                        </x-slot:label>
+                    </x-core::form.checkbox>
+                </div>
+                @if (isset($children[$elOne]))
+                    <ul
+                        class="row permissions-body {{ isset($children[$elOne]) && count($children[$elOne]) > 0 ? 'has-children' : 'single-node' }}">
+                        @foreach ($children[$elOne] as $keyTwo => $elTwo)
+                            <li
+                                class="list-unstyled col-4 m-0"
+                                style="background-color: inherit"
+                                id="node_sub_{{ $keyOne }}_{{ $keyTwo }}"
+                            >
+                                <x-core::form.checkbox
+                                    id="checkbox_two_{{ $keyOne }}_{{ $keyTwo }}"
+                                    name="flags[]"
+                                    value="{{ $flags[$elTwo]['flag'] }}"
+                                    checked="{{ in_array($flags[$elTwo]['flag'], $active) }}"
+                                >
+                                    <x-slot:label>
+                                        <x-core::badge
+                                            lite
+                                            color="primary"
+                                            :label="$flags[$elTwo]['name']"
+                                        />
+                                    </x-slot:label>
+                                </x-core::form.checkbox>
+                                @if (isset($children[$elTwo]))
+                                    <ul class="list-unstyled">
+                                        @foreach ($children[$elTwo] as $keyThree => $elThree)
+                                            <li
+                                                style="background-color: inherit"
+                                                id="node_sub_sub_{{ $keyThree }}"
+                                            >
+                                                <x-core::form.checkbox
+                                                    id="checkbox_three_{{ $keyThree }}"
+                                                    class="check-yellow"
+                                                    name="flags[]"
+                                                    value="{{ $flags[$elThree]['flag'] }}"
+                                                    checked="{{ in_array($flags[$elThree]['flag'], $active) }}"
+                                                >
+                                                    <x-slot:label
+                                                        class="small"
+                                                    >
+                                                        <x-core::badge
+                                                            lite
+                                                            color="yellow"
+                                                            :label="$flags[$elThree]['name']"
+                                                        />
+                                                    </x-slot:label>
+                                                </x-core::form.checkbox>
+                                                @if (isset($children[$elThree]))
+                                                    <ul class="list-unstyled">
+                                                        @foreach ($children[$elThree] as $keyFour => $elFour)
+                                                            <li
+                                                                style="background-color: inherit"
+                                                                id="node_grand_child{{ $keyFour }}"
+                                                            >
+                                                                <x-core::form.checkbox
+                                                                    id="checkbox_four_{{ $keyFour }}"
+                                                                    name="flags[]"
+                                                                    value="{{ $flags[$elFour]['flag'] }}"
+                                                                    checked="{{ in_array($flags[$elFour]['flag'], $active) }}"
+                                                                >
+                                                                    <x-slot:label>
+                                                                        <small>{{ $flags[$elFour]['name'] }}</small>
+                                                                    </x-slot:label>
+                                                                </x-core::form.checkbox>
+                                                                @if (isset($children[$elFour]))
+                                                                    <ul class="list-unstyled">
+                                                                        @foreach ($children[$elFour] as $keyFive => $elFive)
+                                                                            <li
+                                                                                style="background-color: inherit"
+                                                                                id="node{{ $grandChildrenKey }}"
+                                                                            >
+                                                                                <x-core::form.checkbox
+                                                                                    id="checkbox_five_{{ $keyFive }}"
+                                                                                    name="flags[]"
+                                                                                    value="{{ $flags[$elFour]['flag'] }}"
+                                                                                    checked="{{ in_array($flags[$elFour]['flag'], $active) }}"
+                                                                                >
+                                                                                    <x-slot:label>{{ $flags[$elFour]['name'] }}</x-slot:label
+                                                                                    >
+                                                                                </x-core::form.checkbox>
+                                                                        @endforeach
+                                                                    </ul>
+                                                                @endif
+                                                            </li>
+                                                        @endforeach
+                                                    </ul>
+                                                @endif
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                @endif
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+            </li>
         </ul>
-    </li>
-</ul>
+    @endforeach
+</div>

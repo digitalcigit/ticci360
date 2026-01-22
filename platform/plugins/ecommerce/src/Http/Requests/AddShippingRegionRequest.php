@@ -2,8 +2,8 @@
 
 namespace Botble\Ecommerce\Http\Requests;
 
-use Botble\Support\Http\Requests\Request;
 use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Support\Http\Requests\Request;
 use Illuminate\Validation\Rule;
 
 class AddShippingRegionRequest extends Request
@@ -11,7 +11,7 @@ class AddShippingRegionRequest extends Request
     public function rules(): array
     {
         return [
-            'region' => ['sometimes', 'string', Rule::in(array_keys(EcommerceHelper::getAvailableCountries()))],
+            'region' => ['nullable', 'string', Rule::in(array_keys(EcommerceHelper::getAvailableCountries()))],
         ];
     }
 }

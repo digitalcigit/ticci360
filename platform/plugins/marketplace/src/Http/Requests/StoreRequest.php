@@ -3,39 +3,36 @@
 namespace Botble\Marketplace\Http\Requests;
 
 use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Marketplace\Enums\PayoutPaymentMethodsEnum;
+use Botble\Base\Facades\BaseHelper;
+use Botble\Base\Rules\EmailRule;
+use Botble\Base\Rules\MediaImageRule;
+use Botble\Marketplace\Models\Store;
 use Botble\Support\Http\Requests\Request;
-use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 
 class StoreRequest extends Request
 {
     public function rules(): array
     {
-        return array_merge([
-            'name' => 'required',
-            'customer_id' => 'required',
-            'description' => 'max:400',
+        return [
+            'name' => ['required', 'max:250', 'min:2'],
+            'email' => [
+                'required',
+                new EmailRule(),
+                Rule::unique((new Store())->getTable(), 'email')
+                    ->ignore($this->route('store.id')),
+            ],
+            'phone' => 'required|' . BaseHelper::getPhoneValidationRule(),
+            'slug' => ['required', 'string', 'max:255'],
+            'customer_id' => ['required', 'string', 'exists:ec_customers,id'],
+            'description' => ['nullable', 'max:400', 'string'],
             'status' => Rule::in(BaseStatusEnum::values()),
-            'company' => 'max:255',
-            'zip_code' => 'nullable|max:20',
-        ], PayoutPaymentMethodsEnum::getRules('bank_info'));
-    }
-
-    public function attributes(): array
-    {
-        return array_merge([
-            'bank_info' => __('Payout info'),
-        ], PayoutPaymentMethodsEnum::getAttributes('bank_info'));
-    }
-
-    /**
-     * Handle a passed validation attempt.
-     */
-    protected function passedValidation(): void
-    {
-        $channel = $this->input('payout_payment_method');
-
-        $this->merge(['bank_info' => Arr::get($this->input('bank_info'), $channel)]);
+            'company' => ['nullable', 'string', 'max:255'],
+            'tax_id' => ['nullable', 'string', 'max:255'],
+            'zip_code' => ['nullable', ...BaseHelper::getZipcodeValidationRule(true)],
+            'logo' => ['nullable', 'string', new MediaImageRule()],
+            'logo_square' => ['nullable', 'string', new MediaImageRule()],
+            'cover_image' => ['nullable', 'string', new MediaImageRule()],
+        ];
     }
 }

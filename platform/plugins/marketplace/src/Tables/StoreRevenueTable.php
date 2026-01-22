@@ -3,41 +3,35 @@
 namespace Botble\Marketplace\Tables;
 
 use Botble\Base\Facades\BaseHelper;
+use Botble\Base\Facades\Html;
 use Botble\Marketplace\Enums\RevenueTypeEnum;
 use Botble\Marketplace\Models\Revenue;
-use Botble\Marketplace\Repositories\Interfaces\RevenueInterface;
 use Botble\Table\Abstracts\TableAbstract;
-use Botble\Base\Facades\Html;
-use Illuminate\Contracts\Routing\UrlGenerator;
+use Botble\Table\Columns\Column;
+use Botble\Table\Columns\CreatedAtColumn;
+use Botble\Table\Columns\EnumColumn;
+use Botble\Table\Columns\IdColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Auth;
-use Botble\Table\DataTables;
 
 class StoreRevenueTable extends TableAbstract
 {
-    protected string $type = self::TABLE_TYPE_SIMPLE;
-
-    protected $view = 'core/table::simple-table';
-
-    protected $hasCheckbox = false;
+    protected ?int $customerId;
 
     protected $hasOperations = false;
 
-    protected ?int $customerId;
-
-    public function __construct(
-        DataTables $table,
-        UrlGenerator $urlGenerator,
-        RevenueInterface $revenueRepository
-    ) {
-        parent::__construct($table, $urlGenerator);
+    public function setup(): void
+    {
+        $this
+            ->model(Revenue::class)
+            ->addActions([]);
 
         $this->setCustomerId(request()->route()->parameter('id'));
-        $this->repository = $revenueRepository;
         $this->pageLength = 10;
+        $this->type = self::TABLE_TYPE_SIMPLE;
+        $this->view = $this->simpleTableView();
     }
 
     public function ajax(): JsonResponse
@@ -60,7 +54,7 @@ class StoreRevenueTable extends TableAbstract
 
                 $url = '';
                 if (is_in_admin(true)) {
-                    if (Auth::user()->hasPermission('orders.edit')) {
+                    if ($this->hasPermission('orders.edit')) {
                         $url = route('orders.edit', $item->order->id);
                     }
                 } else {
@@ -69,25 +63,19 @@ class StoreRevenueTable extends TableAbstract
 
                 return $url ? Html::link($url, $item->order->code, ['target' => '_blank']) : $item->order->code;
             })
-            ->editColumn('type', function (Revenue $item) {
-                return $item->type->toHtml();
-            })
-            ->editColumn('created_at', function (Revenue $item) {
-                return BaseHelper::formatDate($item->created_at);
-            })
-            ->filterColumn('id', function (Builder $query, $keyword) {
+            ->filterColumn('id', function (Builder $query, $keyword): void {
                 if ($keyword) {
                     $query->where('id', $keyword);
                 }
             })
-            ->filterColumn('order_id', function (Builder $query, $keyword) {
+            ->filterColumn('order_id', function (Builder $query, $keyword): void {
                 if ($keyword) {
                     $query
                         ->where('order_id', $keyword)
                         ->orWhereHas('order', fn (Builder $query) => $query->where('code', 'like', '%' . $keyword));
                 }
             })
-            ->filterColumn('type', function (Builder $query, $keyword) {
+            ->filterColumn('type', function (Builder $query, $keyword): void {
                 if ($keyword && in_array($keyword, RevenueTypeEnum::values())) {
                     $query->where('type', $keyword);
                 }
@@ -96,14 +84,14 @@ class StoreRevenueTable extends TableAbstract
         if (! $this->customerId) {
             $data
                 ->editColumn('customer_id', function (Revenue $item) {
-                    if (! $item->customer->id || ! $item->customer->store->id) {
+                    if (! $item->customer->id || ! $item->customer->store?->id) {
                         return '&mdash;';
                     }
 
                     $store = $item->customer->store;
                     $logo = Html::image($store->logo_url, $store->name, ['width' => 20, 'class' => 'rounded me-2']);
                     $storeName = $store->name;
-                    if (is_in_admin(true) && Auth::user()->hasPermission('marketplace.store.view')) {
+                    if (is_in_admin(true) && $this->hasPermission('marketplace.store.view')) {
                         $storeName = Html::link(route('marketplace.store.view', $store->id), $storeName);
                     }
 
@@ -116,24 +104,27 @@ class StoreRevenueTable extends TableAbstract
 
     public function query(): Relation|Builder|QueryBuilder
     {
-        $query = $this->repository
+        $query = $this
             ->getModel()
+            ->query()
             ->select([
                 'id',
                 'sub_amount',
                 'fee',
                 'amount',
                 'order_id',
+                'customer_id',
                 'created_at',
                 'type',
                 'description',
             ])
             ->with(['order:id,code'])
-            ->when($this->customerId, function (Builder $query) {
+            ->whereHas('order', function (Builder $query): void {
+                $query->where('is_finished', true);
+            })
+            ->when($this->customerId, function (Builder $query): void {
                 $query
-                    ->where('customer_id', $this->customerId);
-            }, function ($query) {
-                $query
+                    ->where('customer_id', $this->customerId)
                     ->with([
                         'customer:id,name,avatar',
                         'customer.store:id,name,logo,customer_id',
@@ -147,46 +138,32 @@ class StoreRevenueTable extends TableAbstract
     public function columns(): array
     {
         $columns = [
-            'id' => [
-                'title' => trans('core/base::tables.id'),
-                'width' => '20px',
-                'class' => 'text-start',
-            ],
-            'order_id' => [
-                'title' => trans('plugins/ecommerce::order.description'),
-                'class' => 'text-start',
-            ],
+            IdColumn::make(),
+            Column::make('order_id')
+                ->title(trans('plugins/ecommerce::order.description'))
+                ->alignStart(),
         ];
 
         if (! $this->customerId) {
-            $columns['customer_id'] = [
-                'title' => 'store',
-                'class' => 'text-start',
-            ];
+            $columns[] = Column::make('customer_id')
+                ->title(trans('plugins/marketplace::store.store'))
+                ->alignStart();
         }
 
         return array_merge($columns, [
-            'fee' => [
-                'title' => trans('plugins/ecommerce::shipping.fee'),
-                'class' => 'text-start',
-            ],
-            'sub_amount' => [
-                'title' => trans('plugins/ecommerce::order.sub_amount'),
-                'class' => 'text-start',
-            ],
-            'amount' => [
-                'title' => trans('plugins/ecommerce::order.amount'),
-                'class' => 'text-start',
-            ],
-            'type' => [
-                'title' => trans('plugins/marketplace::revenue.forms.type'),
-                'class' => 'text-start',
-            ],
-            'created_at' => [
-                'title' => trans('core/base::tables.created_at'),
-                'class' => 'text-start',
-                'width' => '100px',
-            ],
+            Column::make('fee')
+                ->title(trans('plugins/ecommerce::shipping.fee'))
+                ->alignStart(),
+            Column::make('sub_amount')
+                ->title(trans('plugins/ecommerce::order.sub_amount'))
+                ->alignStart(),
+            Column::make('amount')
+                ->title(trans('plugins/ecommerce::order.amount'))
+                ->alignStart(),
+            EnumColumn::make('type')
+                ->title(trans('plugins/marketplace::revenue.forms.type'))
+                ->alignStart(),
+            CreatedAtColumn::make(),
         ]);
     }
 
@@ -198,21 +175,9 @@ class StoreRevenueTable extends TableAbstract
         return $this;
     }
 
-    protected function getDom(): ?string
-    {
-        if ($this->type == self::TABLE_TYPE_ADVANCED) {
-            return "fBrt<'datatables__info_wrap'pli<'clearfix'>>";
-        }
-
-        return "rt<'datatables__info_wrap'pli<'clearfix'>>";
-    }
-
     public function getDefaultButtons(): array
     {
-        return [
-            'export',
-            'reload',
-        ];
+        return array_unique(array_merge(['export'], parent::getDefaultButtons()));
     }
 
     public function htmlDrawCallbackFunction(): ?string

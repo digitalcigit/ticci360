@@ -5,13 +5,9 @@ namespace Botble\Ecommerce\Services;
 use Botble\Base\Models\BaseModel;
 use Botble\Ecommerce\Enums\ShippingMethodEnum;
 use Botble\Ecommerce\Enums\ShippingRuleTypeEnum;
-use Botble\Ecommerce\Models\Shipping;
-use Botble\Ecommerce\Repositories\Interfaces\AddressInterface;
-use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
-use Botble\Ecommerce\Repositories\Interfaces\ShippingInterface;
-use Botble\Ecommerce\Repositories\Interfaces\ShippingRuleInterface;
-use Botble\Ecommerce\Repositories\Interfaces\StoreLocatorInterface;
 use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Ecommerce\Models\Shipping;
+use Botble\Ecommerce\Models\ShippingRule;
 use Botble\Support\Services\Cache\Cache;
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Database\Eloquent\Builder;
@@ -29,17 +25,12 @@ class HandleShippingFeeService
 
     protected Cache $cache;
 
-    public function __construct(
-        protected ShippingInterface $shippingRepository,
-        protected AddressInterface $addressRepository,
-        protected ShippingRuleInterface $shippingRuleRepository,
-        protected ProductInterface $productRepository,
-        protected StoreLocatorInterface $storeLocatorRepository
-    ) {
+    public function __construct()
+    {
         $this->shipping = [];
         $this->shippingRules = [];
 
-        $this->cache = new Cache(app('cache'), self::class);
+        $this->cache = Cache::make(static::class);
         $this->useCache = true;
     }
 
@@ -84,7 +75,7 @@ class HandleShippingFeeService
 
             foreach ($result as $item) {
                 foreach ($item as $option) {
-                    if ((float)$option['price'] == 0) {
+                    if ((float) $option['price'] == 0) {
                         $hasFreeShipping = true;
 
                         break;
@@ -95,7 +86,7 @@ class HandleShippingFeeService
             if ($hasFreeShipping) {
                 foreach ($result as $itemKey => $item) {
                     foreach ($item as $optionKey => $option) {
-                        if ((float)$option['price'] > 0) {
+                        if ((float) $option['price'] > 0) {
                             Arr::forget($result, $itemKey . '.' . $optionKey);
                         }
                     }
@@ -124,7 +115,9 @@ class HandleShippingFeeService
             if (Arr::has($this->shipping, $methodKey)) {
                 $shipping = Arr::get($this->shipping, $methodKey);
             } else {
-                $shipping = $this->shippingRepository->getFirstBy(['country' => $country]);
+                $shipping = Shipping::query()
+                    ->where('country', $country)
+                    ->first();
                 Arr::set($this->shipping, $methodKey, $shipping);
             }
 
@@ -142,13 +135,18 @@ class HandleShippingFeeService
                 if ($this->shippingDefault) {
                     $default = $this->shippingDefault;
                 } else {
-                    $default = $this->shippingRepository
-                        ->getModel()
+                    /**
+                     * @var Shipping $default
+                     */
+                    $default = Shipping::query()
                         ->whereNull('country')
                         ->first();
                     $this->shippingDefault = $default;
                 }
 
+                /**
+                 * @var Shipping $default
+                 */
                 $result = $this->calculateDefaultFeeByAddress(
                     $default,
                     $weight,
@@ -160,7 +158,15 @@ class HandleShippingFeeService
         }
 
         if ($result) {
-            $result = collect($result)->sortBy('price')->toArray();
+            $result = collect($result);
+
+            if (get_ecommerce_setting('sort_shipping_options_direction', 'price_lower_to_higher') == 'price_lower_to_higher') {
+                $result = $result->sortBy('price');
+            } else {
+                $result = $result->sortByDesc('price');
+            }
+
+            $result = $result->toArray();
         }
 
         return $result;
@@ -171,7 +177,7 @@ class HandleShippingFeeService
         int|float $weight,
         int|float $orderTotal,
         array $data,
-        string $option = null
+        ?string $option = null
     ): array {
         $result = [];
 
@@ -180,7 +186,7 @@ class HandleShippingFeeService
             if (Arr::has($this->shippingRules, $ruleKey)) {
                 $rule = Arr::get($this->shippingRules, $ruleKey);
             } else {
-                $rule = $this->shippingRuleRepository->findById($option, ['items']);
+                $rule = ShippingRule::query()->with(['items'])->find($option);
                 Arr::set($this->shippingRules, $ruleKey, $rule);
             }
             $city = Arr::get($data, 'city');
@@ -206,25 +212,24 @@ class HandleShippingFeeService
             } else {
                 $zipCode = Arr::get($data, 'address_to.zip_code');
 
-                $rules = $this->shippingRuleRepository
-                    ->getModel()
-                    ->where(function (Builder $query) use ($orderTotal, $shipping) {
+                $rules = ShippingRule::query()
+                    ->where(function (Builder $query) use ($orderTotal, $shipping): void {
                         $query
-                            ->where('shipping_id', $shipping->id)
+                            ->where('shipping_id', $shipping->getKey())
                             ->where('type', ShippingRuleTypeEnum::BASED_ON_PRICE)
                             ->where('from', '<=', $orderTotal)
-                            ->where(function (Builder $sub) use ($orderTotal) {
+                            ->where(function (Builder $sub) use ($orderTotal): void {
                                 $sub
                                     ->whereNull('to')
                                     ->orWhere('to', '>=', $orderTotal);
                             });
                     })
-                    ->orWhere(function (Builder $query) use ($weight, $shipping) {
+                    ->orWhere(function (Builder $query) use ($weight, $shipping): void {
                         $query
-                            ->where('shipping_id', $shipping->id)
+                            ->where('shipping_id', $shipping->getKey())
                             ->where('type', ShippingRuleTypeEnum::BASED_ON_WEIGHT)
                             ->where('from', '<=', $weight)
-                            ->where(function (Builder $sub) use ($weight) {
+                            ->where(function (Builder $sub) use ($weight): void {
                                 $sub
                                     ->whereNull('to')
                                     ->orWhere('to', '>=', $weight);
@@ -233,20 +238,20 @@ class HandleShippingFeeService
 
                 if (EcommerceHelper::loadCountriesStatesCitiesFromPluginLocation()) {
                     $rules = $rules
-                        ->orWhere(function (Builder $query) use ($shipping) {
+                        ->orWhere(function (Builder $query) use ($shipping): void {
                             $query
-                                ->where('shipping_id', $shipping->id)
+                                ->where('shipping_id', $shipping->getKey())
                                 ->where('type', ShippingRuleTypeEnum::BASED_ON_LOCATION);
                         });
                 }
 
                 if (EcommerceHelper::isZipCodeEnabled()) {
                     $rules = $rules
-                        ->orWhere(function (Builder $query) use ($zipCode, $shipping) {
+                        ->orWhere(function (Builder $query) use ($zipCode, $shipping): void {
                             $query
-                                ->where('shipping_id', $shipping->id)
+                                ->where('shipping_id', $shipping->getKey())
                                 ->where('type', ShippingRuleTypeEnum::BASED_ON_ZIPCODE)
-                                ->whereHas('items', function (Builder $sub) use ($zipCode) {
+                                ->whereHas('items', function (Builder $sub) use ($zipCode): void {
                                     $sub->where(['zip_code' => $zipCode]);
                                 });
                         });
@@ -254,9 +259,9 @@ class HandleShippingFeeService
 
                 $rules = $rules
                     ->with([
-                        'items' => function ($query) {
+                        'items' => function ($query): void {
                             $query
-                                ->where(['is_enabled' => 1])
+                                ->where('is_enabled', 1)
                                 ->orderBy('adjustment_price');
                         },
                     ])

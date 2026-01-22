@@ -2,6 +2,7 @@
 
 namespace Botble\Theme\Supports;
 
+use Botble\Theme\Events\RenderingAdminBar;
 use Illuminate\Support\Facades\Auth;
 
 class AdminBar
@@ -50,6 +51,13 @@ class AdminBar
         return $this->noGroupLinks;
     }
 
+    public function setLinksNoGroup(array $links): self
+    {
+        $this->noGroupLinks = $links;
+
+        return $this;
+    }
+
     public function registerGroup(string $slug, string $title, string $link = 'javascript:;'): self
     {
         if (isset($this->groups[$slug])) {
@@ -67,7 +75,7 @@ class AdminBar
         return $this;
     }
 
-    public function registerLink(string $title, string $url, $group = null, string $permission = null): self
+    public function registerLink(string $title, string $url, $group = null, ?string $permission = null): self
     {
         if ($group === null || ! isset($this->groups[$group])) {
             $this->noGroupLinks[] = [
@@ -88,13 +96,15 @@ class AdminBar
 
     public function render(): string
     {
-        if (! Auth::check()) {
+        if (! Auth::guard()->check()) {
             return '';
         }
 
         $this->registerLink(trans('core/base::layouts.dashboard'), route('dashboard.index'), 'appearance', 'dashboard.index');
         $this->registerLink(trans('core/acl::users.users'), route('users.create'), 'add-new', 'users.create');
-        $this->registerLink(trans('core/setting::setting.title'), route('settings.options'), 'appearance', 'settings.options');
+        $this->registerLink(trans('core/setting::setting.title'), route('settings.index'), 'appearance', 'settings.options');
+
+        RenderingAdminBar::dispatch();
 
         foreach ($this->groups as $key => $group) {
             if (! isset($group['items'])) {
@@ -102,7 +112,7 @@ class AdminBar
             }
 
             foreach ($group['items'] as $itemKey => $item) {
-                if (! empty($item['permission']) && ! Auth::user()->hasPermission($item['permission'])) {
+                if (! empty($item['permission']) && ! Auth::guard()->user()->hasPermission($item['permission'])) {
                     unset($this->groups[$key]['items'][$itemKey]);
                 }
             }

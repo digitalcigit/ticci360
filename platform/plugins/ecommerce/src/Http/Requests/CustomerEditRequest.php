@@ -2,15 +2,32 @@
 
 namespace Botble\Ecommerce\Http\Requests;
 
+use Botble\Base\Http\Requests\Concerns\HasPhoneFieldValidation;
+use Botble\Base\Rules\EmailRule;
+use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Ecommerce\Models\Customer;
 use Botble\Support\Http\Requests\Request;
+use Illuminate\Validation\Rule;
 
 class CustomerEditRequest extends Request
 {
+    use HasPhoneFieldValidation;
+
+    protected function prepareForValidation(): void
+    {
+        $this->preparePhoneForValidation();
+    }
+
     public function rules(): array
     {
         $rules = [
-            'name' => 'required|max:120|min:2',
-            'email' => 'required|max:60|min:6|email|unique:ec_customers,email,' . $this->route('customer'),
+            'name' => ['required', 'max:120', 'min:2'],
+            'email' => [
+                'nullable',
+                Rule::requiredIf(! EcommerceHelper::isLoginUsingPhone()),
+                new EmailRule(),
+                Rule::unique((new Customer())->getTable(), 'email')->ignore($this->route('customer.id')),
+            ],
         ];
 
         if ($this->boolean('is_change_password')) {

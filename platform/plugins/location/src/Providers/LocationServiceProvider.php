@@ -4,16 +4,19 @@ namespace Botble\Location\Providers;
 
 use Botble\Base\Facades\DashboardMenu;
 use Botble\Base\Facades\MacroableModels;
+use Botble\Base\Facades\PanelSectionManager;
 use Botble\Base\Models\BaseModel;
+use Botble\Base\PanelSections\PanelSectionItem;
+use Botble\Base\Supports\DashboardMenuItem;
+use Botble\Base\Supports\ServiceProvider;
 use Botble\Base\Traits\LoadAndPublishDataTrait;
+use Botble\DataSynchronize\PanelSections\ExportPanelSection;
+use Botble\DataSynchronize\PanelSections\ImportPanelSection;
 use Botble\LanguageAdvanced\Supports\LanguageAdvancedManager;
 use Botble\Location\Facades\Location;
 use Botble\Location\Models\City;
 use Botble\Location\Models\Country;
 use Botble\Location\Models\State;
-use Botble\Location\Repositories\Caches\CityCacheDecorator;
-use Botble\Location\Repositories\Caches\CountryCacheDecorator;
-use Botble\Location\Repositories\Caches\StateCacheDecorator;
 use Botble\Location\Repositories\Eloquent\CityRepository;
 use Botble\Location\Repositories\Eloquent\CountryRepository;
 use Botble\Location\Repositories\Eloquent\StateRepository;
@@ -22,10 +25,8 @@ use Botble\Location\Repositories\Interfaces\CountryInterface;
 use Botble\Location\Repositories\Interfaces\StateInterface;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\AliasLoader;
-use Illuminate\Routing\Events\RouteMatched;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\ServiceProvider;
 
 class LocationServiceProvider extends ServiceProvider
 {
@@ -34,15 +35,15 @@ class LocationServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(CountryInterface::class, function () {
-            return new CountryCacheDecorator(new CountryRepository(new Country()));
+            return new CountryRepository(new Country());
         });
 
         $this->app->bind(StateInterface::class, function () {
-            return new StateCacheDecorator(new StateRepository(new State()));
+            return new StateRepository(new State());
         });
 
         $this->app->bind(CityInterface::class, function () {
-            return new CityCacheDecorator(new CityRepository(new City()));
+            return new CityRepository(new City());
         });
 
         AliasLoader::getInstance()->alias('Location', Location::class);
@@ -50,9 +51,11 @@ class LocationServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->setNamespace('plugins/location')
+        $this
+            ->setNamespace('plugins/location')
             ->loadHelpers()
-            ->loadAndPublishConfigurations(['permissions', 'general'])
+            ->loadAndPublishConfigurations(['general'])
+            ->loadAndPublishConfigurations(['permissions'])
             ->loadAndPublishViews()
             ->loadMigrations()
             ->loadAndPublishTranslations()
@@ -67,7 +70,6 @@ class LocationServiceProvider extends ServiceProvider
 
             LanguageAdvancedManager::registerModule(State::class, [
                 'name',
-                'abbreviation',
             ]);
 
             LanguageAdvancedManager::registerModule(City::class, [
@@ -75,64 +77,84 @@ class LocationServiceProvider extends ServiceProvider
             ]);
         }
 
-        $this->app['events']->listen(RouteMatched::class, function () {
-            DashboardMenu::registerItem([
-                'id' => 'cms-plugins-location',
-                'priority' => 900,
-                'parent_id' => null,
-                'name' => 'plugins/location::location.name',
-                'icon' => 'fas fa-globe',
-                'url' => null,
-                'permissions' => ['country.index'],
-            ])
-                ->registerItem([
-                    'id' => 'cms-plugins-country',
-                    'priority' => 0,
-                    'parent_id' => 'cms-plugins-location',
-                    'name' => 'plugins/location::country.name',
-                    'icon' => 'fas fa-globe',
-                    'url' => route('country.index'),
-                    'permissions' => ['country.index'],
-                ])
-                ->registerItem([
-                    'id' => 'cms-plugins-state',
-                    'priority' => 1,
-                    'parent_id' => 'cms-plugins-location',
-                    'name' => 'plugins/location::state.name',
-                    'icon' => 'fas fa-globe',
-                    'url' => route('state.index'),
-                    'permissions' => ['state.index'],
-                ])
-                ->registerItem([
-                    'id' => 'cms-plugins-city',
-                    'priority' => 2,
-                    'parent_id' => 'cms-plugins-location',
-                    'name' => 'plugins/location::city.name',
-                    'icon' => 'fas fa-globe',
-                    'url' => route('city.index'),
-                    'permissions' => ['city.index'],
-                ])
-                ->registerItem([
-                    'id' => 'cms-plugins-location-bulk-import',
-                    'priority' => 3,
-                    'parent_id' => 'cms-plugins-location',
-                    'name' => 'plugins/location::bulk-import.menu',
-                    'icon' => 'fas fa-cloud-upload-alt',
-                    'url' => route('location.bulk-import.index'),
-                    'permissions' => ['location.bulk-import.index'],
-                ])
-                ->registerItem([
-                    'id' => 'cms-plugins-location-export',
-                    'priority' => 4,
-                    'parent_id' => 'cms-plugins-location',
-                    'name' => 'plugins/location::location.export_location',
-                    'icon' => 'fas fa-cloud-download-alt',
-                    'url' => route('location.export.index'),
-                    'permissions' => ['location.export.index'],
-                ]);
+        DashboardMenu::default()->beforeRetrieving(function (): void {
+            DashboardMenu::make()
+                ->registerItem(
+                    DashboardMenuItem::make()
+                        ->id('cms-plugins-location')
+                        ->priority(900)
+                        ->name('plugins/location::location.name')
+                        ->icon('ti ti-world')
+                        ->permissions(['country.index'])
+                )
+                ->registerItem(
+                    DashboardMenuItem::make()
+                        ->id('cms-plugins-country')
+                        ->priority(0)
+                        ->parentId('cms-plugins-location')
+                        ->name('plugins/location::country.name')
+                        ->icon('ti ti-flag')
+                        ->route('country.index')
+                )
+                ->registerItem(
+                    DashboardMenuItem::make()
+                        ->id('cms-plugins-state')
+                        ->priority(10)
+                        ->parentId('cms-plugins-location')
+                        ->name('plugins/location::state.name')
+                        ->icon('ti ti-map')
+                        ->route('state.index')
+                )
+                ->registerItem(
+                    DashboardMenuItem::make()
+                        ->id('cms-plugins-city')
+                        ->priority(20)
+                        ->parentId('cms-plugins-location')
+                        ->name('plugins/location::city.name')
+                        ->icon('ti ti-location-pin')
+                        ->route('city.index')
+                )
+                ->registerItem(
+                    DashboardMenuItem::make()
+                        ->id('cms-plugins-location-bulk-import')
+                        ->priority(30)
+                        ->parentId('cms-plugins-location')
+                        ->name('plugins/location::bulk-import.name')
+                        ->icon('ti ti-package-import')
+                        ->route('location.bulk-import.index')
+                )
+                ->registerItem(
+                    DashboardMenuItem::make()
+                        ->id('cms-plugins-location-export')
+                        ->priority(40)
+                        ->parentId('cms-plugins-location')
+                        ->name('plugins/location::export.name')
+                        ->icon('ti ti-package-export')
+                        ->route('location.export.index')
+                );
         });
 
-        $this->app->booted(function () {
+        PanelSectionManager::setGroupId('data-synchronize')->beforeRendering(function (): void {
+            PanelSectionManager::default()
+                ->registerItem(
+                    ExportPanelSection::class,
+                    fn () => PanelSectionItem::make('location')
+                        ->setTitle(trans('plugins/location::location.name'))
+                        ->withDescription(trans('plugins/location::location.export.description'))
+                        ->withPriority(100)
+                        ->withRoute('location.export.index')
+                )
+                ->registerItem(
+                    ImportPanelSection::class,
+                    fn () => PanelSectionItem::make('location')
+                        ->setTitle(trans('plugins/location::location.name'))
+                        ->withDescription(trans('plugins/location::location.import.description'))
+                        ->withPriority(90)
+                        ->withRoute('location.bulk-import.index')
+                );
+        });
+
+        $this->app->booted(function (): void {
             Blueprint::macro('location', function ($item = null, $keys = []) {
                 if ($item) {
                     if (class_exists($item) && Location::isSupported($item)) {
@@ -232,15 +254,15 @@ class LocationServiceProvider extends ServiceProvider
                     /**
                      * @var BaseModel $this
                      */
-                    return ($this->address ? $this->address . ', ' : null) .
-                        ($this->city_name ? $this->city_name . ', ' : null) .
-                        ($this->state_name ? $this->state_name . ', ' : null) .
-                        $this->country_name;
+                    $addresses = [$this->address, $this->city_name, $this->state_name, $this->country_name];
+
+                    return implode(', ', array_filter($addresses));
                 });
             }
         });
 
         $this->app->register(CommandServiceProvider::class);
         $this->app->register(HookServiceProvider::class);
+        $this->app->register(EventServiceProvider::class);
     }
 }

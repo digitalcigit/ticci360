@@ -2,150 +2,95 @@
 
 namespace Botble\Location\Tables;
 
-use Botble\Location\Models\State;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Relations\Relation;
-use Illuminate\Database\Query\Builder as QueryBuilder;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Auth;
-use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Location\Repositories\Interfaces\CountryInterface;
-use Botble\Location\Repositories\Interfaces\StateInterface;
-use Botble\Table\Abstracts\TableAbstract;
 use Botble\Base\Facades\Html;
-use Illuminate\Contracts\Routing\UrlGenerator;
-use Botble\Table\DataTables;
+use Botble\Location\Models\Country;
+use Botble\Location\Models\State;
+use Botble\Table\Abstracts\TableAbstract;
+use Botble\Table\Actions\DeleteAction;
+use Botble\Table\Actions\EditAction;
+use Botble\Table\BulkActions\DeleteBulkAction;
+use Botble\Table\BulkChanges\CreatedAtBulkChange;
+use Botble\Table\BulkChanges\NameBulkChange;
+use Botble\Table\BulkChanges\SelectBulkChange;
+use Botble\Table\BulkChanges\StatusBulkChange;
+use Botble\Table\Columns\Column;
+use Botble\Table\Columns\CreatedAtColumn;
+use Botble\Table\Columns\IdColumn;
+use Botble\Table\Columns\NameColumn;
+use Botble\Table\Columns\StatusColumn;
+use Botble\Table\HeaderActions\CreateHeaderAction;
+use Illuminate\Database\Eloquent\Builder;
 
 class StateTable extends TableAbstract
 {
-    protected $hasActions = true;
-
-    protected $hasFilter = true;
-
-    public function __construct(
-        DataTables $table,
-        UrlGenerator $urlGenerator,
-        StateInterface $stateRepository,
-        protected CountryInterface $countryRepository
-    ) {
-        parent::__construct($table, $urlGenerator);
-
-        $this->repository = $stateRepository;
-        $this->countryRepository = $countryRepository;
-
-        if (! Auth::user()->hasAnyPermission(['state.edit', 'state.destroy'])) {
-            $this->hasOperations = false;
-            $this->hasActions = false;
-        }
-    }
-
-    public function ajax(): JsonResponse
+    public function setup(): void
     {
-        $data = $this->table
-            ->eloquent($this->query())
-            ->editColumn('name', function (State $item) {
-                if (! Auth::user()->hasPermission('state.edit')) {
-                    return BaseHelper::clean($item->name);
-                }
+        $this
+            ->model(State::class)
+            ->addColumns([
+                IdColumn::make(),
+                NameColumn::make()->route('state.edit'),
+                Column::make('country_id')
+                    ->title(trans('plugins/location::state.country'))
+                    ->alignStart(),
+                CreatedAtColumn::make(),
+                StatusColumn::make(),
+            ])
+            ->addHeaderAction(CreateHeaderAction::make()->route('state.create'))
+            ->addActions([
+                EditAction::make()->route('state.edit'),
+                DeleteAction::make()->route('state.destroy'),
+            ])
+            ->addBulkAction(DeleteBulkAction::make()->permission('state.destroy'))
+            ->addBulkChanges([
+                NameBulkChange::make(),
+                SelectBulkChange::make()
+                    ->name('country_id')
+                    ->title(trans('plugins/location::city.country'))
+                    ->searchable()
+                    ->choices(fn () => Country::query()->pluck('name', 'id')->all()),
+                StatusBulkChange::make(),
+                CreatedAtBulkChange::make(),
+            ])
+            ->queryUsing(function (Builder $query) {
+                return $query
+                    ->select([
+                        'id',
+                        'name',
+                        'country_id',
+                        'created_at',
+                        'status',
+                    ]);
+            })
+            ->onAjax(function () {
+                $data = $this->table
+                    ->eloquent($this->query())
+                    ->editColumn('country_id', function (State $item) {
+                        if (! $item->country_id && $item->country->name) {
+                            return null;
+                        }
 
-                return Html::link(route('state.edit', $item->id), BaseHelper::clean($item->name));
-            })
-            ->editColumn('country_id', function (State $item) {
-                if (! $item->country_id && $item->country->name) {
-                    return null;
-                }
+                        return Html::link(route('country.edit', $item->country_id), $item->country->name);
+                    })
+                    ->filter(function (Builder $query) {
+                        $keyword = $this->request->input('search.value');
 
-                return Html::link(route('country.edit', $item->country_id), $item->country->name);
-            })
-            ->editColumn('checkbox', function (State $item) {
-                return $this->getCheckbox($item->id);
-            })
-            ->editColumn('created_at', function (State $item) {
-                return BaseHelper::formatDate($item->created_at);
-            })
-            ->editColumn('status', function (State $item) {
-                return $item->status->toHtml();
-            })
-            ->addColumn('operations', function (State $item) {
-                return $this->getOperations('state.edit', 'state.destroy', $item);
+                        if (! $keyword) {
+                            return $query;
+                        }
+
+                        return $query->where(function (Builder $query) use ($keyword): void {
+                            $query
+                                ->where('id', $keyword)
+                                ->orWhere('name', 'LIKE', '%' . $keyword . '%')
+                                ->orWhereHas('country', function (Builder $subQuery) use ($keyword) {
+                                    return $subQuery
+                                        ->where('name', 'LIKE', '%' . $keyword . '%');
+                                });
+                        });
+                    });
+
+                return $this->toJson($data);
             });
-
-        return $this->toJson($data);
-    }
-
-    public function query(): Relation|Builder|QueryBuilder
-    {
-        $query = $this->repository->getModel()->select([
-            'id',
-            'name',
-            'country_id',
-            'created_at',
-            'status',
-        ]);
-
-        return $this->applyScopes($query);
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => [
-                'title' => trans('core/base::tables.id'),
-                'width' => '20px',
-            ],
-            'name' => [
-                'title' => trans('core/base::tables.name'),
-                'class' => 'text-start',
-            ],
-            'country_id' => [
-                'title' => trans('plugins/location::state.country'),
-                'class' => 'text-start',
-            ],
-            'created_at' => [
-                'title' => trans('core/base::tables.created_at'),
-                'width' => '100px',
-            ],
-            'status' => [
-                'title' => trans('core/base::tables.status'),
-                'width' => '100px',
-            ],
-        ];
-    }
-
-    public function buttons(): array
-    {
-        return $this->addCreateButton(route('state.create'), 'state.create');
-    }
-
-    public function bulkActions(): array
-    {
-        return $this->addDeleteAction(route('state.deletes'), 'state.destroy', parent::bulkActions());
-    }
-
-    public function getBulkChanges(): array
-    {
-        return [
-            'name' => [
-                'title' => trans('core/base::tables.name'),
-                'type' => 'text',
-                'validate' => 'required|max:120',
-            ],
-            'country_id' => [
-                'title' => trans('plugins/location::state.country'),
-                'type' => 'customSelect',
-                'validate' => 'required|max:120',
-            ],
-            'status' => [
-                'title' => trans('core/base::tables.status'),
-                'type' => 'customSelect',
-                'choices' => BaseStatusEnum::labels(),
-                'validate' => 'required|in:' . implode(',', BaseStatusEnum::values()),
-            ],
-            'created_at' => [
-                'title' => trans('core/base::tables.created_at'),
-                'type' => 'datePicker',
-            ],
-        ];
     }
 }

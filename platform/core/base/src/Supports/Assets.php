@@ -4,20 +4,26 @@ namespace Botble\Base\Supports;
 
 use Botble\Assets\Assets as BaseAssets;
 use Botble\Assets\HtmlBuilder;
+use Botble\Base\Facades\AdminHelper;
+use Botble\Base\Facades\BaseHelper;
 use Illuminate\Config\Repository;
-use Illuminate\Support\Facades\File;
-use Illuminate\Support\Str;
 
 /**
  * @since 22/07/2015 11:23 PM
  */
 class Assets extends BaseAssets
 {
+    protected bool $hasVueJs = false;
+
     public function __construct(Repository $config, HtmlBuilder $htmlBuilder)
     {
         parent::__construct($config, $htmlBuilder);
 
         $this->config = $config->get('core.base.assets');
+
+        if (empty($this->config['version'])) {
+            $this->config['version'] = get_cms_version();
+        }
 
         $this->scripts = $this->config['scripts'];
 
@@ -29,57 +35,73 @@ class Assets extends BaseAssets
         $this->config = $config;
     }
 
+    /**
+     * @deprecated v7.0
+     */
     public function getThemes(): array
     {
-        $themeFolder = '/vendor/core/core/base/css/themes';
-
-        $themes = ['default' => $themeFolder . '/default.css'];
-
-        if (! File::isDirectory(public_path($themeFolder))) {
-            return $themes;
-        }
-
-        $files = File::files(public_path($themeFolder));
-
-        if (empty($files)) {
-            return $themes;
-        }
-
-        foreach ($files as $file) {
-            $name = $themeFolder . '/' . basename($file);
-            if (! Str::contains($file, '.css.map')) {
-                $themes[basename($file, '.css')] = $name;
-            }
-        }
-
-        return $themes;
+        return [];
     }
 
     public function renderHeader($lastStyles = []): string
     {
         do_action(BASE_ACTION_ENQUEUE_SCRIPTS);
 
-        return parent::renderHeader($lastStyles);
+        if (AdminHelper::isInAdmin(true) && BaseHelper::adminLanguageDirection() === 'rtl') {
+            $this->config['resources']['styles']['core']['src']['local'] = '/vendor/core/core/base/css/core.rtl.css';
+            $this->config['resources']['styles']['select2']['src']['local'][1] = '/vendor/core/core/base/css/libraries/select2.rtl.css';
+        }
+
+        $styles = $this->getStyles($lastStyles);
+        $headScripts = $this->getScripts(self::ASSETS_SCRIPT_POSITION_HEADER);
+
+        return view('core/base::assets.header', compact('styles', 'headScripts'))->render();
     }
 
     public function renderFooter(): string
     {
         $bodyScripts = $this->getScripts(self::ASSETS_SCRIPT_POSITION_FOOTER);
 
-        return view('assets::footer', compact('bodyScripts'))->render();
+        return view('core/base::assets.footer', compact('bodyScripts'))->render();
+    }
+
+    public function getBuildVersionFor(string $src): string
+    {
+        if (str_contains($src, '?')) {
+            return '';
+        }
+
+        return $this->getBuildVersion();
     }
 
     public function usingVueJS(): self
     {
-        $this->addScripts(['vue-app']);
+        $this->addScripts(['vue', 'vue-app']);
+
+        $this->hasVueJs = true;
 
         return $this;
     }
 
     public function disableVueJS(): self
     {
-        $this->removeScripts(['vue-app']);
+        $this->removeScripts(['vue', 'vue-app']);
+
+        $this->hasVueJs = false;
 
         return $this;
+    }
+
+    public function hasVueJs(): bool
+    {
+        return $this->hasVueJs;
+    }
+
+    /**
+     * @deprecated since v5.13
+     */
+    public function getAdminLocales(): array
+    {
+        return Language::getAvailableLocales();
     }
 }

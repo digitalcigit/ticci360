@@ -9,17 +9,17 @@ use Illuminate\Support\Facades\Schema;
 return new class () extends Migration {
     public function up(): void
     {
-        Schema::table('ec_customers', function (Blueprint $table) {
+        Schema::table('ec_customers', function (Blueprint $table): void {
             $table->dateTime('confirmed_at')->nullable();
             $table->string('email_verify_token', 120)->nullable();
         });
 
-        Customer::whereNull('confirmed_at')->update(['confirmed_at' => Carbon::now()]);
+        Customer::query()->whereNull('confirmed_at')->update(['confirmed_at' => Carbon::now()]);
     }
 
     public function down(): void
     {
-        Schema::table('ec_customers', function (Blueprint $table) {
+        Schema::table('ec_customers', function (Blueprint $table): void {
             $table->dropColumn(['confirmed_at', 'email_verify_token']);
         });
     }

@@ -2,45 +2,37 @@
 
 namespace Botble\Marketplace\Http\Controllers\Fronts;
 
-use Botble\Base\Facades\Assets;
-use Botble\Base\Events\DeletedContentEvent;
 use Botble\Base\Events\UpdatedContentEvent;
-use Botble\Base\Facades\PageTitle;
+use Botble\Base\Facades\Assets;
+use Botble\Base\Facades\EmailHandler;
+use Botble\Base\Http\Actions\DeleteResourceAction;
 use Botble\Base\Http\Controllers\BaseController;
-use Botble\Base\Http\Responses\BaseHttpResponse;
+use Botble\Ecommerce\Enums\OrderCancellationReasonEnum;
+use Botble\Ecommerce\Enums\OrderHistoryActionEnum;
 use Botble\Ecommerce\Enums\OrderStatusEnum;
+use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Ecommerce\Facades\InvoiceHelper;
+use Botble\Ecommerce\Facades\OrderHelper;
 use Botble\Ecommerce\Http\Requests\AddressRequest;
+use Botble\Ecommerce\Http\Requests\CancelOrderRequest;
 use Botble\Ecommerce\Http\Requests\UpdateOrderRequest;
 use Botble\Ecommerce\Models\Order;
-use Botble\Ecommerce\Repositories\Interfaces\OrderAddressInterface;
-use Botble\Ecommerce\Repositories\Interfaces\OrderHistoryInterface;
-use Botble\Ecommerce\Repositories\Interfaces\OrderInterface;
-use Botble\Marketplace\Tables\OrderTable;
-use Botble\Payment\Repositories\Interfaces\PaymentInterface;
-use Botble\Ecommerce\Facades\EcommerceHelper;
-use Botble\Base\Facades\EmailHandler;
-use Exception;
-use Illuminate\Http\Request;
-use Botble\Ecommerce\Facades\InvoiceHelper;
+use Botble\Ecommerce\Models\OrderAddress;
+use Botble\Ecommerce\Models\OrderHistory;
 use Botble\Marketplace\Facades\MarketplaceHelper;
-use Botble\Ecommerce\Facades\OrderHelper;
+use Botble\Marketplace\Tables\OrderTable;
+use Botble\Payment\Models\Payment;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class OrderController extends BaseController
 {
-    public function __construct(
-        protected OrderInterface $orderRepository,
-        protected OrderHistoryInterface $orderHistoryRepository,
-        protected OrderAddressInterface $orderAddressRepository,
-        protected PaymentInterface $paymentRepository
-    ) {
-        Assets::setConfig(config('plugins.marketplace.assets', []));
-    }
-
     public function index(OrderTable $table)
     {
-        PageTitle::setTitle(__('Orders'));
+        $this->pageTitle(trans('plugins/ecommerce::order.name'));
 
-        return $table->render(MarketplaceHelper::viewPath('dashboard.table.base'));
+        return $table->renderTable();
     }
 
     public function edit(int|string $id)
@@ -50,7 +42,7 @@ class OrderController extends BaseController
                 'vendor/core/plugins/ecommerce/libraries/jquery.textarea_autosize.js',
                 'vendor/core/plugins/ecommerce/js/order.js',
             ])
-            ->addScripts(['blockui', 'input-mask']);
+            ->addScripts(['input-mask']);
 
         if (EcommerceHelper::loadCountriesStatesCitiesFromPluginLocation()) {
             Assets::addScriptsDirectly('vendor/core/plugins/location/js/location.js');
@@ -60,59 +52,36 @@ class OrderController extends BaseController
 
         $order->load(['products', 'user']);
 
-        PageTitle::setTitle(trans('plugins/ecommerce::order.edit_order', ['code' => $order->code]));
+        $this->pageTitle(trans('plugins/ecommerce::order.edit_order', ['code' => $order->code]));
 
         $weight = $order->products_weight;
 
         $defaultStore = get_primary_store_locator();
 
-        return MarketplaceHelper::view('dashboard.orders.edit', compact('order', 'weight', 'defaultStore'));
+        return MarketplaceHelper::view('vendor-dashboard.orders.edit', compact('order', 'weight', 'defaultStore'));
     }
 
-    public function update(int|string $id, UpdateOrderRequest $request, BaseHttpResponse $response)
+    public function update(int|string $id, UpdateOrderRequest $request)
     {
-        $order = $this->orderRepository->createOrUpdate($request->input(), ['id' => $id]);
+        $order = $this->findOrFail($id);
+        $order->fill($request->input());
+        $order->save();
 
         event(new UpdatedContentEvent(ORDER_MODULE_SCREEN_NAME, $request, $order));
 
-        return $response
+        return $this
+            ->httpResponse()
             ->setPreviousUrl(route('orders.index'))
-            ->setMessage(trans('core/base::notices.update_success_message'));
+            ->withUpdatedSuccessMessage();
     }
 
-    public function destroy(int|string $id, Request $request, BaseHttpResponse $response)
+    public function destroy(int|string $id)
     {
+        abort_unless(EcommerceHelper::isOrderDeletionEnabled() && MarketplaceHelper::allowVendorDeleteTheirOrders(), 403);
+
         $order = $this->findOrFail($id);
 
-        try {
-            $this->orderRepository->deleteBy(['id' => $id]);
-            event(new DeletedContentEvent(ORDER_MODULE_SCREEN_NAME, $request, $order));
-
-            return $response->setMessage(trans('core/base::notices.delete_success_message'));
-        } catch (Exception $exception) {
-            return $response
-                ->setError()
-                ->setMessage($exception->getMessage());
-        }
-    }
-
-    public function deletes(Request $request, BaseHttpResponse $response)
-    {
-        $ids = $request->input('ids');
-        if (empty($ids)) {
-            return $response
-                ->setError()
-                ->setMessage(trans('core/base::notices.no_select'));
-        }
-
-        foreach ($ids as $id) {
-            $order = $this->findOrFail($id);
-
-            $this->orderRepository->delete($order);
-            event(new DeletedContentEvent(ORDER_MODULE_SCREEN_NAME, $request, $order));
-        }
-
-        return $response->setMessage(trans('core/base::notices.delete_success_message'));
+        return DeleteResourceAction::make($order);
     }
 
     public function getGenerateInvoice(int|string $orderId)
@@ -122,7 +91,7 @@ class OrderController extends BaseController
         return InvoiceHelper::downloadInvoice($order->invoice);
     }
 
-    public function postConfirm(Request $request, BaseHttpResponse $response)
+    public function postConfirm(Request $request)
     {
         $order = $this->findOrFail($request->input('order_id'));
 
@@ -131,16 +100,19 @@ class OrderController extends BaseController
             $order->status = OrderStatusEnum::PROCESSING;
         }
 
-        $this->orderRepository->createOrUpdate($order);
+        /**
+         * @var Order $order
+         */
+        $order->save();
 
-        $this->orderHistoryRepository->createOrUpdate([
-            'action' => 'confirm_order',
+        OrderHistory::query()->create([
+            'action' => OrderHistoryActionEnum::CONFIRM_ORDER,
             'description' => trans('plugins/ecommerce::order.order_was_verified_by'),
-            'order_id' => $order->id,
+            'order_id' => $order->getKey(),
             'user_id' => 0,
         ]);
 
-        $payment = $this->paymentRepository->getFirstBy(['order_id' => $order->id]);
+        $payment = Payment::query()->where('order_id', $order->getKey())->first();
 
         if ($payment) {
             $payment->user_id = 0;
@@ -150,65 +122,70 @@ class OrderController extends BaseController
         $mailer = EmailHandler::setModule(ECOMMERCE_MODULE_SCREEN_NAME);
         if ($mailer->templateEnabled('order_confirm')) {
             OrderHelper::setEmailVariables($order);
+
             $mailer->sendUsingTemplate(
                 'order_confirm',
                 $order->user->email ?: $order->address->email
             );
         }
 
-        return $response->setMessage(trans('plugins/ecommerce::order.confirm_order_success'));
+        return $this
+            ->httpResponse()
+            ->setMessage(trans('plugins/ecommerce::order.confirm_order_success'));
     }
 
-    public function postResendOrderConfirmationEmail(int|string $id, BaseHttpResponse $response)
+    public function postResendOrderConfirmationEmail(int|string $id)
     {
+        /**
+         * @var Order $order
+         */
         $order = $this->findOrFail($id);
 
         $result = OrderHelper::sendOrderConfirmationEmail($order);
 
         if (! $result) {
-            return $response
+            return $this
+                ->httpResponse()
                 ->setError()
                 ->setMessage(trans('plugins/ecommerce::order.error_when_sending_email'));
         }
 
-        return $response->setMessage(trans('plugins/ecommerce::order.sent_confirmation_email_success'));
+        return $this
+            ->httpResponse()
+            ->setMessage(trans('plugins/ecommerce::order.sent_confirmation_email_success'));
     }
 
-    public function postUpdateShippingAddress(int|string $id, AddressRequest $request, BaseHttpResponse $response)
+    public function postUpdateShippingAddress(int|string $id, AddressRequest $request)
     {
-        $address = $this->orderAddressRepository
-            ->getModel()
+        $address = OrderAddress::query()
             ->where('id', $id)
-            ->whereHas('order', function ($query) {
-                $query->where('store_id', auth('customer')->user()->store->id);
+            ->whereHas('order', function ($query): void {
+                $query->where('store_id', auth('customer')->user()->store?->id);
             })
             ->first();
 
         if ($address) {
             $order = $address->order;
         } else {
-            if (! $orderId = $request->input('order_id')) {
-                abort(404);
-            }
+            abort_unless($orderId = $request->input('order_id'), 404);
 
             $order = $this->findOrFail($orderId);
 
             if ($order->address->id) {
                 $address = $order->address;
             } else {
-                $address = $this->orderAddressRepository->getModel();
+                $address = new OrderAddress();
                 $address->order_id = $order->id;
             }
         }
 
-        if ($order->status == OrderStatusEnum::CANCELED) {
-            abort(401);
-        }
+        abort_if($order->status == OrderStatusEnum::CANCELED, 401);
 
         $address->fill($request->validated());
-        $address = $this->orderAddressRepository->createOrUpdate($address);
+        $address->save();
 
-        return $response
+        return $this
+            ->httpResponse()
             ->setData([
                 'line' => view('plugins/ecommerce::orders.shipping-address.line', compact('address'))->render(),
                 'detail' => view('plugins/ecommerce::orders.shipping-address.detail', compact('address'))->render(),
@@ -216,34 +193,69 @@ class OrderController extends BaseController
             ->setMessage(trans('plugins/ecommerce::order.update_shipping_address_success'));
     }
 
-    public function postCancelOrder(int|string $id, BaseHttpResponse $response)
+    public function postCancelOrder(CancelOrderRequest $request, int|string $id)
     {
+        /**
+         * @var Order $order
+         */
         $order = $this->findOrFail($id);
 
-        if (! $order->canBeCanceledByAdmin()) {
-            abort(403);
-        }
+        abort_unless($order->canBeCanceledByAdmin(), 403);
 
-        OrderHelper::cancelOrder($order);
+        $reason = $request->input('cancellation_reason');
+        $reasonDescription = $request->input('cancellation_reason_description');
 
-        $this->orderHistoryRepository->createOrUpdate([
-            'action' => 'cancel_order',
-            'description' => trans('plugins/ecommerce::order.order_was_canceled_by'),
+        OrderHelper::cancelOrder($order, $reason, $reasonDescription);
+
+        $vendorName = auth('customer')->user()->store?->name ?? trans('plugins/ecommerce::order.vendor');
+
+        $description = match (true) {
+            $reason && $reason !== OrderCancellationReasonEnum::OTHER => trans('plugins/ecommerce::order.order_was_canceled_by_with_reason', [
+                'admin' => $vendorName,
+                'reason' => OrderCancellationReasonEnum::getLabel($reason),
+            ]),
+            $reason === OrderCancellationReasonEnum::OTHER && $reasonDescription => trans('plugins/ecommerce::order.order_was_canceled_by_with_reason', [
+                'admin' => $vendorName,
+                'reason' => $reasonDescription,
+            ]),
+            default => trans('plugins/ecommerce::order.order_was_canceled_by'),
+        };
+
+        OrderHistory::query()->create([
+            'action' => OrderHistoryActionEnum::CANCEL_ORDER,
+            'description' => $description,
             'order_id' => $order->id,
             'user_id' => 0,
         ]);
 
-        return $response->setMessage(trans('plugins/ecommerce::order.customer.messages.cancel_success'));
+        return $this
+            ->httpResponse()
+            ->setMessage(trans('plugins/ecommerce::order.customer_messages.cancel_success'));
     }
 
-    protected function findOrFail(int|string $id): Order
+    public function downloadProof(Order $order)
     {
-        return $this->orderRepository
-            ->getModel()
+        abort_unless($order->store_id === auth('customer')->user()->store?->id, 403);
+
+        $storage = Storage::disk('local');
+
+        if (! $storage->exists($order->proof_file)) {
+            return $this
+                ->httpResponse()
+                ->setError()
+                ->setMessage(trans('plugins/marketplace::marketplace.notices.file_not_found'));
+        }
+
+        return $storage->download($order->proof_file);
+    }
+
+    protected function findOrFail(int|string $id): Order|Model|null
+    {
+        return Order::query()
             ->where([
                 'id' => $id,
                 'is_finished' => 1,
-                'store_id' => auth('customer')->user()->store->id,
+                'store_id' => auth('customer')->user()->store?->id,
             ])
             ->firstOrFail();
     }

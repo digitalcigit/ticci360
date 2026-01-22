@@ -4,58 +4,52 @@ namespace Botble\ACL\Forms;
 
 use Botble\ACL\Http\Requests\UpdatePasswordRequest;
 use Botble\ACL\Models\User;
+use Botble\Base\Forms\FieldOptions\TextFieldOption;
+use Botble\Base\Forms\Fields\PasswordField;
 use Botble\Base\Forms\FormAbstract;
-use Botble\Base\Facades\Html;
 
 class PasswordForm extends FormAbstract
 {
-    public function buildForm(): void
+    public function setup(): void
     {
         $this
-            ->setupModel(new User())
+            ->model(User::class)
             ->setValidatorClass(UpdatePasswordRequest::class)
-            ->setFormOption('template', 'core/base::forms.form-no-wrap')
+            ->template('core/base::forms.form-no-wrap')
             ->setFormOption('id', 'password-form')
-            ->add('old_password', 'password', [
-                'label' => trans('core/acl::users.current_password'),
-                'label_attr' => ['class' => 'control-label required'],
-                'attr' => [
-                    'data-counter' => 60,
-                ],
-            ])
-            ->add('rowOpen1', 'html', [
-                'html' => '<div class="row">',
-            ])
-            ->add('password', 'password', [
-                'label' => trans('core/acl::users.new_password'),
-                'label_attr' => ['class' => 'control-label required'],
-                'attr' => [
-                    'data-counter' => 60,
-                ],
-                'wrapper' => [
-                    'class' => $this->formHelper->getConfig('defaults.wrapper_class') . ' col-md-6',
-                ],
-                'help_block' => [
-                    'text' => Html::tag('span', 'Password Strength', ['class' => 'hidden'])->toHtml(),
-                    'tag' => 'div',
-                    'attr' => [
-                        'class' => 'pwstrength_viewport_progress',
-                    ],
-                ],
-            ])
-            ->add('password_confirmation', 'password', [
-                'label' => trans('core/acl::users.confirm_new_password'),
-                'label_attr' => ['class' => 'control-label required'],
-                'attr' => [
-                    'data-counter' => 60,
-                ],
-                'wrapper' => [
-                    'class' => $this->formHelper->getConfig('defaults.wrapper_class') . ' col-md-6',
-                ],
-            ])
-            ->add('rowClose', 'html', [
-                'html' => '</div>',
-            ])
+            ->setMethod('PUT')
+            ->columns()
+            ->when(
+                $this->getModel()->exists &&
+                $this->getRequest()->user()->is($this->getModel()),
+                function (FormAbstract $form): void {
+                    $form->add(
+                        'old_password',
+                        PasswordField::class,
+                        TextFieldOption::make()
+                            ->label(trans('core/acl::users.current_password'))
+                            ->required()
+                            ->maxLength(60)
+                            ->colspan(2)
+                    );
+                }
+            )
+            ->add(
+                'password',
+                PasswordField::class,
+                TextFieldOption::make()
+                    ->label(trans('core/acl::users.new_password'))
+                    ->required()
+                    ->maxLength(60)
+            )
+            ->add(
+                'password_confirmation',
+                PasswordField::class,
+                TextFieldOption::make()
+                    ->label(trans('core/acl::users.confirm_new_password'))
+                    ->required()
+                    ->maxLength(60)
+            )
             ->setActionButtons(view('core/acl::users.profile.actions')->render());
     }
 }

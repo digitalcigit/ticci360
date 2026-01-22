@@ -2,210 +2,220 @@
 
 namespace Botble\Ecommerce\Http\Controllers\Customers;
 
-use Botble\Base\Facades\Assets;
 use Botble\Base\Events\CreatedContentEvent;
-use Botble\Base\Events\DeletedContentEvent;
 use Botble\Base\Events\UpdatedContentEvent;
-use Botble\Base\Facades\PageTitle;
-use Botble\Base\Forms\FormBuilder;
-use Botble\Base\Http\Controllers\BaseController;
-use Botble\Base\Http\Responses\BaseHttpResponse;
+use Botble\Base\Facades\Assets;
+use Botble\Base\Facades\BaseHelper;
+use Botble\Base\Http\Actions\DeleteResourceAction;
+use Botble\Base\Supports\Breadcrumb;
+use Botble\Ecommerce\Facades\EcommerceHelper;
 use Botble\Ecommerce\Forms\CustomerForm;
+use Botble\Ecommerce\Http\Controllers\BaseController;
 use Botble\Ecommerce\Http\Requests\AddCustomerWhenCreateOrderRequest;
 use Botble\Ecommerce\Http\Requests\CustomerCreateRequest;
 use Botble\Ecommerce\Http\Requests\CustomerEditRequest;
 use Botble\Ecommerce\Http\Requests\CustomerUpdateEmailRequest;
 use Botble\Ecommerce\Http\Resources\CustomerAddressResource;
-use Botble\Ecommerce\Repositories\Interfaces\AddressInterface;
-use Botble\Ecommerce\Repositories\Interfaces\CustomerInterface;
+use Botble\Ecommerce\Models\Address;
+use Botble\Ecommerce\Models\Customer;
+use Botble\Ecommerce\Tables\CustomerReviewTable;
 use Botble\Ecommerce\Tables\CustomerTable;
 use Carbon\Carbon;
-use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 class CustomerController extends BaseController
 {
-    public function __construct(protected CustomerInterface $customerRepository, protected AddressInterface $addressRepository)
+    protected function breadcrumb(): Breadcrumb
     {
+        return parent::breadcrumb()
+            ->add(trans('plugins/ecommerce::customer.name'), route('customers.index'));
     }
 
     public function index(CustomerTable $dataTable)
     {
-        PageTitle::setTitle(trans('plugins/ecommerce::customer.name'));
+        $this->pageTitle(trans('plugins/ecommerce::customer.name'));
 
         return $dataTable->renderTable();
     }
 
-    public function create(FormBuilder $formBuilder)
+    public function create()
     {
-        PageTitle::setTitle(trans('plugins/ecommerce::customer.create'));
+        $this->pageTitle(trans('plugins/ecommerce::customer.create'));
 
         Assets::addScriptsDirectly('vendor/core/plugins/ecommerce/js/customer.js');
 
-        return $formBuilder->create(CustomerForm::class)->remove('is_change_password')->renderForm();
+        return CustomerForm::create()->remove('is_change_password')->renderForm();
     }
 
-    public function store(CustomerCreateRequest $request, BaseHttpResponse $response)
+    public function store(CustomerCreateRequest $request)
     {
-        $customer = $this->customerRepository->getModel();
+        $customer = new Customer();
         $customer->fill($request->input());
         $customer->confirmed_at = Carbon::now();
         $customer->password = Hash::make($request->input('password'));
-        $customer->dob = Carbon::parse($request->input('dob'))->toDateString();
-        $customer = $this->customerRepository->createOrUpdate($customer);
+
+        if ($dob = $request->input('dob')) {
+            $customer->dob = BaseHelper::parseDate($dob);
+        }
+
+        $customer->save();
 
         event(new CreatedContentEvent(CUSTOMER_MODULE_SCREEN_NAME, $request, $customer));
 
-        return $response
+        return $this
+            ->httpResponse()
             ->setPreviousUrl(route('customers.index'))
-            ->setNextUrl(route('customers.edit', $customer->id))
-            ->setMessage(trans('core/base::notices.create_success_message'));
+            ->setNextUrl(route('customers.edit', $customer->getKey()))
+            ->withCreatedSuccessMessage();
     }
 
-    public function edit(int|string $id, FormBuilder $formBuilder)
+    public function edit(Customer $customer)
     {
         Assets::addScriptsDirectly('vendor/core/plugins/ecommerce/js/customer.js');
 
-        $customer = $this->customerRepository->findOrFail($id);
-
-        PageTitle::setTitle(trans('plugins/ecommerce::customer.edit', ['name' => $customer->name]));
+        $this->pageTitle(trans('plugins/ecommerce::customer.edit', ['name' => $customer->name]));
 
         $customer->password = null;
 
-        return $formBuilder->create(CustomerForm::class, ['model' => $customer])->renderForm();
+        return CustomerForm::createFromModel($customer)->setValidatorClass(CustomerEditRequest::class)->renderForm();
     }
 
-    public function update(int|string $id, CustomerEditRequest $request, BaseHttpResponse $response)
+    public function update(Customer $customer, CustomerEditRequest $request)
     {
-        $customer = $this->customerRepository->findOrFail($id);
-
         $customer->fill($request->except('password'));
 
         if ($request->input('is_change_password') == 1) {
             $customer->password = Hash::make($request->input('password'));
         }
 
-        $customer->dob = Carbon::parse($request->input('dob'))->toDateString();
+        if ($dob = $request->input('dob')) {
+            $customer->dob = BaseHelper::parseDate($dob);
+        }
 
-        $customer = $this->customerRepository->createOrUpdate($customer);
+        $customer->save();
 
         event(new UpdatedContentEvent(CUSTOMER_MODULE_SCREEN_NAME, $request, $customer));
 
-        return $response
+        return $this
+            ->httpResponse()
             ->setPreviousUrl(route('customers.index'))
-            ->setMessage(trans('core/base::notices.update_success_message'));
+            ->withUpdatedSuccessMessage();
     }
 
-    public function destroy(int|string $id, Request $request, BaseHttpResponse $response)
+    public function destroy(Customer $customer)
     {
-        try {
-            $customer = $this->customerRepository->findOrFail($id);
-            $this->customerRepository->delete($customer);
-            event(new DeletedContentEvent(CUSTOMER_MODULE_SCREEN_NAME, $request, $customer));
-
-            return $response->setMessage(trans('core/base::notices.delete_success_message'));
-        } catch (Exception $exception) {
-            return $response
-                ->setError()
-                ->setMessage($exception->getMessage());
-        }
+        return DeleteResourceAction::make($customer);
     }
 
-    public function deletes(Request $request, BaseHttpResponse $response)
+    public function verifyEmail(int|string $id, Request $request)
     {
-        $ids = $request->input('ids');
-        if (empty($ids)) {
-            return $response
-                ->setError()
-                ->setMessage(trans('core/base::notices.no_select'));
-        }
-
-        foreach ($ids as $id) {
-            $customer = $this->customerRepository->findOrFail($id);
-            $this->customerRepository->delete($customer);
-            event(new DeletedContentEvent(CUSTOMER_MODULE_SCREEN_NAME, $request, $customer));
-        }
-
-        return $response->setMessage(trans('core/base::notices.delete_success_message'));
-    }
-
-    public function verifyEmail(int|string $id, Request $request, BaseHttpResponse $response)
-    {
-        $customer = $this->customerRepository->getFirstBy([
-            'id' => $id,
-            'confirmed_at' => null,
-        ]);
-
-        if (! $customer) {
-            abort(404);
-        }
+        $customer = Customer::query()
+            ->where([
+                'id' => $id,
+                'confirmed_at' => null,
+            ])->firstOrFail();
 
         $customer->confirmed_at = Carbon::now();
         $customer->save();
 
         event(new UpdatedContentEvent(CUSTOMER_MODULE_SCREEN_NAME, $request, $customer));
 
-        return $response
+        return $this
+            ->httpResponse()
             ->setPreviousUrl(route('customers.index'))
-            ->setMessage(trans('core/base::notices.update_success_message'));
+            ->withUpdatedSuccessMessage();
     }
 
-    public function getListCustomerForSelect(BaseHttpResponse $response)
+    public function resendVerificationEmail(int|string $id)
     {
-        $customers = $this->customerRepository
-            ->allBy([], [], ['id', 'name'])
-            ->toArray();
+        $customer = Customer::query()->findOrFail($id);
 
-        return $response->setData($customers);
+        if ($customer->confirmed_at) {
+            return $this
+                ->httpResponse()
+                ->setError()
+                ->setMessage(trans('plugins/ecommerce::customer.email_already_verified'));
+        }
+
+        $customer->sendEmailVerificationNotification();
+
+        return $this
+            ->httpResponse()
+            ->setMessage(trans('plugins/ecommerce::customer.verification_email_sent'));
     }
 
-    public function getListCustomerForSearch(Request $request, BaseHttpResponse $response)
+    public function getListCustomerForSelect()
     {
-        $customers = $this->customerRepository
-            ->getModel()
+        $customers = Customer::query()
+            ->select(['id', 'name'])
+            ->get()
+            ->all();
+
+        return $this
+            ->httpResponse()
+            ->setData($customers);
+    }
+
+    public function getListCustomerForSearch(Request $request)
+    {
+        $customers = Customer::query()
             ->where('name', 'LIKE', '%' . $request->input('keyword') . '%')
             ->simplePaginate(5);
 
         foreach ($customers as &$customer) {
-            $customer->avatar_url = (string)$customer->avatar_url;
+            $customer->avatar_url = (string) $customer->avatar_url;
         }
 
-        return $response->setData($customers);
+        return $this
+            ->httpResponse()->setData($customers);
     }
 
-    public function postUpdateEmail($id, CustomerUpdateEmailRequest $request, BaseHttpResponse $response)
+    public function postUpdateEmail($id, CustomerUpdateEmailRequest $request)
     {
-        $this->customerRepository->createOrUpdate(['email' => $request->input('email')], ['id' => $id]);
+        $customer = Customer::query()->findOrFail($id);
 
-        return $response->setMessage(trans('core/base::notices.update_success_message'));
+        $customer->email = $request->input('email');
+        $customer->save();
+
+        return $this
+            ->httpResponse()
+            ->withUpdatedSuccessMessage();
     }
 
-    public function getCustomerAddresses($id, BaseHttpResponse $response)
+    public function getCustomerAddresses($id)
     {
-        $addresses = $this->addressRepository->allBy(['customer_id' => $id]);
+        $addresses = Address::query()->where('customer_id', $id)->get();
 
-        return $response->setData(CustomerAddressResource::collection($addresses));
+        return $this
+            ->httpResponse()
+            ->setData(CustomerAddressResource::collection($addresses));
     }
 
-    public function getCustomerOrderNumbers($id, BaseHttpResponse $response)
+    public function getCustomerOrderNumbers($id)
     {
-        $customer = $this->customerRepository->findById($id);
+        /**
+         * @var Customer $customer
+         */
+        $customer = Customer::query()->find($id);
+
         if (! $customer) {
-            return $response->setData(0);
+            return $this
+                ->httpResponse()
+                ->setData(0);
         }
 
-        return $response->setData($customer->orders()->count());
+        return $this
+            ->httpResponse()
+            ->setData($customer->completedOrders()->count());
     }
 
-    public function postCreateCustomerWhenCreatingOrder(
-        AddCustomerWhenCreateOrderRequest $request,
-        BaseHttpResponse $response
-    ) {
+    public function postCreateCustomerWhenCreatingOrder(AddCustomerWhenCreateOrderRequest $request)
+    {
         $request->merge(['password' => Hash::make(Str::random(36))]);
-        $customer = $this->customerRepository->createOrUpdate($request->input());
-        $customer->avatar = (string)$customer->avatar_url;
+        $customer = Customer::query()->create($request->input());
+        $customer->avatar = (string) $customer->avatar_url;
 
         event(new CreatedContentEvent(CUSTOMER_MODULE_SCREEN_NAME, $request, $customer));
 
@@ -214,18 +224,41 @@ class CustomerController extends BaseController
             'is_default' => true,
         ]);
 
-        $address = $this->addressRepository->createOrUpdate($request->input());
+        $address = Address::query()->create($request->input());
 
-        $address->country = $address->country_name;
-        $address->state = $address->state_name;
-        $address->city = $address->city_name;
+        if (! EcommerceHelper::loadCountriesStatesCitiesFromPluginLocation()) {
+            $address->country = $address->country_name;
+            $address->state = $address->state_name;
+            $address->city = $address->city_name;
+        }
 
-        $address->country_name = $address->country;
-        $address->state_name = $address->state;
-        $address->city_name = $address->city;
-
-        return $response
+        return $this
+            ->httpResponse()
             ->setData(compact('address', 'customer'))
-            ->setMessage(trans('core/base::notices.create_success_message'));
+            ->withCreatedSuccessMessage();
+    }
+
+    public function ajaxReviews(int|string $id, CustomerReviewTable $customerReviewTable)
+    {
+        return $customerReviewTable->customerId($id)->renderTable();
+    }
+
+    public function view($id)
+    {
+        $customer = Customer::query()->findOrFail($id);
+
+        $this->pageTitle(trans('plugins/ecommerce::customer.view', ['name' => $customer->name]));
+
+        Assets::addScriptsDirectly('vendor/core/plugins/ecommerce/js/customer.js');
+
+        $totalSpent = $customer->completedOrders()->sum('amount');
+        $totalOrders = $customer->finishedOrders()->count();
+        $completedOrders = $customer->completedOrders()->count();
+        $totalProducts = $customer->completedOrders()
+            ->withCount('products')
+            ->get()
+            ->sum('products_count');
+
+        return view('plugins/ecommerce::customers.view', compact('customer', 'totalSpent', 'totalOrders', 'completedOrders', 'totalProducts'));
     }
 }

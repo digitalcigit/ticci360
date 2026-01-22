@@ -1,0 +1,1 @@
+{"name":"botble/captcha","type":"package","autoload":{"psr-4":{"Botble\\Captcha\\":"src/"}}}

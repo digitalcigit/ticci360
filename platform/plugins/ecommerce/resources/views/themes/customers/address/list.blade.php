@@ -1,55 +1,54 @@
 @extends(EcommerceHelper::viewPath('customers.master'))
 
+@section('title', trans('plugins/ecommerce::customer-dashboard.address_books'))
+
 @section('content')
-    <h2 class="customer-page-title">{{ __('Address books') }}</h2>
-    <div class="dashboard-address">
-        <a class="add-address" href="{{ route('customer.address.create') }}"><i class="fa fa-plus"></i>
-            <span>{{ __('Add a new address') }}</span></a>
-        <div class="row">
-
-            @foreach($addresses as $address)
-                <div class="col-md-12 col-sm-12">
-                    <div
-                        class="panel panel-default dashboard-address-item @if ($address->is_default) is-address-default @endif">
-                        <div class="panel-body">
-                            <p class="name">{{ $address->name }} @if ($address->is_default) <span
-                                    class="address-default">{{ __('Default') }}</span> @endif
-                            </p>
-                            <p class="address"><i class="fa fa-address-book"
-                                                  aria-hidden="true"></i> {{ $address->address }}, {{ $address->city_name }}
-                                , {{ $address->state_name }}, {{ $address->country_name }}@if (EcommerceHelper::isZipCodeEnabled()), {{ $address->zip_code }} @endif</p>
-                            <p class="phone"><i class="fa fa-phone" aria-hidden="true"></i> {{ $address->phone }}</p>
-                            <div class="action">
-                                <div class="edit-customer-address">
-                                    <a class="text-info"
-                                       href="{{ route('customer.address.edit', $address->id) }}">{{ __('Edit') }}</a> |
-                                    <a class="text-danger btn-trigger-delete-address"
-                                       href="#" data-url="{{ route('customer.address.destroy', $address->id) }}">{{ __('Remove') }}</a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            @endforeach
-
-        </div>
-    </div>
-
-    <div class="modal fade" id="confirm-delete-modal" tabindex="-1" role="dialog" aria-hidden="true">
-        <div class="modal-dialog modal-xs">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h4 class="modal-title"><strong>{{ __('Confirm delete') }}</strong></h4>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <p>{{ __('Do you really want to delete this address?') }}</p>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn--custom btn--rounded btn--outline btn--sm" type="button" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
-                    <button class="btn--custom btn--rounded btn--outline btn--sm btn-confirm-delete btn-outline-danger" type="submit">{{ __('Delete') }}</button>
+    <div class="bb-customer-content-wrapper">
+        @if($addresses->isNotEmpty())
+            <div class="dashboard-address">
+            <!-- Page Header -->
+            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+                <div>
+                    <h2 class="h5 mb-1">{{ trans('plugins/ecommerce::customer-dashboard.your_addresses') }}</h2>
+                    <p class="text-muted small mb-0">{{ trans('plugins/ecommerce::customer-dashboard.manage_shipping_billing_addresses') }}</p>
                 </div>
             </div>
-        </div>
-    </div><!-- /.modal -->
+
+            <!-- Address Grid -->
+            <div class="bb-customer-card-list">
+                <div class="row row-cols-1 row-cols-lg-2 g-4">
+                    @foreach ($addresses as $address)
+                        @include(EcommerceHelper::viewPath('customers.address.item'), ['address' => $address])
+                    @endforeach
+                </div>
+            </div>
+
+            <!-- Add Address Prompt -->
+            @if($addresses->count() < 5)
+                <div class="card border-0 bg-light mt-4">
+                    <div class="card-body text-center py-4">
+                        <div class="bg-primary bg-opacity-10 rounded-circle p-3 d-inline-flex mb-3">
+                            <x-core::icon name="ti ti-map-pin-plus" class="text-primary" />
+                        </div>
+                        <h5 class="card-title h6 mb-2">{{ trans('plugins/ecommerce::customer-dashboard.need_another_address') }}</h5>
+                        <p class="card-text text-muted small mb-3">
+                            {{ trans('plugins/ecommerce::customer-dashboard.add_multiple_addresses_description') }}
+                        </p>
+                        <a href="{{ route('customer.address.create') }}" class="btn btn-outline-primary btn-sm">
+                            <x-core::icon name="ti ti-plus" class="me-1" />
+                            {{ trans('plugins/ecommerce::customer-dashboard.add_another_address') }}
+                        </a>
+                    </div>
+                </div>
+            @endif
+            </div>
+        @else
+            @include(EcommerceHelper::viewPath('customers.partials.empty-state'), [
+                'title' => trans('plugins/ecommerce::customer-dashboard.no_addresses_yet'),
+                'subtitle' => trans('plugins/ecommerce::customer-dashboard.add_first_address_description'),
+                'actionUrl' => route('customer.address.create'),
+                'actionLabel' => trans('plugins/ecommerce::customer-dashboard.add_your_first_address'),
+            ])
+        @endif
+    </div>
 @endsection

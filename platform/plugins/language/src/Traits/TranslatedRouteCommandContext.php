@@ -2,12 +2,12 @@
 
 namespace Botble\Language\Traits;
 
-use Botble\Language\LanguageManager;
 use Botble\Language\Facades\Language;
+use Botble\Language\LanguageManager;
 
 trait TranslatedRouteCommandContext
 {
-    protected function isSupportedLocale(string|null $locale): bool
+    protected function isSupportedLocale(?string $locale): bool
     {
         return in_array($locale, $this->getSupportedLocales());
     }
@@ -19,7 +19,7 @@ trait TranslatedRouteCommandContext
 
     protected function getLocalization()
     {
-        return $this->laravel->make(LanguageManager::class);
+        return app(LanguageManager::class);
     }
 
     protected function getBootstrapPath(): string
@@ -27,7 +27,7 @@ trait TranslatedRouteCommandContext
         return $this->laravel->bootstrapPath();
     }
 
-    protected function makeLocaleRoutesPath(string|null $locale = ''): string
+    protected function makeLocaleRoutesPath(?string $locale = ''): string
     {
         $path = $this->laravel->getCachedRoutesPath();
 

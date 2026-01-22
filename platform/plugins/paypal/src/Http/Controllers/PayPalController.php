@@ -2,13 +2,13 @@
 
 namespace Botble\PayPal\Http\Controllers;
 
+use Botble\Base\Http\Controllers\BaseController;
 use Botble\Base\Http\Responses\BaseHttpResponse;
+use Botble\Payment\Supports\PaymentHelper;
 use Botble\PayPal\Http\Requests\PayPalPaymentCallbackRequest;
 use Botble\PayPal\Services\Gateways\PayPalPaymentService;
-use Botble\Payment\Supports\PaymentHelper;
-use Illuminate\Routing\Controller;
 
-class PayPalController extends Controller
+class PayPalController extends BaseController
 {
     public function getCallback(
         PayPalPaymentCallbackRequest $request,
@@ -22,13 +22,13 @@ class PayPalController extends Controller
                 ->setError()
                 ->setNextUrl(PaymentHelper::getCancelURL())
                 ->withInput()
-                ->setMessage(__('Payment failed!'));
+                ->setMessage(trans('plugins/paypal::paypal.payment_failed'));
         }
 
         $payPalPaymentService->afterMakePayment($request->input());
 
         return $response
             ->setNextUrl(PaymentHelper::getRedirectURL())
-            ->setMessage(__('Checkout successfully!'));
+            ->setMessage(trans('plugins/payment::payment.checkout_success'));
     }
 }

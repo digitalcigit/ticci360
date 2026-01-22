@@ -2,24 +2,24 @@
 
 return [
     '401_title' => 'Permission Denied',
-    '401_msg' => '<li>You have not been granted access to the section by the administrator.</li>
-	                <li>You may have the wrong account type.</li>
-	                <li>You are not authorized to view the requested resource.</li>
-	                <li>Your subscription may have expired.</li>',
     '404_title' => 'Page could not be found',
-    '404_msg' => '<li>The page you requested does not exist.</li>
-	                <li>The link you clicked is no longer.</li>
-	                <li>The page may have moved to a new location.</li>
-	                <li>An error may have occurred.</li>
-	                <li>You are not authorized to view the requested resource.</li>',
+    '404_page_not_found' => '404 Page Not Found',
+    '404_page_not_found_description' => 'Page could not be found',
+    '404_description' => 'The page you are looking for could not be found.',
     '500_title' => 'Page could not be loaded',
-    '500_msg' => '<li>The page you requested does not exist.</li>
-	                <li>The link you clicked is no longer.</li>
-	                <li>The page may have moved to a new location.</li>
-	                <li>An error may have occurred.</li>
-	                <li>You are not authorized to view the requested resource.</li>',
+    '500_internal_server_error' => '500 Internal Server Error',
+    '500_internal_server_error_description' => 'Internal Server Error',
+    '500_description' => 'Something is broken. Please let us know what you were doing when this error occurred. We will fix it as soon as possible. Sorry for any inconvenience caused.',
+    '503_service_unavailable' => '503 Service Unavailable',
+    '503_temporarily_down' => 'Temporarily down for maintenance',
+    '503_admin_instruction' => "If you are the administrator and you can't access your site after enabling maintenance mode, just need to delete file <strong>storage/framework/down</strong> to turn-off maintenance mode.",
     'reasons' => 'This may have occurred because of several reasons',
     'try_again' => 'Please try again in a few minutes, or alternatively return to the homepage by <a href=":link">clicking here</a>.',
     'not_found' => 'Not Found',
     'results_not_found' => 'Results not found!',
+    'go_to_home' => 'Go to home',
+    'take_me_home' => 'Take me home',
+    'error_when_sending_email' => 'Unable to send e-mail. Something wrong with your email settings in Admin → Settings → Email, please check your settings again.',
+    'error_when_sending_email_guest' => 'Unable to send e-mail. Please contact the site administrator if the problem persists.',
+    'token_mismatch' => 'Session expired. Please try again.',
 ];

@@ -3,43 +3,46 @@
 namespace Botble\Ecommerce\Notifications;
 
 use Botble\Base\Facades\EmailHandler;
+use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\HtmlString;
 
 class ConfirmEmailNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
-    /**
-     * Get the notification's delivery channels.
-     *
-     * @param mixed $notifiable
-     */
-    public function via($notifiable)
+    public function via($notifiable): array
     {
         return ['mail'];
     }
 
-    /**
-     * Get the mail representation of the notification.
-     *
-     * @param mixed $notifiable
-     * @return MailMessage
-     */
-    public function toMail($notifiable)
+    public function toMail($notifiable): MailMessage
     {
-        EmailHandler::setModule(ECOMMERCE_MODULE_SCREEN_NAME)
-            ->setVariableValue('verify_link', URL::signedRoute('customer.confirm', ['user' => $notifiable->id]));
+        $expirationMinutes = (int) get_ecommerce_setting('verification_expire_minutes');
 
-        $template = 'confirm-email';
-        $content = EmailHandler::prepareData(EmailHandler::getTemplateContent($template));
+        if (! $expirationMinutes) {
+            $expirationMinutes = (int) config('plugins.ecommerce.general.verification_expire_minutes', 60);
+        }
+
+        $emailHandler = EmailHandler::setModule(ECOMMERCE_MODULE_SCREEN_NAME)
+            ->setType('plugins')
+            ->setTemplate('confirm-email')
+            ->addTemplateSettings(ECOMMERCE_MODULE_SCREEN_NAME, config('plugins.ecommerce.email', []))
+            ->setVariableValues([
+                'verify_link' => URL::temporarySignedRoute(
+                    'customer.confirm',
+                    Carbon::now()->addMinutes($expirationMinutes),
+                    ['user' => $notifiable->id]
+                ),
+                'customer_name' => $notifiable->name,
+            ]);
 
         return (new MailMessage())
-            ->view(['html' => new HtmlString($content)])
-            ->subject(EmailHandler::getTemplateSubject($template));
+            ->view(['html' => new HtmlString($emailHandler->getContent())])
+            ->subject($emailHandler->getSubject());
     }
 }

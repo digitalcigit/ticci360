@@ -3,28 +3,28 @@
 namespace Botble\Ecommerce\Forms;
 
 use Botble\Base\Facades\Assets;
+use Botble\Base\Forms\Fields\TextField;
 use Botble\Base\Forms\FormAbstract;
 use Botble\Ecommerce\Enums\ShippingRuleTypeEnum;
+use Botble\Ecommerce\Forms\Concerns\HasLocationFields;
+use Botble\Ecommerce\Forms\Fronts\Auth\FieldOptions\TextFieldOption;
 use Botble\Ecommerce\Http\Requests\ShippingRuleItemRequest;
+use Botble\Ecommerce\Models\ShippingRule;
 use Botble\Ecommerce\Models\ShippingRuleItem;
-use Botble\Ecommerce\Repositories\Interfaces\ShippingRuleInterface;
-use Botble\Ecommerce\Facades\EcommerceHelper;
 use Illuminate\Database\Eloquent\Builder;
 
 class ShippingRuleItemForm extends FormAbstract
 {
-    public function buildForm(): void
-    {
-        if (EcommerceHelper::loadCountriesStatesCitiesFromPluginLocation()) {
-            Assets::addScriptsDirectly('vendor/core/plugins/location/js/location.js');
-        }
+    use HasLocationFields;
 
+    public function setup(): void
+    {
         Assets::addScriptsDirectly(['vendor/core/plugins/ecommerce/js/shipping.js'])
             ->addScripts(['input-mask']);
 
-        $rules = app(ShippingRuleInterface::class)->getModel()
+        $rules = ShippingRule::query()
             ->whereIn('type', ShippingRuleTypeEnum::keysAllowRuleItems())
-            ->whereHas('shipping', function (Builder $query) {
+            ->whereHas('shipping', function (Builder $query): void {
                 $query->whereNotNull('country');
             })
             ->get();
@@ -49,7 +49,9 @@ class ShippingRuleItemForm extends FormAbstract
 
         $choices = [];
         foreach ($rules as $rule) {
-            $choices[$rule->id] = $rule->name . ' - ' . format_price($rule->price) . ' / ' . $rule->shipping->country_name;
+            $choices[$rule->id] = $rule->name . ' - ' . format_price(
+                $rule->price
+            ) . ' / ' . $rule->shipping->country_name;
             $optionAttrs[$rule->id] = ['data-country' => $rule->shipping->country];
             if ($shippingRuleId && $shippingRuleId == $rule->id) {
                 $country = $rule->shipping->country;
@@ -67,12 +69,11 @@ class ShippingRuleItemForm extends FormAbstract
         }
 
         $this
-            ->setupModel(new ShippingRuleItem())
+            ->model(ShippingRuleItem::class)
             ->setValidatorClass(ShippingRuleItemRequest::class)
-            ->withCustomFields()
             ->add('shipping_rule_id', 'customSelect', [
                 'label' => trans('plugins/ecommerce::shipping.rule.item.forms.shipping_rule'),
-                'label_attr' => ['class' => 'control-label required'],
+                'required' => true,
                 'attr' => [
                     'class' => 'form-control shipping-rule-id',
                 ],
@@ -80,101 +81,40 @@ class ShippingRuleItemForm extends FormAbstract
                 'choices' => $choices,
                 'default_value' => $shippingRuleId,
                 'wrapper' => [
-                    'class' => $this->formHelper->getConfig('defaults.wrapper_class') . ($shippingRuleId ? ' d-none' : ''),
+                    'class' => $this->formHelper->getConfig(
+                        'defaults.wrapper_class'
+                    ) . ($shippingRuleId ? ' d-none' : ''),
                 ],
             ]);
 
-        if (EcommerceHelper::loadCountriesStatesCitiesFromPluginLocation()) {
-            $states = ['' => trans('plugins/location::city.select_state')];
-            if ($country) {
-                $states += EcommerceHelper::getAvailableStatesByCountry($country);
-            }
-
-            $cities = ['' => trans('plugins/location::city.select_city')];
-            if ($state = old('state', $this->getModel()->state)) {
-                $cities += EcommerceHelper::getAvailableCitiesByState($state);
-            }
-
-            $this
-                ->add('country', 'customSelect', [
-                    'attr' => [
-                        'data-type' => 'country',
-                    ],
-                    'choices' => EcommerceHelper::getAvailableCountries(),
-                    'wrapper' => [
-                        'class' => $this->formHelper->getConfig('defaults.wrapper_class') . ' d-none',
-                    ],
-                    'selected' => $country,
-                ])
-                ->add('state', 'customSelect', [
-                    'label' => trans('plugins/ecommerce::shipping.rule.item.forms.state'),
-                    'label_attr' => ['class' => 'control-label ' . ($isRequiredState ? 'required' : '')],
-                    'attr' => [
-                        'class' => 'form-control select-search-full',
-                        'data-type' => 'state',
-                        'data-url' => route('ajax.states-by-country'),
-                    ],
-                    'choices' => $states,
-                ])
-                ->add('city', 'customSelect', [
-                    'label' => trans('plugins/ecommerce::shipping.rule.item.forms.city'),
-                    'label_attr' => ['class' => 'control-label'],
-                    'attr' => [
-                        'class' => 'form-control select-search-full',
-                        'data-type' => 'city',
-                        'data-url' => route('ajax.cities-by-state'),
-                    ],
-                    'choices' => $cities,
-                ]);
-        } else {
-            $this
-                ->add('country', 'text', [
-                    'label' => trans('plugins/ecommerce::shipping.rule.item.forms.country'),
-                    'label_attr' => ['class' => 'control-label'],
-                    'attr' => [
-                        'placeholder' => trans('plugins/ecommerce::shipping.rule.item.forms.country_placeholder'),
-                    ],
-                    'wrapper' => [
-                        'class' => $this->formHelper->getConfig('defaults.wrapper_class') . ' d-none',
-                    ],
-                    'value' => $country,
-                ])
-                ->add('state', 'text', [
-                    'label' => trans('plugins/ecommerce::shipping.rule.item.forms.state'),
-                    'label_attr' => ['class' => 'control-label ' . ($isRequiredState ? 'required' : '')],
-                    'attr' => [
-                        'placeholder' => trans('plugins/ecommerce::shipping.rule.item.forms.state_placeholder'),
-                    ],
-                ])
-                ->add('city', 'text', [
-                    'label' => trans('plugins/ecommerce::shipping.rule.item.forms.city'),
-                    'label_attr' => ['class' => 'control-label'],
-                    'attr' => [
-                        'placeholder' => trans('plugins/ecommerce::shipping.rule.item.forms.city_placeholder'),
-                    ],
-                ]);
-        }
-
         $this
-            ->add('zip_code', 'text', [
-                'label' => trans('plugins/ecommerce::shipping.rule.item.forms.zip_code'),
-                'label_attr' => ['class' => 'control-label'],
-                'attr' => [
-                    'placeholder' => trans('plugins/ecommerce::shipping.rule.item.forms.zip_code_placeholder'),
+            ->addLocationFields(
+                countryAttributes: [
+                    'selected' => $country,
                 ],
-            ])
-            ->add('adjustment_price', 'text', [
-                'label' => trans('plugins/ecommerce::shipping.rule.item.forms.adjustment_price'),
-                'label_attr' => ['class' => 'control-label required'],
-                'attr' => [
-                    'class' => 'form-control input-mask-number',
-                    'placeholder' => trans('plugins/ecommerce::shipping.rule.item.forms.adjustment_price_placeholder'),
-                    'data-placeholder' => '',
-                ],
-            ])
+                stateAttributes: [
+                    'required' => $isRequiredState,
+                ]
+            )
+            ->remove('address')
+            ->add(
+                'adjustment_price',
+                TextField::class,
+                TextFieldOption::make()
+                    ->label(trans('plugins/ecommerce::shipping.rule.item.forms.adjustment_price'))
+                    ->helperText(trans('plugins/ecommerce::shipping.rule.item.forms.adjustment_price_helper'))
+                    ->attributes([
+                        'class' => 'form-control input-mask-number',
+                        'placeholder' => trans(
+                            'plugins/ecommerce::shipping.rule.item.forms.adjustment_price_placeholder'
+                        ),
+                        'data-placeholder' => '',
+                    ])
+                    ->defaultValue(0)
+            )
             ->add('is_enabled', 'onOff', [
                 'label' => trans('plugins/ecommerce::shipping.rule.item.forms.is_enabled'),
-                'label_attr' => ['class' => 'control-label required'],
+                'required' => true,
                 'attr' => [
                     'class' => 'form-control',
                 ],

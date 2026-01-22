@@ -1,18 +1,20 @@
 <?php
 
-use Botble\Base\Facades\BaseHelper;
+use Botble\Base\Facades\AdminHelper;
+use Botble\Ecommerce\Http\Controllers\ExportProductController;
+use Botble\Ecommerce\Http\Controllers\ImportProductController;
 use Illuminate\Support\Facades\Route;
 
-Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'middleware' => ['web', 'core']], function () {
-    Route::group(['prefix' => BaseHelper::getAdminPrefix() . '/ecommerce', 'middleware' => 'auth'], function () {
-        Route::group(['prefix' => 'products', 'as' => 'products.'], function () {
+AdminHelper::registerRoutes(function (): void {
+    Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'prefix' => 'ecommerce'], function (): void {
+        Route::group(['prefix' => 'products', 'as' => 'products.'], function (): void {
             Route::resource('', 'ProductController')
                 ->parameters(['' => 'product']);
 
-            Route::delete('items/destroy', [
-                'as' => 'deletes',
-                'uses' => 'ProductController@deletes',
-                'permission' => 'products.destroy',
+            Route::post('{product}/duplicate', [
+                'as' => 'duplicate',
+                'uses' => 'ProductController@duplicate',
+                'permission' => 'products.duplicate',
             ]);
 
             Route::post('add-attribute-to-product/{id}', [
@@ -105,7 +107,7 @@ Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'middleware' =
                 'permission' => 'products.edit',
             ]);
 
-            Route::post('product-variations/{id}', [
+            Route::post('product-variations/{product}', [
                 'as' => 'product-variations',
                 'uses' => 'ProductController@getProductVariations',
                 'permission' => 'products.index',
@@ -117,11 +119,67 @@ Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'middleware' =
                 'permission' => 'products.index',
             ])->wherePrimaryKey();
 
-            Route::post('set-default-product-variation/{id}', [
+            Route::post('set-default-product-variation/{productVariation}', [
                 'as' => 'set-default-product-variation',
                 'uses' => 'ProductController@setDefaultProductVariation',
                 'permission' => 'products.edit',
             ])->wherePrimaryKey();
+
+            Route::get('view/{product}', [
+                'as' => 'view',
+                'uses' => 'ProductController@view',
+                'permission' => 'products.index',
+            ])->wherePrimaryKey('product');
+
+            Route::group(['prefix' => '{product}/license-codes', 'as' => 'license-codes.'], function (): void {
+                Route::get('/', [
+                    'as' => 'index',
+                    'uses' => 'ProductLicenseCodeController@index',
+                    'permission' => 'products.edit',
+                ]);
+
+                Route::post('/', [
+                    'as' => 'store',
+                    'uses' => 'ProductLicenseCodeController@store',
+                    'permission' => 'products.edit',
+                ]);
+
+                Route::put('{licenseCode}', [
+                    'as' => 'update',
+                    'uses' => 'ProductLicenseCodeController@update',
+                    'permission' => 'products.edit',
+                ]);
+
+                Route::delete('{licenseCode}', [
+                    'as' => 'destroy',
+                    'uses' => 'ProductLicenseCodeController@destroy',
+                    'permission' => 'products.edit',
+                ]);
+
+                Route::post('bulk-generate', [
+                    'as' => 'bulk-generate',
+                    'uses' => 'ProductLicenseCodeController@bulkGenerate',
+                    'permission' => 'products.edit',
+                ]);
+            });
+        });
+    });
+
+    Route::prefix('tools/data-synchronize')->name('tools.data-synchronize.')->group(function (): void {
+        Route::prefix('export')->name('export.')->group(function (): void {
+            Route::group(['prefix' => 'products', 'as' => 'products.', 'permission' => 'ecommerce.export.products.index'], function (): void {
+                Route::get('/', [ExportProductController::class, 'index'])->name('index');
+                Route::post('/', [ExportProductController::class, 'store'])->name('store');
+            });
+        });
+
+        Route::prefix('import')->name('import.')->group(function (): void {
+            Route::group(['prefix' => 'products', 'as' => 'products.', 'permission' => 'ecommerce.import.products.index'], function (): void {
+                Route::get('/', [ImportProductController::class, 'index'])->name('index');
+                Route::post('validate', [ImportProductController::class, 'validateData'])->name('validate');
+                Route::post('import', [ImportProductController::class, 'import'])->name('store');
+                Route::post('download-example', [ImportProductController::class, 'downloadExample'])->name('download-example');
+            });
         });
     });
 });

@@ -6,7 +6,7 @@ if (! function_exists('sort_item_with_children')) {
     function sort_item_with_children(
         Collection|array $list,
         array &$result = [],
-        int|string $parent = null,
+        int|string|null $parent = null,
         int $depth = 0
     ): array {
         if ($list instanceof Collection) {
@@ -25,7 +25,7 @@ if (! function_exists('sort_item_with_children')) {
                 continue;
             }
 
-            if ((int)$object->parent_id == (int)$parent) {
+            if ((int) $object->parent_id == (int) $parent) {
                 $result[] = $object;
                 $object->depth = $depth;
                 unset($list[$key]);

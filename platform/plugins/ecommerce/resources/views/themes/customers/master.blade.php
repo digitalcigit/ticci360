@@ -1,134 +1,154 @@
-<div class="customer-page crop-avatar">
+<div class="bb-customer-page crop-avatar">
     <div class="container">
         <div class="customer-body">
-            <div class="row body-border">
+            <!-- Mobile Header -->
+            <div class="d-lg-none bg-white border-bottom p-3">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        @if ($customer = auth('customer')->user())
+                            <div class="wrapper-image" style="width: 32px; height: 32px;">
+                                {!! RvMedia::image($customer->avatar_url, $customer->name, attributes: ['class' => 'rounded-circle img-fluid']) !!}
+                            </div>
+                            <div>
+                                <div class="fw-semibold small">{{ $customer->name }}</div>
+                                <div class="text-muted" style="font-size: 0.75rem;">{{ trans('plugins/ecommerce::customer-dashboard.account_dashboard') }}</div>
+                            </div>
+                        @endif
+                    </div>
+                    <button
+                        class="btn btn-outline-secondary btn-sm"
+                        type="button"
+                        data-bs-toggle="offcanvas"
+                        data-bs-target="#customerSidebar"
+                        aria-controls="customerSidebar"
+                    >
+                        <x-core::icon name="ti ti-menu-2" size="sm" />
+                    </button>
+                </div>
+            </div>
 
-                <div class="col-md-3">
-                    <div class="profile-sidebar">
-
-                        <form id="avatar-upload-form" enctype="multipart/form-data" action="javascript:void(0)" onsubmit="return false">
-                            <div class="avatar-upload-container">
-                                <div class="form-group mb-3">
-                                    <div id="account-avatar">
-                                        <div class="profile-image">
-                                            <div class="avatar-view mt-card-avatar">
-                                                <img class="br2" src="{{ auth('customer')->user()->avatar_url }}" alt="{{ auth('customer')->user()->name }}">
-                                                <div class="mt-overlay br2">
-                                                    <span><i class="fa fa-edit"></i></span>
-                                                </div>
+            <div class="row g-0">
+                <!-- Desktop Sidebar -->
+                <div class="col-lg-3 col-xl-3 d-none d-lg-block">
+                    <div class="bb-customer-sidebar-wrapper h-100 d-flex flex-column">
+                        <div class="bb-customer-sidebar flex-1">
+                            <!-- User Profile Section -->
+                            @if ($customer = auth('customer')->user())
+                                <div class="bb-customer-sidebar-heading">
+                                    <div class="d-flex align-items-center gap-3 p-4">
+                                        <div class="position-relative">
+                                            <div class="wrapper-image">
+                                                {!! RvMedia::image($customer->avatar_url, $customer->name, attributes: ['class' => 'rounded-circle border border-2 border-white shadow-sm']) !!}
                                             </div>
+                                            <div class="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white" style="width: 12px; height: 12px;"></div>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="name fw-semibold text-truncate">{{ $customer->name }}</div>
+                                            <div class="email text-muted small text-truncate">{{ $customer->email }}</div>
                                         </div>
                                     </div>
                                 </div>
-                                <div id="print-msg" class="text-danger hidden"></div>
-                            </div>
-                        </form>
+                            @endif
 
-                        <div class="text-center">
-                            <div class="profile-usertitle-name">
-                                <strong>{{ auth('customer')->user()->name }}</strong>
-                            </div>
+                            <!-- Navigation Section -->
+                            <nav class="bb-customer-navigation px-3 pb-4">
+                                <div class="nav-section">
+                                    <ul class="nav nav-pills flex-column gap-1 mt-3">
+                                        @foreach (DashboardMenu::getAll('customer') as $item)
+                                            @continue(! $item['name'])
+                                            <li class="nav-item">
+                                                <a
+                                                    href="{{ $item['url'] }}"
+                                                    @class([
+                                                        'nav-link d-flex align-items-center gap-3 rounded-2 py-2 px-3',
+                                                        'active' => $item['active']
+                                                    ])
+                                                    title="{{ $item['name'] }}"
+                                                >
+                                                    <x-core::icon :name="$item['icon']" class="nav-icon flex-shrink-0" size="sm" />
+                                                    <span class="nav-text">{{ $item['name'] }}</span>
+                                                </a>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            </nav>
                         </div>
-
-                        <div class="profile-usermenu">
-                            <ul class="list-group">
-                                <li class="list-group-item" style="display:none">
-                                    <a href="{{ route('customer.overview') }}" class="collection-item @if (Route::currentRouteName() == 'customer.overview') active @endif">{{ __('Overview') }}</a>
-                                    <i class="fa fa-user-circle-o float-end" aria-hidden="true"></i>
-                                </li>
-                                <li class="list-group-item">
-                                    <a href="{{ route('customer.edit-account') }}" class="collection-item @if (Route::currentRouteName() == 'customer.edit-account') active @endif">{{ __('Profile') }}</a>
-                                    <i class="fa fa-credit-card" aria-hidden="true"></i>
-                                </li>
-                                <li class="list-group-item">
-                                    <a href="{{ route('customer.orders') }}" class="collection-item @if (Route::currentRouteName() == 'customer.orders') active @endif">{{ __('Orders') }}</a>
-                                    <i class="fa fa-first-order" aria-hidden="true"></i>
-                                </li>
-                                @if (EcommerceHelper::isReviewEnabled())
-                                    <li class="list-group-item">
-                                        <a href="{{ route('customer.product-reviews') }}" class="collection-item @if (Route::currentRouteName() == 'customer.product-reviews') active @endif">{{ __('Product Reviews') }}</a>
-                                        <i class="fa fa-star"></i>
-                                    </li>
-                                @endif
-                                @if (EcommerceHelper::isEnabledSupportDigitalProducts())
-                                    <li class="list-group-item">
-                                        <a href="{{ route('customer.downloads') }}" class="collection-item @if (Route::currentRouteName() == 'customer.downloads') active @endif">{{ __('Downloads') }}</a>
-                                        <i class="fa-solid fa-download" aria-hidden="true"></i>
-                                    </li>
-                                @endif
-                                <li class="list-group-item">
-                                    <a href="{{ route('customer.address') }}" class="collection-item @if (Route::currentRouteName() == 'customer.address') active @endif">{{ __('Address books') }}</a>
-                                    <i class="fa fa-book" aria-hidden="true"></i>
-                                </li>
-                                <li class="list-group-item">
-                                    <a href="{{ route('customer.change-password') }}" class="collection-item @if (Route::currentRouteName() == 'customer.change-password') active @endif">{{ __('Change password') }}</a>
-                                    <i class="fa fa-exclamation-circle" aria-hidden="true"></i>
-                                </li>
-                                <li class="list-group-item">
-                                    <a href="{{ route('customer.logout') }}" class="collection-item">{{ __('Logout') }}</a>
-                                    <i class="fa fa-sign-out" aria-hidden="true"></i>
-
-                                </li>
-                            </ul>
-                        </div>
-
                     </div>
                 </div>
 
-                <div class="col-md-9">
-                    <div class="profile-content">
-                        @yield('content')
+                <!-- Main Content -->
+                <div class="col-lg-9 col-xl-9">
+                    <div class="bb-profile-content">
+                        <!-- Page Header -->
+                        <div class="bb-profile-header">
+                            <h1 class="bb-profile-header-title h3 mb-0">
+                                @yield('title')
+                            </h1>
+                        </div>
+
+                        <!-- Page Content -->
+                        <div class="bb-profile-main">
+                            @yield('content')
+                        </div>
                     </div>
                 </div>
-
             </div>
         </div>
     </div>
 
-    <div class="modal fade" id="avatar-modal" tabindex="-1" role="dialog" aria-labelledby="avatar-modal-label"
-         aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <form class="avatar-form" method="post" action="{{ route('customer.avatar') }}" enctype="multipart/form-data">
-                    <div class="modal-header">
-                        <h4 class="modal-title" id="avatar-modal-label"><i class="til_img"></i><strong>{{ __('Profile Image') }}</strong></h4>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-
-                        <div class="avatar-body">
-
-                            <!-- Upload image and data -->
-                            <div class="avatar-upload">
-                                <input class="avatar-src" name="avatar_src" type="hidden">
-                                <input class="avatar-data" name="avatar_data" type="hidden">
-                                @csrf
-                                <label for="avatarInput">{{ __('New image') }}</label>
-                                <input class="avatar-input" id="avatarInput" name="avatar_file" type="file">
-                            </div>
-
-                            <div class="loading" tabindex="-1" role="img" aria-label="{{ __('Loading') }}"></div>
-
-                            <!-- Crop and preview -->
-                            <div class="row">
-                                <div class="col-md-9">
-                                    <div class="avatar-wrapper"></div>
-                                    <div class="error-message text-danger" style="display: none"></div>
+    <!-- Mobile Sidebar Offcanvas -->
+    <div class="offcanvas offcanvas-start d-lg-none" tabindex="-1" id="customerSidebar" aria-labelledby="customerSidebarLabel">
+        <div class="offcanvas-header border-bottom">
+            <h5 class="offcanvas-title" id="customerSidebarLabel">{{ trans('plugins/ecommerce::customer-dashboard.account_menu') }}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body p-0">
+            <div class="bb-customer-sidebar-wrapper h-100 d-flex flex-column">
+                <div class="bb-customer-sidebar flex-1">
+                    <!-- User Profile Section -->
+                    @if ($customer = auth('customer')->user())
+                        <div class="bb-customer-sidebar-heading">
+                            <div class="d-flex align-items-center gap-3 p-4">
+                                <div class="position-relative">
+                                    <div class="wrapper-image">
+                                        {!! RvMedia::image($customer->avatar_url, $customer->name, attributes: ['class' => 'rounded-circle border border-2 border-white shadow-sm']) !!}
+                                    </div>
+                                    <div class="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white" style="width: 12px; height: 12px;"></div>
                                 </div>
-                                <div class="col-md-3 avatar-preview-wrapper">
-                                    <div class="avatar-preview preview-lg"></div>
-                                    <div class="avatar-preview preview-md"></div>
-                                    <div class="avatar-preview preview-sm"></div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="name fw-semibold text-truncate">{{ $customer->name }}</div>
+                                    <div class="email text-muted small text-truncate">{{ $customer->email }}</div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button class="btn--custom btn--rounded btn--outline" type="button" data-bs-dismiss="modal">{{ __('Close') }}</button>
-                        <button class="btn--custom btn--rounded btn--outline avatar-save" type="submit">{{ __('Save') }}</button>
-                    </div>
-                </form>
+                    @endif
+
+                    <!-- Navigation Section -->
+                    <nav class="bb-customer-navigation px-3 pb-4">
+                        <div class="nav-section">
+                            <ul class="nav nav-pills flex-column gap-1">
+                                @foreach (DashboardMenu::getAll('customer') as $item)
+                                    @continue(! $item['name'])
+                                    <li class="nav-item">
+                                        <a
+                                            href="{{ $item['url'] }}"
+                                            @class([
+                                                'nav-link d-flex align-items-center gap-3 rounded-2 py-2 px-3',
+                                                'active' => $item['active']
+                                            ])
+                                            title="{{ $item['name'] }}"
+                                        >
+                                            <x-core::icon :name="$item['icon']" class="nav-icon flex-shrink-0" size="sm" />
+                                            <span class="nav-text">{{ $item['name'] }}</span>
+                                        </a>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    </nav>
+                </div>
             </div>
         </div>
-    </div><!-- /.modal -->
+    </div>
 </div>

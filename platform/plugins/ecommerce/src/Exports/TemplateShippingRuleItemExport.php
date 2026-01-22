@@ -3,9 +3,9 @@
 namespace Botble\Ecommerce\Exports;
 
 use Botble\Ecommerce\Enums\ShippingRuleTypeEnum;
+use Botble\Ecommerce\Facades\EcommerceHelper;
 use Botble\Ecommerce\Models\ShippingRule;
 use Botble\Location\Models\Country;
-use Botble\Ecommerce\Facades\EcommerceHelper;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -81,8 +81,8 @@ class TemplateShippingRuleItemExport implements
 
         $results = [];
 
-        $shippingRule = ShippingRule::where('type', ShippingRuleTypeEnum::BASED_ON_ZIPCODE)
-            ->whereHas('shipping', function (Builder $query) use ($countryCode) {
+        $shippingRule = ShippingRule::query()->where('type', ShippingRuleTypeEnum::BASED_ON_ZIPCODE)
+            ->whereHas('shipping', function (Builder $query) use ($countryCode): void {
                 $query->where('country', $countryCode);
             })
             ->first();
@@ -109,19 +109,19 @@ class TemplateShippingRuleItemExport implements
                 }
             }
         } else {
-            $shippingRule = ShippingRule::where('type', ShippingRuleTypeEnum::BASED_ON_ZIPCODE)->first();
+            $shippingRule = ShippingRule::query()->where('type', ShippingRuleTypeEnum::BASED_ON_ZIPCODE)->first();
 
             if ($shippingRule) {
                 $shippingRuleName = $shippingRule->name;
 
                 if ($shippingRule->shipping->country) {
                     if ($this->isLoadFromLocation) {
-                        $country = Country::where('code', $shippingRule->shipping->country)
+                        $country = Country::query()->where('code', $shippingRule->shipping->country)
                             ->with([
-                                'states' => function ($query) {
+                                'states' => function ($query): void {
                                     $query->limit(3);
                                 },
-                                'states.cities' => function ($query) {
+                                'states.cities' => function ($query): void {
                                     $query->limit(3);
                                 },
                             ])
@@ -199,7 +199,7 @@ class TemplateShippingRuleItemExport implements
     public function registerEvents(): array
     {
         return [
-            AfterSheet::class => function (AfterSheet $event) {
+            AfterSheet::class => function (AfterSheet $event): void {
                 $isEnabledColumn = 'G';
                 $adjustmentPriceColumn = 'F';
                 $typeColumn = 'H';
@@ -256,7 +256,7 @@ class TemplateShippingRuleItemExport implements
         return $this->getDropDownListValidation(ShippingRuleTypeEnum::keysAllowRuleItems());
     }
 
-    protected function getDecimalValidation(float $min = 0, float $max = null): DataValidation
+    protected function getDecimalValidation(float $min = 0, ?float $max = null): DataValidation
     {
         // set dropdown list for first data row
         $validation = new DataValidation();
@@ -271,10 +271,10 @@ class TemplateShippingRuleItemExport implements
         $validation->setPromptTitle(trans('plugins/ecommerce::bulk-import.export.template.allowed_input'));
 
         if ($min != null) {
-            $validation->setFormula1((string)$min);
+            $validation->setFormula1((string) $min);
         }
         if ($max != null) {
-            $validation->setFormula2((string)$max);
+            $validation->setFormula2((string) $max);
         }
 
         if (! ($min == null && $max == null)) {

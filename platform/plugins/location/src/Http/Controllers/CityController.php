@@ -3,148 +3,138 @@
 namespace Botble\Location\Http\Controllers;
 
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Base\Events\CreatedContentEvent;
-use Botble\Base\Events\DeletedContentEvent;
-use Botble\Base\Events\UpdatedContentEvent;
-use Botble\Base\Facades\PageTitle;
-use Botble\Base\Forms\FormBuilder;
+use Botble\Base\Http\Actions\DeleteResourceAction;
 use Botble\Base\Http\Controllers\BaseController;
-use Botble\Base\Http\Responses\BaseHttpResponse;
+use Botble\Base\Supports\Breadcrumb;
 use Botble\Location\Forms\CityForm;
 use Botble\Location\Http\Requests\CityRequest;
 use Botble\Location\Http\Resources\CityResource;
 use Botble\Location\Models\City;
-use Botble\Location\Repositories\Interfaces\CityInterface;
 use Botble\Location\Tables\CityTable;
-use Exception;
 use Illuminate\Http\Request;
 
 class CityController extends BaseController
 {
-    public function __construct(protected CityInterface $cityRepository)
+    protected function breadcrumb(): Breadcrumb
     {
+        return parent::breadcrumb()
+            ->add(trans('plugins/location::location.name'))
+            ->add(trans('plugins/location::city.name'), route('city.index'));
     }
 
     public function index(CityTable $table)
     {
-        PageTitle::setTitle(trans('plugins/location::city.name'));
+        $this->pageTitle(trans('plugins/location::city.name'));
 
         return $table->renderTable();
     }
 
-    public function create(FormBuilder $formBuilder)
+    public function create()
     {
-        PageTitle::setTitle(trans('plugins/location::city.create'));
+        $this->pageTitle(trans('plugins/location::city.create'));
 
-        return $formBuilder->create(CityForm::class)->renderForm();
+        return CityForm::create()->renderForm();
     }
 
-    public function store(CityRequest $request, BaseHttpResponse $response)
+    public function store(CityRequest $request)
     {
-        $city = $this->cityRepository->createOrUpdate($request->input());
+        $form = CityForm::create()->setRequest($request);
+        $form->save();
 
-        event(new CreatedContentEvent(CITY_MODULE_SCREEN_NAME, $request, $city));
-
-        return $response
-            ->setPreviousUrl(route('city.index'))
-            ->setNextUrl(route('city.edit', $city->id))
-            ->setMessage(trans('core/base::notices.create_success_message'));
+        return $this
+            ->httpResponse()
+            ->setPreviousRoute('city.index')
+            ->setNextRoute('city.edit', $form->getModel()->getKey())
+            ->withCreatedSuccessMessage();
     }
 
-    public function edit(City $city, FormBuilder $formBuilder)
+    public function edit(City $city)
     {
-        PageTitle::setTitle(trans('core/base::forms.edit_item', ['name' => $city->name]));
+        $this->pageTitle(trans('core/base::forms.edit_item', ['name' => $city->name]));
 
-        return $formBuilder->create(CityForm::class, ['model' => $city])->renderForm();
+        return CityForm::createFromModel($city)->renderForm();
     }
 
-    public function update(City $city, CityRequest $request, BaseHttpResponse $response)
+    public function update(City $city, CityRequest $request)
     {
-        $city->fill($request->input());
+        CityForm::createFromModel($city)->setRequest($request)->save();
 
-        $this->cityRepository->createOrUpdate($city);
-
-        event(new UpdatedContentEvent(CITY_MODULE_SCREEN_NAME, $request, $city));
-
-        return $response
-            ->setPreviousUrl(route('city.index'))
-            ->setMessage(trans('core/base::notices.update_success_message'));
+        return $this
+            ->httpResponse()
+            ->setPreviousRoute('city.index')
+            ->withUpdatedSuccessMessage();
     }
 
-    public function destroy(City $city, Request $request, BaseHttpResponse $response)
+    public function destroy(City $city)
     {
-        try {
-            $this->cityRepository->delete($city);
-
-            event(new DeletedContentEvent(CITY_MODULE_SCREEN_NAME, $request, $city));
-
-            return $response->setMessage(trans('core/base::notices.delete_success_message'));
-        } catch (Exception $exception) {
-            return $response
-                ->setError()
-                ->setMessage($exception->getMessage());
-        }
+        return DeleteResourceAction::make($city);
     }
 
-    public function deletes(Request $request, BaseHttpResponse $response)
-    {
-        $ids = $request->input('ids');
-        if (empty($ids)) {
-            return $response
-                ->setError()
-                ->setMessage(trans('core/base::notices.no_select'));
-        }
-
-        foreach ($ids as $id) {
-            $city = $this->cityRepository->findOrFail($id);
-            $this->cityRepository->delete($city);
-            event(new DeletedContentEvent(CITY_MODULE_SCREEN_NAME, $request, $city));
-        }
-
-        return $response->setMessage(trans('core/base::notices.delete_success_message'));
-    }
-
-    public function getList(Request $request, BaseHttpResponse $response)
+    public function getList(Request $request)
     {
         $keyword = BaseHelper::stringify($request->input('q'));
 
         if (! $keyword) {
-            return $response->setData([]);
+            return $this
+                ->httpResponse()
+                ->setData([]);
         }
 
-        $data = $this->cityRepository->advancedGet([
-            'condition' => [
-                ['cities.name', 'LIKE', '%' . $keyword . '%'],
-            ],
-            'select' => ['cities.id', 'cities.name'],
-            'take' => 10,
-            'order_by' => ['order' => 'ASC', 'name' => 'ASC'],
-        ]);
+        $data = City::query()
+            ->where('name', 'LIKE', '%' . $keyword . '%')
+            ->select(['id', 'name'])
+            ->take(10)
+            ->oldest('order')
+            ->oldest('name')
+            ->get();
 
         $data->prepend(new City(['id' => 0, 'name' => trans('plugins/location::city.select_city')]));
 
-        return $response->setData(CityResource::collection($data));
+        return $this
+            ->httpResponse()
+            ->setData(CityResource::collection($data));
     }
 
-    public function ajaxGetCities(Request $request, BaseHttpResponse $response)
+    public function ajaxGetCities(Request $request)
     {
-        $params = [
-            'select' => ['cities.id', 'cities.name'],
-            'condition' => [
-                'cities.status' => BaseStatusEnum::PUBLISHED,
-            ],
-            'order_by' => ['order' => 'ASC', 'name' => 'ASC'],
-        ];
+        $data = City::query()
+            ->select(['id', 'name'])
+            ->wherePublished()
+            ->orderBy('order')
+            ->orderBy('name');
 
-        if ($request->input('state_id') && $request->input('state_id') != 'null') {
-            $params['condition']['cities.state_id'] = $request->input('state_id');
+        $stateId = $request->input('state_id');
+
+        if ($stateId && $stateId != 'null') {
+            $data = $data->where('state_id', $stateId);
         }
 
-        $data = $this->cityRepository->advancedGet($params);
+        $countryId = $request->input('country_id');
+
+        if ($countryId && $countryId != 'null') {
+            $data = $data->where('country_id', $countryId);
+        }
+
+        $keyword = BaseHelper::stringify($request->query('k'));
+
+        if ($keyword) {
+            $data = $data
+                ->where('name', 'LIKE', '%' . $keyword . '%')
+                ->paginate(10);
+        } else {
+            $data = $data->get();
+        }
+
+        if ($keyword) {
+            return $this
+                ->httpResponse()
+                ->setData([CityResource::collection($data), 'total' => $data->total()]);
+        }
 
         $data->prepend(new City(['id' => 0, 'name' => trans('plugins/location::city.select_city')]));
 
-        return $response->setData(CityResource::collection($data));
+        return $this
+            ->httpResponse()
+            ->setData(CityResource::collection($data));
     }
 }

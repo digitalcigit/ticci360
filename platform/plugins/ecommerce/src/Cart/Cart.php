@@ -3,24 +3,33 @@
 namespace Botble\Ecommerce\Cart;
 
 use Botble\Base\Enums\BaseStatusEnum;
+use Botble\Base\Facades\BaseHelper;
+use Botble\Base\Models\BaseModel;
 use Botble\Ecommerce\Cart\Contracts\Buyable;
 use Botble\Ecommerce\Cart\Exceptions\CartAlreadyStoredException;
 use Botble\Ecommerce\Cart\Exceptions\UnknownModelException;
+use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Ecommerce\Models\Tax;
 use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
+use Botble\Ecommerce\Services\HandleApplyProductCrossSaleService;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Closure;
-use Botble\Ecommerce\Facades\EcommerceHelper;
+use Exception;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Events\NullDispatcher;
 use Illuminate\Session\SessionManager;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 
 class Cart
 {
-    public const DEFAULT_INSTANCE = 'default';
+    protected static Dispatcher $dispatcher;
+
+    public const DEFAULT_INSTANCE = 'cart';
 
     protected string $instance;
 
@@ -28,12 +37,16 @@ class Cart
 
     protected float $weight = 0;
 
-    public function __construct(protected SessionManager $session, protected Dispatcher $events)
+    protected array $counts = [];
+
+    public function __construct(protected SessionManager $session, Dispatcher $events)
     {
+        static::$dispatcher = $events;
+
         $this->instance(self::DEFAULT_INSTANCE);
     }
 
-    public function instance(string $instance = null): self
+    public function instance(?string $instance = null): self
     {
         $instance = $instance ?: self::DEFAULT_INSTANCE;
 
@@ -42,21 +55,11 @@ class Cart
         return $this;
     }
 
-    public function getLastUpdatedAt(): CarbonInterface|null
+    public function getLastUpdatedAt(): ?CarbonInterface
     {
         return $this->session->get($this->instance . '_updated_at');
     }
 
-    /**
-     * Add an item to the cart.
-     *
-     * @param mixed $id
-     * @param mixed $name
-     * @param int|float $qty
-     * @param float $price
-     * @param array $options
-     * @return array|\Botble\Ecommerce\Cart\CartItem
-     */
     public function add($id, $name = null, $qty = null, $price = null, array $options = [])
     {
         if ($this->isMulti($id)) {
@@ -75,20 +78,21 @@ class Cart
 
         $content->put($cartItem->rowId, $cartItem);
 
-        $this->events->dispatch('cart.added', $cartItem);
-
         $this->putToSession($content);
+
+        static::dispatchEvent('cart.added', $cartItem);
 
         return $cartItem;
     }
 
-    /**
-     * Check if the item is a multidimensional array or an array of Buyables.
-     *
-     * @param mixed $item
-     * @return bool
-     */
-    protected function isMulti($item)
+    public function addQuietly($id, $name = null, $qty = null, $price = null, array $options = [])
+    {
+        return static::withoutEvents(
+            fn () => $this->add($id, $name, $qty, $price, $options)
+        );
+    }
+
+    protected function isMulti($item): bool
     {
         if (! is_array($item)) {
             return false;
@@ -99,17 +103,7 @@ class Cart
         return is_array($item) || $item instanceof Buyable;
     }
 
-    /**
-     * Create a new CartItem from the supplied attributes.
-     *
-     * @param mixed $id
-     * @param mixed $name
-     * @param int|float $qty
-     * @param float $price
-     * @param array $options
-     * @return \Botble\Ecommerce\Cart\CartItem
-     */
-    protected function createCartItem($id, $name, $qty, $price, array $options)
+    protected function createCartItem($id, $name, $qty, $price, array $options): CartItem
     {
         if (
             EcommerceHelper::isEnabledProductOptions() &&
@@ -142,9 +136,6 @@ class Cart
         foreach (Arr::get($options, 'optionCartValue', []) as $value) {
             if (is_array($value)) {
                 foreach ($value as $valueItem) {
-                    if (Arr::get($valueItem, 'option_type') == 'field') {
-                        continue;
-                    }
                     if ($valueItem['affect_type'] == 1) {
                         $valueItem['affect_price'] = ($basePrice * $valueItem['affect_price']) / 100;
                     }
@@ -154,9 +145,11 @@ class Cart
                 if (Arr::get($value, 'option_type') == 'field') {
                     continue;
                 }
+
                 if ($value['affect_type'] == 1) {
                     $value['affect_price'] = ($basePrice * $value['affect_price']) / 100;
                 }
+
                 $price += $value['affect_price'];
             }
         }
@@ -164,26 +157,17 @@ class Cart
         return $price;
     }
 
-    /**
-     * Get the carts content, if there is no cart content set yet, return a new empty Collection
-     *
-     * @return \Illuminate\Support\Collection
-     */
-    protected function getContent()
+    protected function getContent(): Collection
     {
         return $this->session->has($this->instance)
             ? $this->session->get($this->instance)
             : new Collection();
     }
 
-    /**
-     * putToSession
-     *
-     * @return $this
-     */
-    public function putToSession($content)
+    public function putToSession($content): static
     {
         $this->setLastUpdatedAt();
+
         $this->session->put($this->instance, $content);
 
         return $this;
@@ -194,14 +178,7 @@ class Cart
         $this->session->put($this->instance . '_updated_at', Carbon::now());
     }
 
-    /**
-     * Update the cart item with the given rowId.
-     *
-     * @param string $rowId
-     * @param mixed $qty
-     * @return \Botble\Ecommerce\Cart\CartItem|bool
-     */
-    public function update($rowId, $qty)
+    public function update(string $rowId, int|Buyable|array $qty): bool|CartItem|null
     {
         $cartItem = $this->get($rowId);
 
@@ -220,7 +197,7 @@ class Cart
 
             if ($content->has($cartItem->rowId)) {
                 $existingCartItem = $this->get($cartItem->rowId);
-                $cartItem->setQuantity((int)$existingCartItem->qty + (int)$cartItem->qty);
+                $cartItem->setQuantity((int) $existingCartItem->qty + (int) $cartItem->qty);
             }
         }
 
@@ -234,20 +211,19 @@ class Cart
 
         $cartItem->updated_at = Carbon::now();
 
-        $this->events->dispatch('cart.updated', $cartItem);
+        static::dispatchEvent('cart.updated', $cartItem);
 
         $this->putToSession($content);
 
         return $cartItem;
     }
 
-    /**
-     * Get a cart item from the cart by its rowId.
-     *
-     * @param string $rowId
-     * @return \Botble\Ecommerce\Cart\CartItem|null
-     */
-    public function get($rowId)
+    public function updateQuietly($rowId, $qty)
+    {
+        return static::withoutEvents(fn () => $this->update($rowId, $qty));
+    }
+
+    public function get(string $rowId): ?CartItem
     {
         $content = $this->getContent();
 
@@ -258,13 +234,7 @@ class Cart
         return $content->get($rowId);
     }
 
-    /**
-     * Remove the cart item with the given rowId from the cart.
-     *
-     * @param string $rowId
-     * @return void
-     */
-    public function remove($rowId)
+    public function remove(string $rowId): void
     {
         $cartItem = $this->get($rowId);
 
@@ -272,48 +242,80 @@ class Cart
 
         $content->pull($cartItem->rowId);
 
-        $this->events->dispatch('cart.removed', $cartItem);
+        static::dispatchEvent('cart.removed', $cartItem);
 
         $this->putToSession($content);
     }
 
-    /**
-     * Destroy the current cart instance.
-     */
+    public function removeQuietly($rowId)
+    {
+        return static::withoutEvents(fn () => $this->remove($rowId));
+    }
+
     public function destroy(): void
     {
         $this->session->remove($this->instance);
     }
 
-    /**
-     * Get the number of items in the cart.
-     *
-     * @return int|float
-     */
-    public function count()
+    public function count(): int
     {
-        $content = $this->getContent();
+        if (isset($this->counts[$this->instance])) {
+            return $this->counts[$this->instance];
+        }
 
+        if ($this->instance == 'cart.wishlist' && auth('customer')->check()) {
+            $this->counts[$this->instance] = auth('customer')->user()->wishlist()->count();
+        } else {
+            $content = $this->getContent();
+
+            $this->counts[$this->instance] = $content->sum('qty');
+        }
+
+        return $this->counts[$this->instance];
+    }
+
+    public function isNotEmpty(): bool
+    {
+        return $this->getContent()->isNotEmpty();
+    }
+
+    public function isEmpty(): bool
+    {
+        return $this->getContent()->isEmpty();
+    }
+
+    public function countByItems($content): float|int
+    {
         return $content->sum('qty');
     }
 
-    /**
-     * Get the number of items in the cart.
-     *
-     * @return int|float
-     */
-    public function countByItems($content)
-    {
-        return $content->sum('qty');
-    }
-
-    /**
-     * @return int
-     */
-    public function rawTotal()
+    public function rawTotal(): float
     {
         $content = $this->getContent();
 
+        $total = $content->reduce(function ($total, ?CartItem $cartItem) {
+            if (! $cartItem) {
+                return 0;
+            }
+
+            if (! EcommerceHelper::isTaxEnabled()) {
+                return $total + $cartItem->qty * $cartItem->price;
+            }
+
+            $priceIncludesTax = $cartItem->options->get('price_includes_tax', false);
+
+            if ($priceIncludesTax) {
+                return $total + $cartItem->qty * $cartItem->price;
+            }
+
+            return $total + ($cartItem->qty * ($cartItem->priceTax == 0 ? $cartItem->price : $cartItem->priceTax));
+        }, 0);
+
+        return apply_filters('ecommerce_cart_raw_total', $total, $content);
+    }
+
+    public function rawTotalByItems($content): float
+    {
         return $content->reduce(function ($total, ?CartItem $cartItem) {
             if (! $cartItem) {
                 return 0;
@@ -323,21 +325,9 @@ class Cart
                 return $total + $cartItem->qty * $cartItem->price;
             }
 
-            return $total + ($cartItem->qty * ($cartItem->priceTax == 0 ? $cartItem->price : $cartItem->priceTax));
-        }, 0);
-    }
+            $priceIncludesTax = $cartItem->options->get('price_includes_tax', false);
 
-    /**
-     * @return int
-     */
-    public function rawTotalByItems($content)
-    {
-        return $content->reduce(function ($total, ?CartItem $cartItem) {
-            if (! $cartItem) {
-                return 0;
-            }
-
-            if (! EcommerceHelper::isTaxEnabled()) {
+            if ($priceIncludesTax) {
                 return $total + $cartItem->qty * $cartItem->price;
             }
 
@@ -345,65 +335,92 @@ class Cart
         }, 0);
     }
 
-    /**
-     * Get the raw total tax of the items in the cart.
-     *
-     * @return float
-     */
-    public function rawTaxByItems($content)
+    public function rawTaxByItems($content, float $discountAmount = 0): float
     {
         if (! EcommerceHelper::isTaxEnabled()) {
             return 0;
         }
 
-        return $content->reduce(function ($tax, CartItem $cartItem) {
-            return $tax + ($cartItem->qty * $cartItem->tax);
-        }, 0);
+        $rawTotal = $this->rawTotalByItems($content);
+        $discountRatio = $rawTotal > 0 ? max(0, $rawTotal - $discountAmount) / $rawTotal : 0;
+
+        $totalTax = 0;
+        foreach ($content as $cartItem) {
+            $taxRate = $cartItem->taxRate;
+            if ($taxRate > 0) {
+                $priceIncludesTax = $cartItem->options->get('price_includes_tax', false);
+                $itemPrice = $cartItem->qty * $cartItem->price;
+                $effectiveItemPrice = $itemPrice * $discountRatio;
+
+                if ($priceIncludesTax) {
+                    $totalTax += EcommerceHelper::roundPrice($effectiveItemPrice - ($effectiveItemPrice / (1 + $taxRate / 100)));
+                } else {
+                    $totalTax += EcommerceHelper::roundPrice($effectiveItemPrice * ($taxRate / 100));
+                }
+            }
+        }
+
+        return $totalTax;
     }
 
-    /**
-     * @return float
-     */
-    public function rawSubTotal()
+    public function rawSubTotal(): float
     {
         $content = $this->getContent();
 
-        return $content->reduce(function ($subTotal, CartItem $cartItem) {
-            return $subTotal + ($cartItem->qty * $cartItem->price);
+        $subTotal = $content->reduce(function ($subTotal, CartItem $cartItem) {
+            $priceIncludesTax = $cartItem->options->get('price_includes_tax', false);
+
+            if (EcommerceHelper::isTaxEnabled() && $priceIncludesTax && $cartItem->taxRate > 0) {
+                $basePrice = $cartItem->price / (1 + $cartItem->taxRate / 100);
+
+                return $subTotal + EcommerceHelper::roundPrice($cartItem->qty * $basePrice);
+            }
+
+            return $subTotal + EcommerceHelper::roundPrice($cartItem->qty * $cartItem->price);
         }, 0);
+
+        return apply_filters('ecommerce_cart_raw_subtotal', $subTotal, $content);
     }
 
-    /**
-     * @return float
-     */
-    public function rawSubTotalByItems($content)
+    public function rawSubTotalByItems($content): float
     {
         return $content->reduce(function ($subTotal, CartItem $cartItem) {
-            return $subTotal + ($cartItem->qty * $cartItem->price);
+            $priceIncludesTax = $cartItem->options->get('price_includes_tax', false);
+
+            if (EcommerceHelper::isTaxEnabled() && $priceIncludesTax && $cartItem->taxRate > 0) {
+                $basePrice = $cartItem->price / (1 + $cartItem->taxRate / 100);
+
+                return $subTotal + EcommerceHelper::roundPrice($cartItem->qty * $basePrice);
+            }
+
+            return $subTotal + EcommerceHelper::roundPrice($cartItem->qty * $cartItem->price);
         }, 0);
     }
 
-    /**
-     * Search the cart content for a cart item matching the given search closure.
-     *
-     * @param \Closure $search
-     * @return \Illuminate\Support\Collection
-     */
-    public function search(Closure $search)
+    public function rawQuantityByItemId($id): int
+    {
+        return $this->getContent()->reduce(function ($qty, CartItem $cartItem) use ($id) {
+            return $cartItem->id == $id ? $qty + $cartItem->qty : $qty;
+        }, 0);
+    }
+
+    public function rawTotalQuantity(): int
+    {
+        $content = $this->getContent();
+
+        return $content->reduce(function ($qty, CartItem $cartItem) {
+            return $qty + $cartItem->qty;
+        }, 0);
+    }
+
+    public function search(Closure $search): Collection
     {
         $content = $this->getContent();
 
         return $content->filter($search);
     }
 
-    /**
-     * Associate the cart item with the given rowId with the given model.
-     *
-     * @param string $rowId
-     * @param mixed $model
-     * @return void
-     */
-    public function associate($rowId, $model)
+    public function associate(string $rowId, BaseModel|string $model): void
     {
         if (is_string($model) && ! class_exists($model)) {
             throw new UnknownModelException('The supplied model ' . $model . ' does not exist.');
@@ -420,14 +437,7 @@ class Cart
         $this->putToSession($content);
     }
 
-    /**
-     * Set the tax rate for the cart item with the given rowId.
-     *
-     * @param string $rowId
-     * @param int|float $taxRate
-     * @return void
-     */
-    public function setTax($rowId, $taxRate)
+    public function setTax(string $rowId, float $taxRate): void
     {
         $cartItem = $this->get($rowId);
 
@@ -442,121 +452,130 @@ class Cart
         $this->putToSession($content);
     }
 
-    /**
-     * Store the current instance of the cart.
-     *
-     * @param mixed $identifier
-     * @return void
-     */
-    public function store($identifier)
+    public function store(string $identifier): void
     {
-        $content = $this->getContent();
-
         if ($this->storedCartWithIdentifierExists($identifier)) {
-            throw new CartAlreadyStoredException('A cart with identifier ' . $identifier . ' was already stored.');
+            throw new CartAlreadyStoredException(sprintf('A cart with identifier %s was already stored.', $identifier));
         }
 
         $this->getConnection()->table($this->getTableName())->insert([
             'identifier' => $identifier,
             'instance' => $this->currentInstance(),
-            'content' => serialize($content),
+            'content' => serialize($this->getContent()),
         ]);
 
-        $this->events->dispatch('cart.stored');
+        static::dispatchEvent('cart.stored');
+    }
+
+    public function storeOrIgnore(string $identifier): void
+    {
+        if ($this->storedCartWithIdentifierExists($identifier)) {
+            return;
+        }
+
+        $this->store($identifier);
+    }
+
+    public function storeQuietly($identifier)
+    {
+        return static::withoutEvents(fn () => $this->store($identifier));
+    }
+
+    public function updateOrStore(string $identifier): void
+    {
+        $this->getConnection()->table($this->getTableName())->updateOrInsert(
+            [
+                'identifier' => $identifier,
+                'instance' => $this->currentInstance(),
+            ],
+            [
+                'content' => serialize($this->getContent()),
+            ]
+        );
+
+        static::dispatchEvent('cart.stored');
+    }
+
+    public function updateOrStoreQuietly(string $identifier): void
+    {
+        static::withoutEvents(fn () => $this->updateOrStore($identifier));
     }
 
     protected function storedCartWithIdentifierExists(string $identifier): bool
     {
-        return $this->getConnection()->table($this->getTableName())->where('identifier', $identifier)->exists();
+        return $this->getConnection()->table($this->getTableName())
+            ->where('identifier', $identifier)
+            ->where('instance', $this->currentInstance())
+            ->exists();
     }
 
-    /**
-     * Get the database connection.
-     *
-     * @return \Illuminate\Database\Connection
-     */
-    protected function getConnection()
+    protected function getConnection(): Connection
     {
         $connectionName = $this->getConnectionName();
 
         return app(DatabaseManager::class)->connection($connectionName);
     }
 
-    /**
-     * Get the database connection name.
-     *
-     * @return string
-     */
-    protected function getConnectionName()
+    protected function getConnectionName(): string
     {
         $connection = config('plugins.ecommerce.cart.database.connection');
 
         return empty($connection) ? config('database.default') : $connection;
     }
 
-    /**
-     * Get the database table name.
-     *
-     * @return string
-     */
-    protected function getTableName()
+    protected function getTableName(): string
     {
         return config('plugins.ecommerce.cart.database.table', 'ec_cart');
     }
 
-    /**
-     * Get the current cart instance.
-     *
-     * @return string
-     */
-    public function currentInstance()
+    public function currentInstance(): string
     {
         return str_replace('cart.', '', $this->instance);
     }
 
-    /**
-     * Restore the cart with the given identifier.
-     *
-     * @param mixed $identifier
-     * @return void
-     */
-    public function restore($identifier)
+    public function restore(string $identifier): void
     {
         if (! $this->storedCartWithIdentifierExists($identifier)) {
             return;
         }
 
-        $stored = $this->getConnection()->table($this->getTableName())
+        $stored = $this
+            ->getConnection()
+            ->table($this->getTableName())
             ->where('identifier', $identifier)->first();
 
-        $storedContent = unserialize($stored->content);
+        if ($stored) {
+            $storedContent = unserialize($stored->content);
 
-        $currentInstance = $this->currentInstance();
+            $currentInstance = $this->currentInstance();
 
-        $this->instance($stored->instance);
+            $this->instance($stored->instance);
 
-        $content = $this->getContent();
+            $content = $this->getContent();
 
-        foreach ($storedContent as $cartItem) {
-            $content->put($cartItem->rowId, $cartItem);
+            foreach ($storedContent as $cartItem) {
+                $content->put($cartItem->rowId, $cartItem);
+            }
+
+            static::dispatchEvent('cart.restored');
+
+            $this->putToSession($content);
+
+            $this->instance($currentInstance);
         }
 
-        $this->events->dispatch('cart.restored');
-
-        $this->putToSession($content);
-
-        $this->instance($currentInstance);
-
-        $this->getConnection()->table($this->getTableName())
-            ->where('identifier', $identifier)->delete();
+        $this
+            ->getConnection()
+            ->table($this->getTableName())
+            ->where('identifier', $identifier)
+            ->delete();
     }
 
-    /**
-     * Magic method to make accessing the total, tax and subtotal properties possible.
-     *
-     * @param string $attribute
-     * @return float|string|null
-     */
+    public function restoreQuietly($identifier)
+    {
+        return static::withoutEvents(fn () => $this->restore($identifier));
+    }
+
     public function __get($attribute)
     {
         if ($attribute === 'total') {
@@ -574,12 +593,7 @@ class Cart
         return null;
     }
 
-    /**
-     * Get the total price of the items in the cart.
-     *
-     * @return string
-     */
-    public function total()
+    public function total(): string
     {
         $content = $this->getContent();
 
@@ -591,15 +605,12 @@ class Cart
             return $total + ($cartItem->qty * ($cartItem->priceTax == 0 ? $cartItem->price : $cartItem->priceTax));
         }, 0);
 
+        $total = apply_filters('ecommerce_cart_total', $total, $content);
+
         return format_price($total);
     }
 
-    /**
-     * Get the total tax of the items in the cart.
-     *
-     * @return float|string
-     */
-    public function tax()
+    public function tax(): float|string
     {
         if (! EcommerceHelper::isTaxEnabled()) {
             return 0;
@@ -608,30 +619,36 @@ class Cart
         return format_price($this->rawTax());
     }
 
-    /**
-     * Get the raw total tax of the items in the cart.
-     *
-     * @return float
-     */
-    public function rawTax()
+    public function rawTax(float $discountAmount = 0): float
     {
         if (! EcommerceHelper::isTaxEnabled()) {
             return 0;
         }
 
         $content = $this->getContent();
+        $rawTotal = $this->rawTotal();
+        $discountRatio = $rawTotal > 0 ? max(0, $rawTotal - $discountAmount) / $rawTotal : 0;
 
-        return $content->reduce(function ($tax, CartItem $cartItem) {
-            return $tax + ($cartItem->qty * $cartItem->tax);
-        }, 0);
+        $totalTax = 0;
+        foreach ($content as $cartItem) {
+            $taxRate = $cartItem->taxRate;
+            if ($taxRate > 0) {
+                $priceIncludesTax = $cartItem->options->get('price_includes_tax', false);
+                $itemPrice = $cartItem->qty * $cartItem->price;
+                $effectiveItemPrice = $itemPrice * $discountRatio;
+
+                if ($priceIncludesTax) {
+                    $totalTax += EcommerceHelper::roundPrice($effectiveItemPrice - ($effectiveItemPrice / (1 + $taxRate / 100)));
+                } else {
+                    $totalTax += EcommerceHelper::roundPrice($effectiveItemPrice * ($taxRate / 100));
+                }
+            }
+        }
+
+        return $totalTax;
     }
 
-    /**
-     * Get the subtotal (total - tax) of the items in the cart.
-     *
-     * @return string
-     */
-    public function subtotal()
+    public function subtotal(): string
     {
         $content = $this->getContent();
 
@@ -639,22 +656,19 @@ class Cart
             return $subTotal + ($cartItem->qty * $cartItem->price);
         }, 0);
 
+        $subTotal = apply_filters('ecommerce_cart_subtotal', $subTotal, $content);
+
         return format_price($subTotal);
     }
 
-    /**
-     * Get all products in Cart
-     *
-     * @return \Illuminate\Support\Collection|\Illuminate\Database\Eloquent\Collection
-     */
-    public function products()
+    public function products(): Collection|EloquentCollection
     {
         if ($this->products) {
             return $this->products;
         }
 
         $cartContent = $this->instance('cart')->content();
-        $productIds = $cartContent->pluck('id')->toArray();
+        $productIds = array_unique($cartContent->pluck('id')->toArray());
         $products = collect();
         $weight = 0;
         if ($productIds) {
@@ -682,7 +696,7 @@ class Cart
 
         $productsInCart = new EloquentCollection();
 
-        if ($products->count()) {
+        if ($products->isNotEmpty()) {
             foreach ($cartContent as $cartItem) {
                 $product = $products->firstWhere('id', $cartItem->id);
                 if (! $product || $product->original_product->status != BaseStatusEnum::PUBLISHED) {
@@ -690,6 +704,29 @@ class Cart
                 } else {
                     $productInCart = clone $product;
                     $productInCart->cartItem = $cartItem;
+                    $productInCart->unique_id = $productInCart->id;
+
+                    if ($productOptions = Arr::get($cartItem->options->toArray(), 'options.optionCartValue', [])) {
+                        $optionValues = [];
+                        foreach ($productOptions as $optionId => $values) {
+                            if (is_array($values)) {
+                                foreach ($values as $value) {
+                                    if (isset($value['option_value'])) {
+                                        $optionValues[] = $optionId . ':' . $value['option_value'];
+                                    }
+                                }
+                            } else {
+                                if (isset($values['option_value'])) {
+                                    $optionValues[] = $optionId . ':' . $values['option_value'];
+                                }
+                            }
+                        }
+
+                        if (! empty($optionValues)) {
+                            $productInCart->unique_id = $productInCart->id . '_' . implode('_', $optionValues);
+                        }
+                    }
+
                     $productsInCart->push($productInCart);
                     $weight += $product->weight * $cartItem->qty;
                 }
@@ -698,22 +735,17 @@ class Cart
 
         $weight = EcommerceHelper::validateOrderWeight($weight);
 
-        $this->products = $productsInCart;
+        $this->products = $productsInCart->unique('unique_id');
         $this->weight = $weight;
 
-        if ($this->products->count() == 0) {
+        if ($this->products->isEmpty()) {
             $this->instance('cart')->destroy();
         }
 
         return $this->products;
     }
 
-    /**
-     * Get the content of the cart.
-     *
-     * @return \Illuminate\Support\Collection
-     */
-    public function content()
+    public function content(): Collection
     {
         if (empty($this->session->get($this->instance))) {
             return collect();
@@ -722,13 +754,114 @@ class Cart
         return $this->session->get($this->instance);
     }
 
-    /**
-     * Get weight
-     *
-     * @return int|float
-     */
-    public function weight()
+    public function weight(): float
     {
         return EcommerceHelper::validateOrderWeight($this->weight);
+    }
+
+    public static function getEventDispatcher(): Dispatcher
+    {
+        return static::$dispatcher;
+    }
+
+    public static function setEventDispatcher(Dispatcher $dispatcher): void
+    {
+        static::$dispatcher = $dispatcher;
+    }
+
+    public static function withoutEvents(callable $callback)
+    {
+        $dispatcher = static::getEventDispatcher();
+
+        static::setEventDispatcher(new NullDispatcher($dispatcher));
+
+        try {
+            return $callback();
+        } finally {
+            static::setEventDispatcher($dispatcher);
+        }
+    }
+
+    protected static function dispatchEvent(string $event, $parameters = []): void
+    {
+        if (isset(static::$dispatcher)) {
+            static::$dispatcher->dispatch($event, $parameters);
+        }
+    }
+
+    public function refresh(): void
+    {
+        $cart = $this->instance('cart');
+
+        if ($cart->isEmpty()) {
+            return;
+        }
+
+        $ids = $cart->content()->pluck('id')->toArray();
+
+        $products = get_products([
+            'condition' => [
+                ['ec_products.id', 'IN', $ids],
+            ],
+        ]);
+
+        if ($products->isEmpty()) {
+            return;
+        }
+
+        foreach ($cart->content() as $rowId => $cartItem) {
+            $product = $products->firstWhere('id', $cartItem->id);
+            if (! $product || $product->original_product->status != BaseStatusEnum::PUBLISHED) {
+                $this->remove($cartItem->rowId);
+            } else {
+                $cart->removeQuietly($rowId);
+
+                $parentProduct = $product->original_product;
+
+                $options = $cartItem->options->toArray();
+                $options['image'] = $product->image ?: $parentProduct->image;
+
+                $options['taxRate'] = $cartItem->getTaxRate();
+
+                $cart->addQuietly(
+                    $cartItem->id,
+                    $cartItem->name,
+                    $cartItem->qty,
+                    $product->price()->getPrice(false),
+                    $options
+                );
+            }
+        }
+
+        try {
+            app(HandleApplyProductCrossSaleService::class)->handle();
+        } catch (Exception $exception) {
+            BaseHelper::logError($exception);
+        }
+    }
+
+    public function taxClassesName(): string
+    {
+        $taxes = [];
+
+        foreach ($this->content() as $cartItem) {
+            if (! $cartItem->taxRate || ! $cartItem->options->taxClasses) {
+                continue;
+            }
+
+            foreach ($cartItem->options->taxClasses as $taxName => $taxRate) {
+                $taxes[] = $taxName . ' - ' . (count($cartItem->options->taxClasses) > 1 ? $taxRate : $cartItem->taxRate) . '%';
+            }
+        }
+
+        if (empty($taxes) && $defaultTaxRate = get_ecommerce_setting('default_tax_rate')) {
+            $tax = Tax::query()->where('id', $defaultTaxRate)->first();
+
+            if ($tax) {
+                $taxes[] = $tax->title . ' - ' . ($tax->percentage) . '%';
+            }
+        }
+
+        return implode(', ', array_unique($taxes));
     }
 }

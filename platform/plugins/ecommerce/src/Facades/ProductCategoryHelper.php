@@ -6,13 +6,13 @@ use Botble\Ecommerce\Supports\ProductCategoryHelper as BaseProductCategoryHelper
 use Illuminate\Support\Facades\Facade;
 
 /**
- * @method static \Illuminate\Support\Collection|\Illuminate\Database\Eloquent\Collection getAllProductCategories(array $params = [], bool $onlyParent = false)
- * @method static \Illuminate\Support\Collection getAllProductCategoriesSortByChildren()
- * @method static array getAllProductCategoriesWithChildren()
- * @method static \Illuminate\Support\Collection getProductCategoriesWithIndent(string $indent = '&nbsp;&nbsp;', bool $sortChildren = true)
- * @method static array getProductCategoriesWithIndentName(\Illuminate\Support\Collection|array $categories = [], string $indent = '&nbsp;&nbsp;')
- * @method static bool appendIndentTextToProductCategoryName(\Illuminate\Support\Collection $categories, int $depth = 0, array $results = [], string $indent = '&nbsp;&nbsp;')
+ * @method static \Illuminate\Support\Collection getAllProductCategories(array $params = [], bool $onlyParent = false)
  * @method static \Illuminate\Support\Collection getActiveTreeCategories()
+ * @method static \Illuminate\Support\Collection getTreeCategories(bool $activeOnly = false, array $select = ['*'])
+ * @method static array getTreeCategoriesOptions(\Illuminate\Support\Collection|array $categories, array $options = [], string|null $indent = null)
+ * @method static string renderProductCategoriesSelect(array|string|int|null $selected = null)
+ * @method static \Illuminate\Support\Collection getProductCategoriesWithUrl(array $categoryIds = [], array $condition = [], int|null $limit = null)
+ * @method static \Illuminate\Database\Query\Builder applyQuery(\Illuminate\Database\Query\Builder $query)
  *
  * @see \Botble\Ecommerce\Supports\ProductCategoryHelper
  */

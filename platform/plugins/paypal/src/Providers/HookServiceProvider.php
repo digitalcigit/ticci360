@@ -2,12 +2,13 @@
 
 namespace Botble\PayPal\Providers;
 
-use Botble\Payment\Enums\PaymentMethodEnum;
-use Botble\PayPal\Services\Gateways\PayPalPaymentService;
 use Botble\Base\Facades\Html;
+use Botble\Payment\Enums\PaymentMethodEnum;
+use Botble\Payment\Facades\PaymentMethods;
+use Botble\PayPal\Forms\PaypalPaymentMethodForm;
+use Botble\PayPal\Services\Gateways\PayPalPaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\ServiceProvider;
-use Botble\Payment\Facades\PaymentMethods;
 
 class HookServiceProvider extends ServiceProvider
 {
@@ -15,7 +16,7 @@ class HookServiceProvider extends ServiceProvider
     {
         add_filter(PAYMENT_FILTER_ADDITIONAL_PAYMENT_METHODS, [$this, 'registerPayPalMethod'], 2, 2);
 
-        $this->app->booted(function () {
+        $this->app->booted(function (): void {
             add_filter(PAYMENT_FILTER_AFTER_POST_CHECKOUT, [$this, 'checkoutWithPayPal'], 2, 2);
         });
 
@@ -61,7 +62,7 @@ class HookServiceProvider extends ServiceProvider
         add_filter(PAYMENT_FILTER_PAYMENT_INFO_DETAIL, function ($data, $payment) {
             if ($payment->payment_channel == PAYPAL_PAYMENT_METHOD_NAME) {
                 $paymentDetail = (new PayPalPaymentService())->getPaymentDetails($payment->charge_id);
-                $data = view('plugins/paypal::detail', ['payment' => $paymentDetail])->render();
+                $data .= view('plugins/paypal::detail', ['payment' => $paymentDetail])->render();
             }
 
             return $data;
@@ -70,7 +71,7 @@ class HookServiceProvider extends ServiceProvider
 
     public function addPaymentSettings(?string $settings): string
     {
-        return $settings . view('plugins/paypal::settings')->render();
+        return $settings . PaypalPaymentMethodForm::create()->renderForm();
     }
 
     public function registerPayPalMethod(?string $html, array $data): string
@@ -84,61 +85,68 @@ class HookServiceProvider extends ServiceProvider
 
     public function checkoutWithPayPal(array $data, Request $request): array
     {
-        if ($request->input('payment_method') == PAYPAL_PAYMENT_METHOD_NAME) {
-            $currentCurrency = get_application_currency();
+        if ($data['type'] !== PAYPAL_PAYMENT_METHOD_NAME) {
+            return $data;
+        }
 
-            $currencyModel = $currentCurrency->replicate();
+        $currentCurrency = get_application_currency();
 
-            $payPalService = $this->app->make(PayPalPaymentService::class);
+        $currencyModel = $currentCurrency->replicate();
 
-            $supportedCurrencies = $payPalService->supportedCurrencyCodes();
+        $payPalService = $this->app->make(PayPalPaymentService::class);
 
-            $currency = strtoupper($currentCurrency->title);
+        $supportedCurrencies = $payPalService->supportedCurrencyCodes();
 
-            $notSupportCurrency = false;
+        $currency = $currentCurrency->title;
 
-            if (! in_array($currency, $supportedCurrencies)) {
-                $notSupportCurrency = true;
+        $notSupportCurrency = false;
 
-                if (! $currencyModel->where('title', 'USD')->exists()) {
-                    $data['error'] = true;
-                    $data['message'] = __(":name doesn't support :currency. List of currencies supported by :name: :currencies.", [
+        if (! in_array($currency, $supportedCurrencies)) {
+            $notSupportCurrency = true;
+
+            if (! $currencyModel->query()->where('title', 'USD')->exists()) {
+                $data['error'] = true;
+                $data['message'] = trans(
+                    'plugins/payment::payment.currency_not_supported',
+                    [
                         'name' => 'PayPal',
                         'currency' => $currency,
                         'currencies' => implode(', ', $supportedCurrencies),
-                    ]);
+                    ]
+                );
 
-                    return $data;
-                }
+                return $data;
             }
+        }
 
-            $paymentData = apply_filters(PAYMENT_FILTER_PAYMENT_DATA, [], $request);
+        $paymentData = apply_filters(PAYMENT_FILTER_PAYMENT_DATA, [], $request);
 
-            if ($notSupportCurrency) {
-                $usdCurrency = $currencyModel->where('title', 'USD')->first();
+        if ($notSupportCurrency) {
+            $usdCurrency = $currencyModel->query()->where('title', 'USD')->first();
 
-                $paymentData['currency'] = 'USD';
-                if ($currentCurrency->is_default) {
-                    $paymentData['amount'] = $paymentData['amount'] * $usdCurrency->exchange_rate;
-                } else {
-                    $paymentData['amount'] = format_price($paymentData['amount'] / $currentCurrency->exchange_rate, $currentCurrency, true);
-                }
-            }
-
-            if (! $request->input('callback_url')) {
-                $paymentData['callback_url'] = route('payments.paypal.status');
-            }
-
-            $checkoutUrl = $payPalService->execute($paymentData);
-
-            if ($checkoutUrl) {
-                $data['checkoutUrl'] = $checkoutUrl;
+            $paymentData['currency'] = 'USD';
+            if ($currentCurrency->is_default) {
+                $paymentData['amount'] = $paymentData['amount'] * $usdCurrency->exchange_rate;
             } else {
-                $data['error'] = true;
-                $data['message'] = $payPalService->getErrorMessage();
+                $paymentData['amount'] = format_price(
+                    $paymentData['amount'] / $currentCurrency->exchange_rate,
+                    $currentCurrency,
+                    true
+                );
             }
+        }
 
-            return $data;
+        if (! $request->input('callback_url')) {
+            $paymentData['callback_url'] = route('payments.paypal.status');
+        }
+
+        $checkoutUrl = $payPalService->execute($paymentData);
+
+        if ($checkoutUrl) {
+            $data['checkoutUrl'] = $checkoutUrl;
+        } else {
+            $data['error'] = true;
+            $data['message'] = $payPalService->getErrorMessage();
         }
 
         return $data;

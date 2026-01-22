@@ -1,18 +1,14 @@
 <?php
 
-use Botble\Base\Facades\BaseHelper;
+use Botble\Base\Facades\AdminHelper;
+use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Theme\Facades\Theme;
 use Illuminate\Support\Facades\Route;
 
-Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'middleware' => ['web', 'core']], function () {
-    Route::group(['prefix' => BaseHelper::getAdminPrefix(), 'middleware' => 'auth'], function () {
-        Route::group(['prefix' => 'orders', 'as' => 'orders.'], function () {
+AdminHelper::registerRoutes(function (): void {
+    Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'prefix' => 'ecommerce'], function (): void {
+        Route::group(['prefix' => 'orders', 'as' => 'orders.'], function (): void {
             Route::resource('', 'OrderController')->parameters(['' => 'order']);
-
-            Route::delete('items/destroy', [
-                'as' => 'deletes',
-                'uses' => 'OrderController@deletes',
-                'permission' => 'orders.destroy',
-            ]);
 
             Route::get('reorder', [
                 'as' => 'reorder',
@@ -20,7 +16,7 @@ Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'middleware' =
                 'permission' => 'orders.create',
             ]);
 
-            Route::get('generate-invoice/{id}', [
+            Route::get('generate-invoice/{order}', [
                 'as' => 'generate-invoice',
                 'uses' => 'OrderController@getGenerateInvoice',
                 'permission' => 'orders.edit',
@@ -32,55 +28,61 @@ Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'middleware' =
                 'permission' => 'orders.edit',
             ]);
 
-            Route::post('send-order-confirmation-email/{id}', [
+            Route::post('send-order-confirmation-email/{order}', [
                 'as' => 'send-order-confirmation-email',
                 'uses' => 'OrderController@postResendOrderConfirmationEmail',
                 'permission' => 'orders.edit',
             ])->wherePrimaryKey();
 
-            Route::post('create-shipment/{id}', [
+            Route::post('create-shipment/{order}', [
                 'as' => 'create-shipment',
                 'uses' => 'OrderController@postCreateShipment',
                 'permission' => 'orders.edit',
             ])->wherePrimaryKey();
 
-            Route::post('cancel-shipment/{id}', [
+            Route::post('cancel-shipment/{shipment}', [
                 'as' => 'cancel-shipment',
                 'uses' => 'OrderController@postCancelShipment',
                 'permission' => 'orders.edit',
             ])->wherePrimaryKey();
 
-            Route::post('update-shipping-address/{id}', [
+            Route::post('update-shipping-address/{address}', [
                 'as' => 'update-shipping-address',
                 'uses' => 'OrderController@postUpdateShippingAddress',
                 'permission' => 'orders.edit',
             ])->wherePrimaryKey();
 
-            Route::post('cancel-order/{id}', [
+            Route::post('update-tax-information/{taxInformation}', [
+                'as' => 'update-tax-information',
+                'uses' => 'OrderController@postUpdateTaxInformation',
+                'permission' => 'orders.edit',
+            ])->wherePrimaryKey();
+
+            Route::post('cancel-order/{order}', [
                 'as' => 'cancel',
                 'uses' => 'OrderController@postCancelOrder',
                 'permission' => 'orders.edit',
             ])->wherePrimaryKey();
 
-            Route::get('print-shipping-order/{id}', [
+            Route::get('print-shipping-order/{order}', [
                 'as' => 'print-shipping-order',
                 'uses' => 'OrderController@getPrintShippingOrder',
                 'permission' => 'orders.edit',
             ])->wherePrimaryKey();
 
-            Route::post('confirm-payment/{id}', [
+            Route::post('confirm-payment/{order}', [
                 'as' => 'confirm-payment',
                 'uses' => 'OrderController@postConfirmPayment',
                 'permission' => 'orders.edit',
             ])->wherePrimaryKey();
 
-            Route::get('get-shipment-form/{id}', [
+            Route::get('get-shipment-form/{order}', [
                 'as' => 'get-shipment-form',
                 'uses' => 'OrderController@getShipmentForm',
                 'permission' => 'orders.edit',
             ])->wherePrimaryKey();
 
-            Route::post('refund/{id}', [
+            Route::post('refund/{order}', [
                 'as' => 'refund',
                 'uses' => 'OrderController@postRefund',
                 'permission' => 'orders.edit',
@@ -103,67 +105,84 @@ Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers', 'middleware' =
                 'uses' => 'OrderController@checkDataBeforeCreateOrder',
                 'permission' => 'orders.create',
             ]);
+
+            Route::get('orders/{order}/generate', [
+                'as' => 'invoice.generate',
+                'uses' => 'OrderController@generateInvoice',
+                'permission' => 'orders.edit',
+            ])->wherePrimaryKey('order');
+
+            Route::get('orders/{order}/download-proof', [
+                'as' => 'download-proof',
+                'uses' => 'OrderController@downloadProof',
+                'permission' => 'orders.edit',
+            ])->wherePrimaryKey('order');
         });
 
-        Route::group(['prefix' => 'incomplete-orders', 'as' => 'orders.'], function () {
+        Route::group(['prefix' => 'incomplete-orders', 'as' => 'orders.'], function (): void {
             Route::match(['GET', 'POST'], '', [
                 'as' => 'incomplete-list',
                 'uses' => 'OrderController@getIncompleteList',
                 'permission' => 'orders.index',
             ]);
 
-            Route::get('view/{id}', [
+            Route::get('view/{order}', [
                 'as' => 'view-incomplete-order',
                 'uses' => 'OrderController@getViewIncompleteOrder',
                 'permission' => 'orders.index',
             ])->wherePrimaryKey();
 
-            Route::post('send-order-recover-email/{id}', [
+            Route::post('mark-as-completed/{order}', [
+                'as' => 'mark-as-completed',
+                'uses' => 'OrderController@markIncompleteOrderAsCompleted',
+                'permission' => 'orders.index',
+            ])->wherePrimaryKey();
+
+            Route::post('send-order-recover-email/{order}', [
                 'as' => 'send-order-recover-email',
                 'uses' => 'OrderController@postSendOrderRecoverEmail',
                 'permission' => 'orders.index',
             ])->wherePrimaryKey();
         });
 
-        Route::group(['prefix' => 'order-returns', 'as' => 'order_returns.'], function () {
-            Route::resource('', 'OrderReturnController')->parameters(['' => 'order_returns'])->except(['create', 'store']);
-
-            Route::delete('items/destroy', [
-                'as' => 'deletes',
-                'uses' => 'OrderReturnController@deletes',
-                'permission' => 'order_returns.destroy',
-            ]);
+        Route::group(['prefix' => 'order-returns', 'as' => 'order_returns.'], function (): void {
+            Route::resource('', 'OrderReturnController')->parameters(['' => 'order_return'])->except(
+                ['create', 'store']
+            );
         });
     });
 });
 
-Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers\Fronts', 'middleware' => ['web', 'core']], function () {
-    Route::group(apply_filters(BASE_FILTER_GROUP_PUBLIC_ROUTE, []), function () {
-        Route::group(['prefix' => 'checkout/{token}', 'as' => 'public.checkout.'], function () {
-            Route::get('/', [
-                'as' => 'information',
-                'uses' => 'PublicCheckoutController@getCheckout',
-            ]);
+Theme::registerRoutes(function (): void {
+    Route::group(['namespace' => 'Botble\Ecommerce\Http\Controllers\Fronts'], function (): void {
+        Route::group(
+            ['prefix' => sprintf('%s/{token}', EcommerceHelper::getPageSlug('checkout')), 'as' => 'public.checkout.'],
+            function (): void {
+                Route::get('/', [
+                    'as' => 'information',
+                    'uses' => 'PublicCheckoutController@getCheckout',
+                ]);
 
-            Route::post('information', [
-                'as' => 'save-information',
-                'uses' => 'PublicCheckoutController@postSaveInformation',
-            ]);
+                Route::post('information', [
+                    'as' => 'save-information',
+                    'uses' => 'PublicCheckoutController@postSaveInformation',
+                ]);
 
-            Route::post('process', [
-                'as' => 'process',
-                'uses' => 'PublicCheckoutController@postCheckout',
-            ]);
+                Route::post('process', [
+                    'as' => 'process',
+                    'uses' => 'PublicCheckoutController@postCheckout',
+                ]);
 
-            Route::get('success', [
-                'as' => 'success',
-                'uses' => 'PublicCheckoutController@getCheckoutSuccess',
-            ]);
+                Route::get('success', [
+                    'as' => 'success',
+                    'uses' => 'PublicCheckoutController@getCheckoutSuccess',
+                ]);
 
-            Route::get('recover', [
-                'as' => 'recover',
-                'uses' => 'PublicCheckoutController@getCheckoutRecover',
-            ]);
-        });
+                Route::get('recover', [
+                    'as' => 'recover',
+                    'uses' => 'PublicCheckoutController@getCheckoutRecover',
+                ]);
+            }
+        );
     });
 });

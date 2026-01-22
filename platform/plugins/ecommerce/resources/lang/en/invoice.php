@@ -2,12 +2,12 @@
 
 return [
     'name' => 'Invoices',
+    'description' => 'View generated invoices and download PDFs for customer orders',
     'create' => 'New invoice',
     'edit' => 'Edit invoice',
     'print' => 'Print Invoice',
     'download' => 'Download Invoice',
     'heading' => 'Invoice',
-    'invoice_for_job' => '',
     'table' => [
         'code' => 'Code',
         'amount' => 'Amount',
@@ -20,6 +20,7 @@ return [
         'issue_at' => 'Issue At',
         'description' => 'Description',
         'qty' => 'Qty',
+        'quantity' => 'Quantity',
         'amount' => 'Amount',
         'discount' => 'Discount',
         'grand_total' => 'Grand Total',
@@ -27,6 +28,9 @@ return [
         'sub_total' => 'Sub Total',
         'tax' => 'Tax',
         'total' => 'Total',
+        'attributes' => 'Attributes',
+        'product_options' => 'Product options',
+        'license_code' => 'License code',
     ],
     'total_amount' => 'Total Amount',
     'payment_info' => 'Payment Info',
@@ -34,4 +38,14 @@ return [
     'payment_status' => 'Payment Status',
     'generate_invoices' => 'Generate Invoices',
     'generate_success_message' => 'Generated :count invoices successfully',
+    'generate_invoice' => 'Generate invoice',
+    'order' => 'Order',
+    'all_invoices_have_already_generated' => 'All invoices have already generated.',
+    'statuses' => [
+        'pending' => 'Pending',
+        'processing' => 'Processing',
+        'completed' => 'Completed',
+        'canceled' => 'Canceled',
+    ],
+    'back_to_invoices' => 'Back to Invoices',
 ];

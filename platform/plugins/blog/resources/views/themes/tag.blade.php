@@ -4,11 +4,14 @@
 </div>
 
 <div>
-    @if ($posts->count() > 0)
+    @if ($posts->isNotEmpty())
         @foreach ($posts as $post)
             <article>
                 <div>
-                    <a href="{{ $post->url }}"><img src="{{ RvMedia::getImageUrl($post->image, null, false, RvMedia::getDefaultImage()) }}" alt="{{ $post->name }}"></a>
+                    <a href="{{ $post->url }}"><img
+                            src="{{ RvMedia::getImageUrl($post->image, null, false, RvMedia::getDefaultImage()) }}"
+                            alt="{{ $post->name }}"
+                        ></a>
                 </div>
                 <div>
                     <header>
@@ -16,7 +19,8 @@
                         <div>
                             {{ $post->created_at->format('M d, Y') }} - <span>{{ $post->author->name }}</span>>
                             @if ($post->categories->first())
-                                <a href="{{ $post->categories->first()->url }}">{{ $post->categories->first()->name }}</a>
+                                <a
+                                    href="{{ $post->categories->first()->url }}">{{ $post->categories->first()->name }}</a>
                             @endif
                         </div>
                     </header>
@@ -31,7 +35,7 @@
         </div>
     @else
         <div>
-            <p>{{ __('There is no data to display!') }}</p>
+            <p>{{ trans('plugins/blog::base.no_data_to_display') }}</p>
         </div>
     @endif
 </div>

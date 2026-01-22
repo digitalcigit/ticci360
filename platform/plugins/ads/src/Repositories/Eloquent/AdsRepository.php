@@ -2,9 +2,8 @@
 
 namespace Botble\Ads\Repositories\Eloquent;
 
-use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Support\Repositories\Eloquent\RepositoriesAbstract;
 use Botble\Ads\Repositories\Interfaces\AdsInterface;
+use Botble\Support\Repositories\Eloquent\RepositoriesAbstract;
 use Illuminate\Database\Eloquent\Collection;
 
 class AdsRepository extends RepositoriesAbstract implements AdsInterface
@@ -13,7 +12,7 @@ class AdsRepository extends RepositoriesAbstract implements AdsInterface
     {
         // @phpstan-ignore-next-line
         $data = $this->model
-            ->where('status', BaseStatusEnum::PUBLISHED)
+            ->wherePublished()
             ->notExpired()
             ->with(['metadata']);
 

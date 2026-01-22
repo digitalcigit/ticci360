@@ -2,39 +2,43 @@
 
 namespace Botble\Ecommerce\Http\Controllers\Customers;
 
-use App\Http\Controllers\Controller;
-use Botble\Base\Facades\BaseHelper;
 use Botble\ACL\Traits\RegistersUsers;
-use Botble\Base\Http\Responses\BaseHttpResponse;
-use Botble\Ecommerce\Http\Requests\RegisterRequest;
-use Botble\Ecommerce\Repositories\Interfaces\CustomerInterface;
-use Botble\JsValidation\Facades\JsValidator;
-use Carbon\Carbon;
+use Botble\Base\Facades\BaseHelper;
+use Botble\Base\Http\Controllers\BaseController;
+use Botble\Ecommerce\Events\CustomerEmailVerified;
 use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Ecommerce\Forms\Fronts\Auth\RegisterForm;
+use Botble\Ecommerce\Http\Requests\RegisterRequest;
+use Botble\Ecommerce\Models\Customer;
+use Botble\JsValidation\Facades\JsValidator;
+use Botble\SeoHelper\Facades\SeoHelper;
+use Botble\Theme\Facades\Theme;
+use Carbon\Carbon;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Validator;
-use Botble\SeoHelper\Facades\SeoHelper;
-use Botble\Theme\Facades\Theme;
 use Illuminate\Support\Facades\URL;
 
-class RegisterController extends Controller
+class RegisterController extends BaseController
 {
     use RegistersUsers;
 
     protected string $redirectTo = '/';
 
-    public function __construct(protected CustomerInterface $customerRepository)
+    public function __construct()
     {
         $this->middleware('customer.guest');
     }
 
     public function showRegistrationForm()
     {
-        SeoHelper::setTitle(__('Register'));
+        abort_unless(EcommerceHelper::isCustomerRegistrationEnabled(), 404);
 
-        Theme::breadcrumb()->add(__('Home'), route('public.index'))->add(__('Register'), route('customer.register'));
+        $title = __('Register');
+        SeoHelper::setTitle(theme_option('ecommerce_register_seo_title') ?: $title)
+            ->setDescription(theme_option('ecommerce_register_seo_description'));
+
+        Theme::breadcrumb()->add($title, route('customer.register'));
 
         if (! session()->has('url.intended') &&
             ! in_array(url()->previous(), [route('customer.login'), route('customer.register')])
@@ -45,52 +49,68 @@ class RegisterController extends Controller
         Theme::asset()
             ->container('footer')
             ->usePath(false)
-            ->add('js-validation', 'vendor/core/core/js-validation/js/js-validation.js', ['jquery']);
+            ->add('js-validation', 'vendor/core/core/js-validation/js/js-validation.js', ['jquery'], version: '1.0.1');
 
         add_filter(THEME_FRONT_FOOTER, function ($html) {
             return $html . JsValidator::formRequest(RegisterRequest::class)->render();
         });
 
-        return Theme::scope('ecommerce.customers.register', [], 'plugins/ecommerce::themes.customers.register')
-            ->render();
+        return Theme::scope(
+            'ecommerce.customers.register',
+            ['form' => RegisterForm::create()],
+            'plugins/ecommerce::themes.customers.register'
+        )->render();
     }
 
-    public function register(Request $request, BaseHttpResponse $response)
+    public function register(RegisterRequest $request)
     {
-       dd( $request->all());
-        $this->validator($request->input())->validate();
+        abort_unless(EcommerceHelper::isCustomerRegistrationEnabled(), 404);
 
         do_action('customer_register_validation', $request);
 
+        /**
+         * @var Customer $customer
+         */
         $customer = $this->create($request->input());
 
         event(new Registered($customer));
 
-        if (EcommerceHelper::isEnableEmailVerification()) {
+        if (
+            EcommerceHelper::isEnableEmailVerification() &&
+            (! EcommerceHelper::isLoginUsingPhone() || get_ecommerce_setting('keep_email_field_in_registration_form', true))
+        ) {
             $this->registered($request, $customer);
 
-            return $response
-                    ->setNextUrl(route('customer.login'))
-                    ->setMessage(__('We have sent you an email to verify your email. Please check and confirm your email address!'));
+            session()->flash('ecommerce_customer_registered', true);
+
+            $message = __('We have sent you an email to verify your email. Please check and confirm your email address!');
+
+            return $this
+                ->httpResponse()
+                ->setNextUrl(route('customer.login'))
+                ->with(['auth_warning_message' => $message])
+                ->setMessage($message);
         }
 
         $customer->confirmed_at = Carbon::now();
-        $this->customerRepository->createOrUpdate($customer);
+        $customer->save();
+
         $this->guard()->login($customer);
 
-        return $response->setNextUrl($this->redirectPath())->setMessage(__('Registered successfully!'));
-    }
+        session()->flash('ecommerce_customer_registered', true);
 
-    protected function validator(array $data)
-    {
-        return Validator::make($data, (new RegisterRequest())->rules());
+        return $this
+            ->httpResponse()
+            ->setNextUrl($this->redirectPath())
+            ->setMessage(__('Registered successfully!'));
     }
 
     protected function create(array $data)
     {
-        return $this->customerRepository->create([
+        return Customer::query()->create([
             'name' => BaseHelper::clean($data['name']),
-            'email' => BaseHelper::clean($data['email']),
+            'email' => BaseHelper::clean($data['email'] ?? null),
+            'phone' => BaseHelper::clean($data['phone'] ?? null),
             'password' => Hash::make($data['password']),
         ]);
     }
@@ -100,40 +120,52 @@ class RegisterController extends Controller
         return auth('customer');
     }
 
-    public function confirm(int|string $id, Request $request, BaseHttpResponse $response, CustomerInterface $customerRepository)
+    public function confirm(int|string $id, Request $request)
     {
         if (! URL::hasValidSignature($request)) {
-            abort(404);
+            return $this
+                ->httpResponse()
+                ->setError()
+                ->setNextUrl(route('customer.login'))
+                ->setMessage(trans('plugins/ecommerce::customer.email_verification_link_expired'));
         }
 
-        $customer = $customerRepository->findOrFail($id);
+        /**
+         * @var Customer $customer
+         */
+        $customer = Customer::query()->findOrFail($id);
 
         $customer->confirmed_at = Carbon::now();
-        $this->customerRepository->createOrUpdate($customer);
+        $customer->save();
 
         $this->guard()->login($customer);
 
-        return $response
+        CustomerEmailVerified::dispatch($customer);
+
+        return $this
+            ->httpResponse()
             ->setNextUrl(route('customer.overview'))
             ->setMessage(__('You successfully confirmed your email address.'));
     }
 
-    public function resendConfirmation(
-        Request $request,
-        CustomerInterface $customerRepository,
-        BaseHttpResponse $response
-    ) {
-        $customer = $customerRepository->getFirstBy(['email' => $request->input('email')]);
+    public function resendConfirmation(Request $request)
+    {
+        /**
+         * @var Customer $customer
+         */
+        $customer = Customer::query()->where('email', $request->input('email'))->first();
 
         if (! $customer) {
-            return $response
+            return $this
+                ->httpResponse()
                 ->setError()
                 ->setMessage(__('Cannot find this customer!'));
         }
 
         $customer->sendEmailVerificationNotification();
 
-        return $response
+        return $this
+            ->httpResponse()
             ->setMessage(__('We sent you another confirmation email. You should receive it shortly.'));
     }
 }

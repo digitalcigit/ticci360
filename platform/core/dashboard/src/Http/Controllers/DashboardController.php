@@ -2,156 +2,184 @@
 
 namespace Botble\Dashboard\Http\Controllers;
 
-use Botble\ACL\Repositories\Interfaces\UserInterface;
 use Botble\Base\Facades\Assets;
-use Botble\Base\Facades\PageTitle;
 use Botble\Base\Http\Controllers\BaseController;
-use Botble\Base\Http\Responses\BaseHttpResponse;
-use Botble\Dashboard\Repositories\Interfaces\DashboardWidgetInterface;
-use Botble\Dashboard\Repositories\Interfaces\DashboardWidgetSettingInterface;
+use Botble\Dashboard\Events\RenderingDashboardWidgets;
+use Botble\Dashboard\Models\DashboardWidget;
+use Botble\Dashboard\Models\DashboardWidgetSetting;
 use Exception;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\Request;
 
 class DashboardController extends BaseController
 {
-    public function __construct(
-        protected DashboardWidgetSettingInterface $widgetSettingRepository,
-        protected DashboardWidgetInterface $widgetRepository,
-        protected UserInterface $userRepository
-    ) {
-    }
-
     public function getDashboard(Request $request)
     {
-        PageTitle::setTitle(trans('core/dashboard::dashboard.title'));
+        $this->pageTitle(trans('core/dashboard::dashboard.title'));
 
-        Assets::addScripts(['blockui', 'sortable', 'equal-height', 'counterup'])
+        Assets::addScripts(['sortable', 'equal-height', 'counterup'])
             ->addScriptsDirectly('vendor/core/core/dashboard/js/dashboard.js')
-            ->addStylesDirectly('vendor/core/core/dashboard/css/dashboard.css');
+            ->addScriptsDirectly('vendor/core/core/dashboard/js/check-for-updates.js');
 
         Assets::usingVueJS();
 
+        RenderingDashboardWidgets::dispatch();
+
         do_action(DASHBOARD_ACTION_REGISTER_SCRIPTS);
 
-        $widgets = $this->widgetRepository->getModel()
+        $widgets = DashboardWidget::query()
             ->with([
-                'settings' => function (HasMany $query) use ($request) {
-                    $query->where('user_id', $request->user()->getKey())
+                'settings' => function (HasMany $query) use ($request): void {
+                    $query
+                        ->where('user_id', $request->user()->getKey())
                         ->select(['status', 'order', 'settings', 'widget_id'])
-                        ->orderBy('order');
+                        ->oldest('order');
                 },
             ])
             ->select(['id', 'name'])
             ->get();
 
         $widgetData = apply_filters(DASHBOARD_FILTER_ADMIN_LIST, [], $widgets);
-        ksort($widgetData);
 
         $availableWidgetIds = collect($widgetData)->pluck('id')->all();
 
         $widgets = $widgets->reject(function ($item) use ($availableWidgetIds) {
-            return ! in_array($item->id, $availableWidgetIds);
+            return ! in_array($item->getKey(), $availableWidgetIds);
         });
 
-        $statWidgets = collect($widgetData)->where('type', '!=', 'widget')->pluck('view')->all();
-        $userWidgets = collect($widgetData)->where('type', 'widget')->pluck('view')->all();
+        $statWidgets = collect($widgetData)
+            ->where('type', '!=', 'widget')
+            ->sortBy('priority')
+            ->pluck('view')
+            ->all();
+
+        $userWidgets = collect($widgetData)
+            ->where('type', 'widget')
+            ->sortBy(function ($widget) use ($widgets) {
+                $widgetModel = $widgets->firstWhere('id', $widget['id'] ?? null);
+                if ($widgetModel && ($userSettings = $widgetModel->settings->first())) {
+                    return $userSettings->order ?? 999;
+                }
+
+                return 999;
+            })
+            ->pluck('view')
+            ->all();
 
         return view('core/dashboard::list', compact('widgets', 'userWidgets', 'statWidgets'));
     }
 
-    public function postEditWidgetSettingItem(Request $request, BaseHttpResponse $response)
+    public function postEditWidgetSettingItem(Request $request)
     {
         try {
-            $widget = $this->widgetRepository->getFirstBy([
+            $widget = DashboardWidget::query()->where([
                 'name' => $request->input('name'),
-            ]);
+            ])->first();
 
             if (! $widget) {
-                return $response
+                return $this
+                    ->httpResponse()
                     ->setError()
                     ->setMessage(trans('core/dashboard::dashboard.widget_not_exists'));
             }
 
-            $widgetSetting = $this->widgetSettingRepository->firstOrCreate([
-                'widget_id' => $widget->id,
+            $widgetSetting = DashboardWidgetSetting::query()->create([
+                'widget_id' => $widget->getKey(),
                 'user_id' => $request->user()->getKey(),
             ]);
 
-            $widgetSetting->settings = array_merge((array)$widgetSetting->settings, [
+            $widgetSetting->settings = array_merge((array) $widgetSetting->settings, [
                 $request->input('setting_name') => $request->input('setting_value'),
             ]);
 
-            $this->widgetSettingRepository->createOrUpdate($widgetSetting);
+            $widgetSetting->save();
         } catch (Exception $exception) {
-            return $response
+            return $this
+                ->httpResponse()
                 ->setError()
                 ->setMessage($exception->getMessage());
         }
 
-        return $response;
+        return $this->httpResponse();
     }
 
-    public function postUpdateWidgetOrder(Request $request, BaseHttpResponse $response)
+    public function postUpdateWidgetOrder(Request $request)
     {
         foreach ($request->input('items', []) as $key => $item) {
-            $widget = $this->widgetRepository->firstOrCreate([
+            $widget = DashboardWidget::query()->firstOrCreate([
                 'name' => $item,
             ]);
-            $widgetSetting = $this->widgetSettingRepository->firstOrCreate([
-                'widget_id' => $widget->id,
+
+            $widgetSetting = DashboardWidgetSetting::query()->firstOrCreate([
+                'widget_id' => $widget->getKey(),
                 'user_id' => $request->user()->getKey(),
             ]);
+
             $widgetSetting->order = $key;
-            $this->widgetSettingRepository->createOrUpdate($widgetSetting);
+            $widgetSetting->save();
         }
 
-        return $response->setMessage(trans('core/dashboard::dashboard.update_position_success'));
+        return $this
+            ->httpResponse()
+            ->setMessage(trans('core/dashboard::dashboard.update_position_success'));
     }
 
-    public function getHideWidget(Request $request, BaseHttpResponse $response)
+    public function getHideWidget(Request $request)
     {
-        $widget = $this->widgetRepository->getFirstBy([
+        $widget = DashboardWidget::query()->where([
             'name' => $request->input('name'),
-        ], ['id']);
+        ], ['id'])->first();
+
         if (! empty($widget)) {
-            $widgetSetting = $this->widgetSettingRepository->firstOrCreate([
-                'widget_id' => $widget->id,
+            $widgetSetting = DashboardWidgetSetting::query()->firstOrCreate([
+                'widget_id' => $widget->getKey(),
                 'user_id' => $request->user()->getKey(),
             ]);
+
+            $maxOrder = DashboardWidgetSetting::query()->max('order');
+
+            $maxOrder = $maxOrder < 125 ? $maxOrder : 10;
 
             $widgetSetting->status = 0;
-            $widgetSetting->order = 99 + $widgetSetting->id;
-            $this->widgetRepository->createOrUpdate($widgetSetting);
+            $widgetSetting->order = $maxOrder + 1;
+            $widgetSetting->save();
         }
 
-        return $response->setMessage(trans('core/dashboard::dashboard.hide_success'));
+        return $this
+            ->httpResponse()
+            ->setMessage(trans('core/dashboard::dashboard.hide_success'));
     }
 
-    public function postHideWidgets(Request $request, BaseHttpResponse $response)
+    public function postHideWidgets(Request $request)
     {
-        $widgets = $this->widgetRepository->all();
+        $widgets = DashboardWidget::query()->get();
 
         foreach ($widgets as $widget) {
-            $widgetSetting = $this->widgetSettingRepository->firstOrCreate([
-                'widget_id' => $widget->id,
+            $widgetSetting = DashboardWidgetSetting::query()->firstOrCreate([
+                'widget_id' => $widget->getKey(),
                 'user_id' => $request->user()->getKey(),
             ]);
 
-            if ($request->has('widgets.' . $widget->name) &&
+            if (
+                $request->has('widgets.' . $widget->name) &&
                 $request->input('widgets.' . $widget->name) == 1
             ) {
                 $widgetSetting->status = 1;
-                $this->widgetRepository->createOrUpdate($widgetSetting);
             } else {
+                $maxOrder = DashboardWidgetSetting::query()->max('order');
+
+                $maxOrder = $maxOrder < 125 ? $maxOrder : 10;
+
                 $widgetSetting->status = 0;
-                $widgetSetting->order = 99 + $widgetSetting->id;
-                $this->widgetRepository->createOrUpdate($widgetSetting);
+                $widgetSetting->order = $maxOrder + 1;
             }
+
+            $widgetSetting->save();
         }
 
-        return $response
-            ->setNextUrl(route('dashboard.index'))
+        return $this
+            ->httpResponse()
+            ->setNextRoute('dashboard.index')
             ->setMessage(trans('core/dashboard::dashboard.hide_success'));
     }
 }

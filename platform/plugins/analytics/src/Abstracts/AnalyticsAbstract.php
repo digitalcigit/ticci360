@@ -10,20 +10,13 @@ abstract class AnalyticsAbstract
 {
     use Macroable;
 
-    public string|null $propertyId = null;
+    public ?string $propertyId = null;
 
-    public string|null $credentials = null;
+    public ?string $credentials = null;
 
     public function getPropertyId(): string
     {
         return $this->propertyId;
-    }
-
-    public function setPropertyId(string $propertyId): static
-    {
-        $this->propertyId = $propertyId;
-
-        return $this;
     }
 
     abstract public function fetchMostVisitedPages(Period $period, int $maxResults = 20): Collection;

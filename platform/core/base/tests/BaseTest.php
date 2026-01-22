@@ -11,9 +11,10 @@ class BaseTest extends TestCase
 {
     public function testRoutes(): void
     {
-        $this->withoutEvents();
-
-        $auth = User::first();
+        /**
+         * @var User $auth
+         */
+        $auth = User::query()->first();
 
         if ($auth) {
             $this->be($auth);

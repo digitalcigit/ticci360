@@ -2,14 +2,18 @@
 
 namespace Botble\Theme\Commands;
 
+use Botble\Language\Facades\Language;
 use Botble\Setting\Facades\Setting;
+use Botble\Theme\Events\RenderingThemeOptionSettings;
+use Botble\Theme\Facades\ThemeOption;
 use Illuminate\Console\Command;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
-use Botble\Language\Facades\Language;
+
+use function Laravel\Prompts\table;
+
 use Symfony\Component\Console\Attribute\AsCommand;
-use Botble\Theme\Facades\ThemeOption;
 
 #[AsCommand('cms:theme:options:check', 'Check difference theme options between database and option definitions')]
 class ThemeOptionCheckMissingCommand extends Command
@@ -18,20 +22,23 @@ class ThemeOptionCheckMissingCommand extends Command
     {
         $isReverse = $this->option('reverse');
 
-        $fields = array_map(function ($name) {
-            return ThemeOption::getOptionKey($name);
-        }, array_keys(Arr::get(ThemeOption::getFields(), 'theme')));
+        RenderingThemeOptionSettings::dispatch();
 
-        $existsOptionsQuery = Setting::newQuery();
-        $existsOptionsQuery->where('key', 'LIKE', ThemeOption::getOptionKey('%'));
+        $fields = array_map(
+            fn (string $name) => ThemeOption::getOptionKey($name),
+            array_keys(Arr::get(ThemeOption::getFields(), 'theme', []))
+        );
+
+        $existsOptionQuery = Setting::newQuery();
+        $existsOptionQuery->where('key', 'LIKE', ThemeOption::getOptionKey('%'));
 
         if (is_plugin_active('language')) {
             foreach (Language::getSupportedLanguagesKeys() as $language) {
-                $existsOptionsQuery->where('key', 'NOT LIKE', ThemeOption::getOptionKey('%', $language));
+                $existsOptionQuery->where('key', 'NOT LIKE', ThemeOption::getOptionKey('%', $language));
             }
         }
 
-        $existsOptions = $existsOptionsQuery->pluck('key')->all();
+        $existsOptions = $existsOptionQuery->pluck('key')->all();
         $missingKeys = $isReverse
             ? $this->missingKeys($existsOptions, $fields)
             : $this->missingKeys($fields, $existsOptions);
@@ -44,23 +51,24 @@ class ThemeOptionCheckMissingCommand extends Command
 
         $missingKeysCount = $missingKeys->count();
         $pluralKeyWord = Str::plural('key', $missingKeysCount);
-        $this->line(
+
+        $this->components->info(
             $isReverse
-                ? 'We found <info>' . $missingKeysCount . '</info> ' . $pluralKeyWord . ' are not exists in settings table (database).'
-                : 'We found <info>' . $missingKeysCount . '</info> ' . $pluralKeyWord . ' are not defined in theme options.'
+                ? sprintf('We found <info>%s</info> %s are not exists in settings table (database).', $missingKeysCount, $pluralKeyWord)
+                : sprintf('We found <info>%s</info> %s are not defined in theme options.', $missingKeysCount, $pluralKeyWord)
         );
-        $this->table(['#', 'Key'], $missingKeys->toArray());
+
+        table(['#', 'Key'], $missingKeys->toArray());
 
         return self::SUCCESS;
     }
 
     protected function missingKeys(array $items, array $origin): Collection
     {
-        return collect($items)->filter(function ($item) use ($origin) {
-            return ! in_array($item, $origin);
-        })->values()->map(function ($item, $key) {
-            return [$key, $item];
-        });
+        return collect($items)
+            ->filter(fn ($item) => ! in_array($item, $origin))
+            ->values()
+            ->map(fn ($item, $key) => [$key, $item]);
     }
 
     protected function configure(): void

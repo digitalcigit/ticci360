@@ -1,15 +1,10 @@
-<input type="hidden" name="page" data-value="{{ $products->currentPage() }}">
-
-<div class="row">
-    @forelse ($products as $product)
-        <div class="col-xl-2 col-lg-4 col-md-4 col-sm-6 col-6">
-            @include('plugins/ecommerce::themes.includes.default-product', compact('product'))
+<div class="row row-cols-md-2 row-cols-lg-3 row-cols-xl-4 g-3">
+    @foreach($products as $product)
+        <div class="col">
+            @include(EcommerceHelper::viewPath('includes.product-item'))
         </div>
-    @empty
-        <div class="alert alert-warning" role="alert">
-            {{ __(':total Products found', ['total' => 0]) }}
-        </div>
-    @endforelse
+    @endforeach
 </div>
 
-{!! $products->withQueryString()->links() !!}
+@include(EcommerceHelper::viewPath('includes.quick-shop-modal'))
+@include(EcommerceHelper::viewPath('includes.quick-view-modal'))

@@ -2,23 +2,39 @@
 
 namespace Botble\Base\Supports;
 
+use Botble\Media\Facades\RvMedia;
 use Exception;
 use Illuminate\Contracts\Filesystem\Filesystem;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class GoogleFonts
 {
-    public function __construct(
-        protected Filesystem $filesystem,
-        protected string $path,
-        protected bool $inline,
-        protected string $userAgent,
-    ) {
+    protected Filesystem $files;
+
+    protected string $path = 'fonts';
+
+    protected bool $inline = true;
+
+    protected string $userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15';
+
+    public function setDisk(): void
+    {
+        config(['filesystems.disks.fonts' => [
+            'driver' => 'local',
+            'root' => RvMedia::getUploadPath(),
+            'url' => RvMedia::getUploadURL(),
+            'visibility' => 'public',
+            'throw' => false,
+        ]]);
+
+        $this->files = Storage::disk('fonts');
     }
 
-    public function load(string $font, string|null $nonce = null, bool $forceDownload = false): Fonts
+    public function load(string $font, ?string $nonce = null, bool $forceDownload = false): ?Fonts
     {
         ['font' => $font, 'nonce' => $nonce] = $this->parseOptions($font, $nonce);
 
@@ -37,7 +53,7 @@ class GoogleFonts
 
             return $fonts;
         } catch (Exception $exception) {
-            if (config('app.debug')) {
+            if (App::hasDebugModeEnabled()) {
                 throw $exception;
             }
 
@@ -45,58 +61,94 @@ class GoogleFonts
         }
     }
 
-    protected function loadLocal(string $url, string|null $nonce): ?Fonts
+    protected function loadLocal(string $url, ?string $nonce): ?Fonts
     {
-        if (! $this->filesystem->exists($this->path($url, 'fonts.css'))) {
+        $this->setDisk();
+
+        if (! $this->files->exists($this->path($url, 'fonts.css'))) {
             return null;
         }
 
-        $localizedCss = $this->filesystem->get($this->path($url, 'fonts.css'));
+        $fontCssPath = $this->path($url, 'fonts.css');
 
-        if (! str_contains($localizedCss, Storage::disk('public')->url('fonts'))) {
-            $localizedCss = preg_replace('/(http|https):\/\/.*?\/storage\/fonts\//i', Storage::disk('public')->url('fonts/'), $localizedCss);
-            $this->filesystem->put($this->path($url, 'fonts.css'), $localizedCss);
+        $localizedCss = $this->files->get($fontCssPath);
+
+        if (str_contains($localizedCss, '<!DOCTYPE html>')) {
+            $this->files->delete($fontCssPath);
+
+            return null;
+        }
+
+        if (! str_contains($localizedCss, $this->files->url('fonts'))) {
+            $uploadFolder = 'storage';
+
+            if (setting('media_customize_upload_path')) {
+                $uploadFolder = trim(setting('media_upload_path'), '/');
+            }
+
+            $localizedCss = preg_replace(
+                '/(http|https):\/\/.*?\/' . $uploadFolder . '\/fonts\//i',
+                $this->files->url('fonts/'),
+                $localizedCss
+            );
+
+            $this->files->put($fontCssPath, $localizedCss);
         }
 
         return new Fonts(
             googleFontsUrl: $url,
-            localizedUrl: $this->filesystem->url($this->path($url, 'fonts.css')),
+            localizedUrl: $this->files->url($fontCssPath),
             localizedCss: $localizedCss,
             nonce: $nonce,
             preferInline: $this->inline,
         );
     }
 
-    protected function fetch(string $url, string|null $nonce): Fonts
+    protected function fetch(string $url, ?string $nonce): ?Fonts
     {
-        $css = Http::withHeaders(['User-Agent' => $this->userAgent])
+        $response = Http::withHeaders(['User-Agent' => $this->userAgent])
             ->timeout(300)
             ->withoutVerifying()
-            ->get($url)
-            ->body();
+            ->get($url);
 
-        $localizedCss = $css;
+        if ($response->failed()) {
+            return null;
+        }
 
-        foreach ($this->extractFontUrls($css) as $fontUrl) {
+        $localizedCss = $response->body();
+
+        try {
+            $extractedFonts = $this->extractFontUrls($response);
+        } catch (Exception) {
+            return null;
+        }
+
+        $this->setDisk();
+
+        foreach ($extractedFonts as $fontUrl) {
             $localizedFontUrl = $this->localizeFontUrl($fontUrl);
 
-            $this->filesystem->put(
-                $this->path($url, $localizedFontUrl),
-                Http::withoutVerifying()->get($fontUrl)->body(),
-            );
+            $storedFontPath = $this->path($url, $localizedFontUrl);
+
+            if (! $this->files->exists($storedFontPath)) {
+                $this->files->put(
+                    $storedFontPath,
+                    Http::withoutVerifying()->get($fontUrl)->body(),
+                );
+            }
 
             $localizedCss = str_replace(
                 $fontUrl,
-                $this->filesystem->url($this->path($url, $localizedFontUrl)),
+                $this->files->url($storedFontPath),
                 $localizedCss,
             );
         }
 
-        $this->filesystem->put($this->path($url, 'fonts.css'), $localizedCss);
+        $this->files->put($this->path($url, 'fonts.css'), $localizedCss);
 
         return new Fonts(
             googleFontsUrl: $url,
-            localizedUrl: $this->filesystem->url($this->path($url, 'fonts.css')),
+            localizedUrl: $this->files->url($this->path($url, 'fonts.css')),
             localizedCss: $localizedCss,
             nonce: $nonce,
             preferInline: $this->inline,
@@ -108,7 +160,7 @@ class GoogleFonts
         $matches = [];
         preg_match_all('/url\((https:\/\/fonts.gstatic.com\/[^)]+)\)/', $css, $matches);
 
-        return $matches[1] ?? [];
+        return $matches[1];
     }
 
     protected function localizeFontUrl(string $path): string
@@ -129,11 +181,39 @@ class GoogleFonts
         return $segments->filter()->join('/');
     }
 
-    protected function parseOptions(string $font, string|null $nonce = null): array
+    protected function parseOptions(string $font, ?string $nonce = null): array
     {
         return [
             'font' => $font,
             'nonce' => $nonce,
         ];
+    }
+
+    protected static ?array $fontsCache = null;
+
+    public static function getFonts(): array
+    {
+        // Lazy load fonts only when needed
+        if (static::$fontsCache !== null) {
+            return static::$fontsCache;
+        }
+
+        $path = core_path('base/resources/data/google-fonts.json');
+
+        try {
+            if (! File::exists($path)) {
+                static::$fontsCache = [];
+
+                return [];
+            }
+
+            static::$fontsCache = File::json($path);
+
+            return static::$fontsCache;
+        } catch (Exception) {
+            static::$fontsCache = [];
+
+            return [];
+        }
     }
 }

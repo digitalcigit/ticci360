@@ -2,37 +2,32 @@
 
 namespace Botble\Media\Http\Controllers;
 
+use Botble\Base\Http\Controllers\BaseController;
 use Botble\Media\Chunks\Exceptions\UploadMissingFileException;
 use Botble\Media\Chunks\Handler\DropZoneUploadHandler;
 use Botble\Media\Chunks\Receiver\FileReceiver;
-use Botble\Media\Repositories\Interfaces\MediaFileInterface;
-use Exception;
+use Botble\Media\Facades\RvMedia;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Routing\Controller;
 use Illuminate\Support\Arr;
-use Botble\Media\Facades\RvMedia;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Throwable;
 
 /**
  * @since 19/08/2015 07:50 AM
  */
-class MediaFileController extends Controller
+class MediaFileController extends BaseController
 {
-    public function __construct(protected MediaFileInterface $fileRepository)
-    {
-    }
-
     public function postUpload(Request $request)
     {
-        if (! RvMedia::isChunkUploadEnabled()) {
-            $result = RvMedia::handleUpload(Arr::first($request->file('file')), $request->input('folder_id', 0));
-
-            return $this->handleUploadResponse($result);
-        }
-
         try {
+            if (! RvMedia::isChunkUploadEnabled()) {
+                $result = RvMedia::handleUpload(Arr::first($request->file('file')), $request->input('folder_id', 0));
+
+                return $this->handleUploadResponse($result);
+            }
+
             // Create the file receiver
             $receiver = new FileReceiver('file', $request, DropZoneUploadHandler::class);
             // Check if the upload is success, throw exception or return response you need
@@ -54,7 +49,7 @@ class MediaFileController extends Controller
                 'done' => $handler->getPercentageDone(),
                 'status' => true,
             ]);
-        } catch (Exception $exception) {
+        } catch (Throwable $exception) {
             return RvMedia::responseError($exception->getMessage());
         }
     }
@@ -79,14 +74,15 @@ class MediaFileController extends Controller
     public function postDownloadUrl(Request $request)
     {
         $validator = Validator::make($request->input(), [
-            'url' => 'required|url',
+            'url' => ['required', 'url'],
+            'folderId' => ['nullable', 'integer'],
         ]);
 
         if ($validator->fails()) {
             return RvMedia::responseError($validator->messages()->first());
         }
 
-        $result = RvMedia::uploadFromUrl($request->input('url'), $request->input('folderId'));
+        $result = RvMedia::uploadFromUrl($request->input('url'), $request->input('folderId', 0));
 
         if (! $result['error']) {
             return RvMedia::responseSuccess([

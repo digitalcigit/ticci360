@@ -3,6 +3,7 @@
 namespace Botble\Ecommerce\Models;
 
 use Botble\Base\Models\BaseModel;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Arr;
 
@@ -25,28 +26,33 @@ class ProductFile extends BaseModel
         return $this->belongsTo(Product::class)->withDefault();
     }
 
-    public function getFileNameAttribute(): string
+    protected function fileName(): Attribute
     {
-        return Arr::get($this->extras, 'name', '');
+        return Attribute::get(fn () => Arr::get($this->extras, 'name', ''));
     }
 
-    public function getFileSizeAttribute(): int
+    protected function fileSize(): Attribute
     {
-        return Arr::get($this->extras, 'size', 0);
+        return Attribute::get(fn () => Arr::get($this->extras, 'size', ''));
     }
 
-    public function getMimeTypeAttribute(): string
+    protected function mimeType(): Attribute
     {
-        return Arr::get($this->extras, 'mime_type', '');
+        return Attribute::get(fn () => Arr::get($this->extras, 'mime_type', ''));
     }
 
-    public function getFileExtensionAttribute(): string
+    protected function fileExtension(): Attribute
     {
-        return Arr::get($this->extras, 'extension', '');
+        return Attribute::get(fn () => Arr::get($this->extras, 'extension', ''));
     }
 
-    public function getBasenameAttribute(): string
+    protected function basename(): Attribute
     {
-        return $this->file_name . '.' . $this->file_extension;
+        return Attribute::get(fn () => $this->file_name . ($this->file_extension ? '.' . $this->file_extension : ''));
+    }
+
+    protected function isExternalLink(): Attribute
+    {
+        return Attribute::get(fn () => Arr::get($this->extras, 'is_external', false));
     }
 }

@@ -2,129 +2,63 @@
 
 namespace Botble\Faq\Tables;
 
-use Botble\Base\Facades\BaseHelper;
 use Botble\Faq\Models\Faq;
-use Botble\Faq\Repositories\Interfaces\FaqInterface;
 use Botble\Table\Abstracts\TableAbstract;
-use Botble\Base\Facades\Html;
-use Illuminate\Contracts\Routing\UrlGenerator;
+use Botble\Table\Actions\DeleteAction;
+use Botble\Table\Actions\EditAction;
+use Botble\Table\BulkActions\DeleteBulkAction;
+use Botble\Table\BulkChanges\CreatedAtBulkChange;
+use Botble\Table\BulkChanges\TextBulkChange;
+use Botble\Table\Columns\CreatedAtColumn;
+use Botble\Table\Columns\FormattedColumn;
+use Botble\Table\Columns\IdColumn;
+use Botble\Table\Columns\LinkableColumn;
+use Botble\Table\Columns\StatusColumn;
+use Botble\Table\HeaderActions\CreateHeaderAction;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Relations\Relation;
-use Illuminate\Database\Query\Builder as QueryBuilder;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Auth;
-use Botble\Table\DataTables;
 
 class FaqTable extends TableAbstract
 {
-    protected $hasActions = true;
-
-    protected $hasFilter = true;
-
-    public function __construct(DataTables $table, UrlGenerator $urlGenerator, FaqInterface $faqRepository)
+    public function setup(): void
     {
-        parent::__construct($table, $urlGenerator);
-
-        $this->repository = $faqRepository;
-
-        if (! Auth::user()->hasAnyPermission(['faq.edit', 'faq.destroy'])) {
-            $this->hasOperations = false;
-            $this->hasActions = false;
-        }
-    }
-
-    public function ajax(): JsonResponse
-    {
-        $data = $this->table
-            ->eloquent($this->query())
-            ->editColumn('question', function (Faq $item) {
-                if (! Auth::user()->hasPermission('faq.edit')) {
-                    return $item->question;
-                }
-
-                return Html::link(route('faq.edit', $item->id), $item->question);
-            })
-            ->editColumn('category_id', function (Faq $item) {
-                return $item->category->name;
-            })
-            ->editColumn('checkbox', function (Faq $item) {
-                return $this->getCheckbox($item->id);
-            })
-            ->editColumn('created_at', function (Faq $item) {
-                return BaseHelper::formatDate($item->created_at);
-            })
-            ->editColumn('status', function (Faq $item) {
-                return $item->status->toHtml();
-            })
-            ->addColumn('operations', function (Faq $item) {
-                return $this->getOperations('faq.edit', 'faq.destroy', $item);
+        $this
+            ->model(Faq::class)
+            ->addColumns([
+                IdColumn::make(),
+                LinkableColumn::make('question')
+                    ->title(trans('plugins/faq::faq.question'))
+                    ->route('faq.edit')
+                    ->alignStart(),
+                FormattedColumn::make('category_id')
+                    ->title(trans('plugins/faq::faq.category'))
+                    ->alignStart()
+                    ->withEmptyState()
+                    ->getValueUsing(fn (FormattedColumn $column) => $column->getItem()->category->name),
+                CreatedAtColumn::make(),
+                StatusColumn::make(),
+            ])
+            ->addHeaderAction(CreateHeaderAction::make()->route('faq.create'))
+            ->addActions([
+                EditAction::make()->route('faq.edit'),
+                DeleteAction::make()->route('faq.destroy'),
+            ])
+            ->addBulkAction(DeleteBulkAction::make()->permission('faq.destroy'))
+            ->addBulkChanges([
+                TextBulkChange::make()
+                    ->name('question')
+                    ->title(trans('plugins/faq::faq.question')),
+                CreatedAtBulkChange::make(),
+            ])
+            ->queryUsing(function (Builder $query) {
+                return $query
+                    ->select([
+                        'id',
+                        'question',
+                        'created_at',
+                        'answer',
+                        'category_id',
+                        'status',
+                    ]);
             });
-
-        return $this->toJson($data);
-    }
-
-    public function query(): Relation|Builder|QueryBuilder
-    {
-        $query = $this->repository->getModel()->select([
-            'id',
-            'question',
-            'created_at',
-            'answer',
-            'category_id',
-            'status',
-        ]);
-
-        return $this->applyScopes($query);
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => [
-                'title' => trans('core/base::tables.id'),
-                'width' => '20px',
-            ],
-            'question' => [
-                'title' => trans('plugins/faq::faq.question'),
-                'class' => 'text-start',
-            ],
-            'category_id' => [
-                'title' => trans('plugins/faq::faq.category'),
-                'class' => 'text-start',
-            ],
-            'created_at' => [
-                'title' => trans('core/base::tables.created_at'),
-                'width' => '100px',
-            ],
-            'status' => [
-                'title' => trans('core/base::tables.status'),
-                'width' => '100px',
-            ],
-        ];
-    }
-
-    public function buttons(): array
-    {
-        return $this->addCreateButton(route('faq.create'), 'faq.create');
-    }
-
-    public function bulkActions(): array
-    {
-        return $this->addDeleteAction(route('faq.deletes'), 'faq.destroy', parent::bulkActions());
-    }
-
-    public function getBulkChanges(): array
-    {
-        return [
-            'question' => [
-                'title' => trans('plugins/faq::faq.question'),
-                'type' => 'text',
-                'validate' => 'required|max:120',
-            ],
-            'created_at' => [
-                'title' => trans('core/base::tables.created_at'),
-                'type' => 'datePicker',
-            ],
-        ];
     }
 }

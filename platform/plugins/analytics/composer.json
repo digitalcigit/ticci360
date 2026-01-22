@@ -3,8 +3,8 @@
     "description": "Analytics plugin",
     "type": "package",
     "require": {
-        "google/apiclient": "^2.12",
-        "google/analytics-data": "^0.10.0",
-        "symfony/cache": "^5.4|^6.0"
+        "phpseclib/bcmath_compat": "^2.0",
+        "google/analytics-data": "^0.23",
+        "symfony/cache": "^5.4|^6.0|^7.0"
     }
 }

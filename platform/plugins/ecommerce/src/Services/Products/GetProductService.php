@@ -3,13 +3,11 @@
 namespace Botble\Ecommerce\Services\Products;
 
 use Botble\Base\Facades\BaseHelper;
-use Botble\Base\Enums\BaseStatusEnum;
-use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
 use Botble\Ecommerce\Facades\EcommerceHelper;
+use Botble\Ecommerce\Repositories\Interfaces\ProductInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class GetProductService
 {
@@ -25,24 +23,29 @@ class GetProductService
         array $withCount = [],
         array $conditions = []
     ): Collection|LengthAwarePaginator {
-        $num = $request->integer('num');
+        $num = $request->integer('num') ?: $request->integer('per-page') ?: $request->input('per_page');
         $shows = EcommerceHelper::getShowParams();
 
         if (! array_key_exists($num, $shows)) {
-            $num = (int)theme_option('number_of_products_per_page', 12);
+            $num = (int) theme_option('number_of_products_per_page', 12);
         }
 
+        $keyword = $request->input('q') ?: $request->input('keyword') ?: $request->input('search');
+
         $queryVar = [
-            'keyword' => $request->input('q'),
-            'brands' => (array)$request->input('brands', []),
-            'categories' => (array)$request->input('categories', []),
-            'tags' => (array)$request->input('tags', []),
-            'collections' => (array)$request->input('collections', []),
-            'attributes' => (array)$request->input('attributes', []),
+            'keyword' => BaseHelper::stringify($keyword),
+            'brands' => EcommerceHelper::parseFilterParams($request, 'brands'),
+            'categories' => EcommerceHelper::parseFilterParams($request, 'categories'),
+            'tags' => EcommerceHelper::parseFilterParams($request, 'tags'),
+            'collections' => EcommerceHelper::parseFilterParams($request, 'collections'),
+            'collection' => $request->input('collection'),
+            'attributes' => $this->parseJsonParam($request->input('attributes')),
             'max_price' => $request->input('max_price'),
             'min_price' => $request->input('min_price'),
-            'sort_by' => $request->input('sort-by'),
+            'price_ranges' => $this->parseJsonParam($request->input('price_ranges')),
+            'sort_by' => $request->input('sort-by') ?: $request->input('sort_by'),
             'num' => $num,
+            'discounted_only' => (bool) $request->input('discounted_only'),
         ];
 
         if ($category) {
@@ -51,14 +54,6 @@ class GetProductService
 
         if ($brand) {
             $queryVar['brands'] = array_merge(($queryVar['brands']), [$brand]);
-        }
-
-        $countAttributeGroups = 1;
-        if (count($queryVar['attributes'])) {
-            $countAttributeGroups = DB::table('ec_product_attributes')
-                ->whereIn('id', $queryVar['attributes'])
-                ->distinct('attribute_set_id')
-                ->count('attribute_set_id');
         }
 
         $orderBy = [
@@ -70,56 +65,56 @@ class GetProductService
             $queryVar['sort_by'] = 'date_desc';
         }
 
-        $params = array_merge([
-                'paginate' => [
-                    'per_page' => $queryVar['num'],
-                    'current_paged' => (int)$request->query('page', '1'),
-                ],
-                'with' => $with,
-                'withCount' => $withCount,
-            ], EcommerceHelper::withReviewsParams());
+        $params = [
+            'paginate' => [
+                'per_page' => $queryVar['num'] ?: 12,
+                'current_paged' => $request->integer('page', 1) ?: 1,
+            ],
+            'with' => array_merge(EcommerceHelper::withProductEagerLoadingRelations(), $with),
+            'withCount' => $withCount,
+        ];
 
         switch ($queryVar['sort_by']) {
             case 'date_asc':
                 $orderBy = [
-                    'ec_products.created_at' => 'asc',
+                    'ec_products.created_at' => 'ASC',
                 ];
 
                 break;
             case 'date_desc':
                 $orderBy = [
-                    'ec_products.created_at' => 'desc',
+                    'ec_products.created_at' => 'DESC',
                 ];
 
                 break;
             case 'price_asc':
                 $orderBy = [
-                    'products_with_final_price.final_price' => 'asc',
+                    'products_with_final_price.final_price' => 'ASC',
                 ];
 
                 break;
             case 'price_desc':
                 $orderBy = [
-                    'products_with_final_price.final_price' => 'desc',
+                    'products_with_final_price.final_price' => 'DESC',
                 ];
 
                 break;
             case 'name_asc':
                 $orderBy = [
-                    'ec_products.name' => 'asc',
+                    'ec_products.name' => 'ASC',
                 ];
 
                 break;
             case 'name_desc':
                 $orderBy = [
-                    'ec_products.name' => 'desc',
+                    'ec_products.name' => 'DESC',
                 ];
 
                 break;
             case 'rating_asc':
                 if (EcommerceHelper::isReviewEnabled()) {
                     $orderBy = [
-                        'reviews_avg' => 'asc',
+                        'reviews_avg' => 'ASC',
                     ];
                 }
 
@@ -127,7 +122,7 @@ class GetProductService
             case 'rating_desc':
                 if (EcommerceHelper::isReviewEnabled()) {
                     $orderBy = [
-                        'reviews_avg' => 'desc',
+                        'reviews_avg' => 'DESC',
                     ];
                 }
 
@@ -135,29 +130,27 @@ class GetProductService
         }
 
         if (! empty($conditions)) {
-            $params['condition'] = array_merge([
-                'ec_products.status' => BaseStatusEnum::PUBLISHED,
-                'ec_products.is_variation' => 0,
-            ], $conditions);
+            $params['condition'] = $conditions;
         }
 
-        $products = $this->productRepository->filterProducts([
+        return $this->productRepository->filterProducts([
             'keyword' => $queryVar['keyword'],
             'min_price' => $queryVar['min_price'],
             'max_price' => $queryVar['max_price'],
+            'price_ranges' => array_values($queryVar['price_ranges']),
             'categories' => $queryVar['categories'],
             'tags' => $queryVar['tags'],
             'collections' => $queryVar['collections'],
+            'collection' => $queryVar['collection'],
             'brands' => $queryVar['brands'],
             'attributes' => $queryVar['attributes'],
-            'count_attribute_groups' => $countAttributeGroups,
             'order_by' => $orderBy,
+            'discounted_only' => $queryVar['discounted_only'],
         ], $params);
+    }
 
-        if ($queryVar['keyword'] && is_string($queryVar['keyword'])) {
-            $products->setCollection(BaseHelper::sortSearchResults($products->getCollection(), $queryVar['keyword'], 'name'));
-        }
-
-        return $products;
+    protected function parseJsonParam($param): array
+    {
+        return EcommerceHelper::parseJsonParam($param);
     }
 }
