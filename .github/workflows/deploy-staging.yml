@@ -25,9 +25,12 @@ jobs:
           echo "Starting deployment..."
           cd /opt/ticci360
           
-          # Attempt to fix permissions (ignore failure if sudo requires password)
-          echo "Fixing permissions..."
-          sudo chown -R $USER:$USER . || echo "sudo chown failed (might require password), continuing..."
+          # Fix permissions using Docker (bypasses sudo requirement)
+          echo "Fixing permissions via Docker..."
+          docker run --rm -v /opt/ticci360:/workdir alpine chown -R $(id -u):$(id -g) /workdir
+          
+          # Remove problematic submodule directory if it exists
+          rm -rf savesave
           
           # Force sync code to match origin/main
           echo "Syncing code..."

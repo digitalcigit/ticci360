@@ -28,13 +28,10 @@ log_error() {
 log_info "Updating codebase..."
 cd "$PROJECT_ROOT"
 
-# Fix permissions if needed (requires sudo)
-if [ -w "$PROJECT_ROOT" ]; then
-    log_info "Directory is writable."
-else
-    log_info "Fixing permissions..."
-    sudo chown -R $USER:$USER "$PROJECT_ROOT"
-fi
+# Fix permissions using Docker (avoids sudo password prompt)
+# Mounts current directory to /workdir in Alpine and changes ownership to current user/group
+log_info "Ensuring correct file permissions..."
+docker run --rm -v "$PROJECT_ROOT":/workdir alpine chown -R $(id -u):$(id -g) /workdir
 
 git reset --hard
 git pull origin main
