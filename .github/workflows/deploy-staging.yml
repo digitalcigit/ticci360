@@ -23,4 +23,18 @@ jobs:
         port: ${{ secrets.STAGING_PORT }}
         script: |
           echo "Starting deployment..."
-          bash /opt/ticci360/infra/scripts/deploy.sh
+          cd /opt/ticci360
+          
+          # Attempt to fix permissions (ignore failure if sudo requires password)
+          echo "Fixing permissions..."
+          sudo chown -R $USER:$USER . || echo "sudo chown failed (might require password), continuing..."
+          
+          # Force sync code to match origin/main
+          echo "Syncing code..."
+          git fetch origin main
+          git reset --hard origin/main
+          git clean -fd
+          
+          # Execute the updated deployment script
+          echo "Executing deploy.sh..."
+          bash infra/scripts/deploy.sh
