@@ -15,14 +15,19 @@ export async function getCategories(
   const queryString = searchParams.toString();
   const endpoint = queryString ? `categories?${queryString}` : 'categories';
 
-  const response = await apiClient<ApiResponse<Category[]>>(endpoint, {
-    next: {
-      tags: options.tags || ['categories'],
-      revalidate: options.revalidate ?? 3600, // 1 hour default for categories
-    },
-  });
+  try {
+    const response = await apiClient<ApiResponse<Category[]>>(endpoint, {
+      next: {
+        tags: options.tags || ['categories'],
+        revalidate: options.revalidate ?? 3600, // 1 hour default for categories
+      },
+    });
 
-  return response.data;
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    return [];
+  }
 }
 
 export async function getCategoryById(

@@ -40,17 +40,37 @@ export async function getProducts(
   const queryString = searchParams.toString();
   const endpoint = queryString ? `products?${queryString}` : 'products';
 
-  const response = await apiClient<ApiResponse<Product[]>>(endpoint, {
-    next: {
-      tags: options.tags || ['products'],
-      revalidate: options.revalidate,
-    },
-  });
+  try {
+    const response = await apiClient<ApiResponse<Product[]>>(endpoint, {
+      next: {
+        tags: options.tags || ['products'],
+        revalidate: options.revalidate,
+      },
+    });
 
-  return {
-    data: response.data,
-    meta: response.meta,
-  };
+    return {
+      data: response.data,
+      meta: response.meta,
+    };
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    return {
+      data: [],
+      meta: {
+        success: false,
+        message: 'Error fetching products',
+        timestamp: new Date().toISOString(),
+        pagination: {
+          total: 0,
+          count: 0,
+          per_page: params.per_page || 12,
+          current_page: params.page || 1,
+          total_pages: 0,
+          links: { next: null, previous: null }
+        }
+      }
+    };
+  }
 }
 
 export async function getProductBySlug(
