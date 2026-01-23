@@ -61,8 +61,7 @@ services:
     environment:
       MYSQL_DATABASE: ${DB_DATABASE}
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "3307:3306" # Mapped to 3307 to avoid conflict
+    # No host port mapping - DB only accessed via Docker network
     volumes:
       - db_data:/var/lib/mysql
     networks:
@@ -76,8 +75,7 @@ services:
     image: redis:alpine
     container_name: ticci_redis
     restart: unless-stopped
-    ports:
-      - "6381:6379" # Mapped to 6381 to avoid conflict with VPS Redis services
+    # No host port mapping needed - Redis only used internally via Docker network
     networks:
       - ticci_net
     healthcheck:
