@@ -21,6 +21,8 @@ jobs:
         username: ${{ secrets.STAGING_USER }}
         key: ${{ secrets.STAGING_SSH_KEY }}
         port: ${{ secrets.STAGING_PORT }}
+        timeout: 20m
+        command_timeout: 20m
         script: |
           echo "Starting deployment..."
           cd /opt/ticci360
