@@ -62,7 +62,7 @@ services:
       MYSQL_DATABASE: ${DB_DATABASE}
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
     ports:
-      - "3306:3306"
+      - "3307:3306" # Mapped to 3307 to avoid conflict
     volumes:
       - db_data:/var/lib/mysql
     networks:
@@ -77,7 +77,7 @@ services:
     container_name: ticci_redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "6380:6379" # Mapped to 6380 to avoid conflict
     networks:
       - ticci_net
     healthcheck:
