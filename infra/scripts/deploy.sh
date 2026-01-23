@@ -27,6 +27,16 @@ log_error() {
 # 1. Update Codebase
 log_info "Updating codebase..."
 cd "$PROJECT_ROOT"
+
+# Fix permissions if needed (requires sudo)
+if [ -w "$PROJECT_ROOT" ]; then
+    log_info "Directory is writable."
+else
+    log_info "Fixing permissions..."
+    sudo chown -R $USER:$USER "$PROJECT_ROOT"
+fi
+
+git reset --hard
 git pull origin main
 
 # 2. Build & Restart Containers
