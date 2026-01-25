@@ -31,9 +31,28 @@ jobs:
         timeout: 5m
         command_timeout: 5m
         script: |
+          set -e
           echo "🚀 Quick Deploy (no Docker rebuild)..."
           cd /opt/ticci360
-          bash infra/scripts/quick-deploy.sh
+          
+          # Fix permissions
+          docker run --rm -v /opt/ticci360:/workdir alpine chown -R $(id -u):$(id -g) /workdir
+          
+          # Sync code
+          git fetch origin main
+          git reset --hard origin/main
+          
+          # Restart containers (no rebuild)
+          docker compose -f docker-compose.yml up -d --force-recreate
+          
+          # Laravel post-deploy tasks
+          docker compose exec -T app php artisan optimize:clear
+          docker compose exec -T app php artisan config:cache
+          docker compose exec -T app php artisan route:cache
+          docker compose exec -T app php artisan view:cache
+          docker compose exec -T app php artisan migrate --force
+          
+          echo "✅ Quick Deploy completed!"
 
     - name: Full Deploy (with rebuild)
       if: ${{ github.event.inputs.full_rebuild == 'true' }}
