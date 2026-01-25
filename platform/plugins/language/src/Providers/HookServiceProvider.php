@@ -35,7 +35,7 @@ class HookServiceProvider extends ServiceProvider
         add_action(BASE_ACTION_TOP_FORM_CONTENT_NOTIFICATION, [$this, 'addCurrentLanguageEditingAlert'], 55, 2);
         add_action(BASE_ACTION_BEFORE_EDIT_CONTENT, [$this, 'getCurrentAdminLanguage'], 55, 2);
 
-        add_filter(FILTER_SLUG_PREFIX, [$this, 'setSlugPrefix'], 500);
+        add_filter(defined('FILTER_SLUG_PREFIX') ? FILTER_SLUG_PREFIX : 'slug-prefix-filter', [$this, 'setSlugPrefix'], 500);
         add_filter(LANGUAGE_FILTER_SWITCHER, [$this, 'languageSwitcher'], 50, 2);
         add_filter(BASE_FILTER_BEFORE_GET_FRONT_PAGE_ITEM, [$this, 'checkItemLanguageBeforeShow'], 50, 2);
         add_filter(BASE_FILTER_BEFORE_GET_SINGLE, [$this, 'getRelatedDataForOtherLanguage'], 50, 2);
