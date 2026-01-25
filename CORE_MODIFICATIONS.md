@@ -73,3 +73,23 @@ protected function addField(FormField $field, bool $modify = false): static
 ```php
 protected function addField(FormField $field, $modify = false)
 ```
+
+## 3. TableAbstract Type Compatibility
+**File:** `platform/core/table/src/Abstracts/TableAbstract.php`
+**Date:** 2026-01-25
+**Reason:** Compatibility issue with `yajra/laravel-datatables-oracle`. The child class included `AnonymousResourceCollection` in the union type which was not present in the parent class `Yajra\DataTables\Services\DataTable::applyScopes`.
+
+**Original Code (`applyScopes`):**
+```php
+protected function applyScopes(
+    EloquentBuilder|QueryBuilder|EloquentRelation|Collection|AnonymousResourceCollection $query
+): EloquentBuilder|QueryBuilder|EloquentRelation|Collection|AnonymousResourceCollection
+```
+
+**Modified Code (`applyScopes`):**
+```php
+protected function applyScopes(
+    EloquentBuilder|QueryBuilder|EloquentRelation|Collection $query
+): EloquentBuilder|QueryBuilder|EloquentRelation|Collection
+```
+
