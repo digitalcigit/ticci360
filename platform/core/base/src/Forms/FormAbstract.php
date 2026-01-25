@@ -290,7 +290,7 @@ abstract class FormAbstract extends Form implements ExtensibleContract
         return $this;
     }
 
-    public function renderForm(array $options = [], $showStart = true, $showFields = true, $showEnd = true): string
+    public function renderForm(array $options = [], $showStart = true, $showFields = true, $showEnd = true)
     {
         Assets::addScripts(['form-validation', 'are-you-sure']);
 
