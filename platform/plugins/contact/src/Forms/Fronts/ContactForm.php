@@ -38,7 +38,7 @@ use Throwable;
 
 class ContactForm extends FormFront
 {
-    protected $errorBag = 'contact';
+    protected ?string $errorBag = 'contact';
 
     protected ?string $formInputWrapperClass = 'contact-form-group';
 
