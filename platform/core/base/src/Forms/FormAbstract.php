@@ -233,7 +233,7 @@ abstract class FormAbstract extends Form implements ExtensibleContract
         return apply_filters('form_custom_fields', $this, $this->getFormHelper());
     }
 
-    public function addCustomField(string $name, string $class): static
+    public function addCustomField($name, $class)
     {
         if ($this->rebuilding && $this->formHelper->hasCustomField($name)) {
             return $this;
