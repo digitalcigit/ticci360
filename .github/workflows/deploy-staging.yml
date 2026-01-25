@@ -42,11 +42,14 @@ jobs:
           git fetch origin main
           git reset --hard origin/main
           
-          # Just restart containers without Laravel artisan commands
-          # (artisan commands fail due to PHP type compatibility issues)
+          # Restart app container to pick up code changes
           docker compose -f docker-compose.yml restart app
           
-          echo "✅ Code synced! Run artisan commands manually if needed."
+          # Test if Laravel boots (show error if it fails)
+          echo "Testing Laravel boot..."
+          docker compose -f docker-compose.yml exec -T app php artisan --version || echo "⚠️ Laravel boot failed - check PHP errors"
+          
+          echo "✅ Code synced!"
 
     - name: Full Deploy (with rebuild)
       if: ${{ github.event.inputs.full_rebuild == 'true' }}
