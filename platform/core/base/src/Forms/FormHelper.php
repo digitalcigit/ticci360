@@ -67,7 +67,7 @@ class FormHelper extends BaseFormHelper
         );
     }
 
-    public function hasCustomField(string $name): bool
+    public function hasCustomField($name)
     {
         return array_key_exists($name, $this->customTypes);
     }
