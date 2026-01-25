@@ -48,3 +48,18 @@ public function hasCustomField($name)
     return array_key_exists($name, $this->customTypes);
 }
 ```
+
+## 2. FormAbstract Type Compatibility
+**File:** `platform/core/base/src/Forms/FormAbstract.php`
+**Date:** 2026-01-25
+**Reason:** Same compatibility issue with `kris/laravel-form-builder`.
+
+**Original Code (`add`):**
+```php
+public function add(string $name, string $type = 'text', array|Arrayable $options = [], bool $modify = false): static
+```
+
+**Modified Code (`add`):**
+```php
+public function add($name, $type = 'text', array $options = [], $modify = false)
+```
