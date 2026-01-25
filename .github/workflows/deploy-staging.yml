@@ -32,7 +32,7 @@ jobs:
         command_timeout: 5m
         script: |
           set -e
-          echo "🚀 Quick Deploy (no Docker rebuild)..."
+          echo "🚀 Quick Deploy (code sync only)..."
           cd /opt/ticci360
           
           # Fix permissions
@@ -42,17 +42,11 @@ jobs:
           git fetch origin main
           git reset --hard origin/main
           
-          # Restart containers (no rebuild)
-          docker compose -f docker-compose.yml up -d --force-recreate
+          # Just restart containers without Laravel artisan commands
+          # (artisan commands fail due to PHP type compatibility issues)
+          docker compose -f docker-compose.yml restart app
           
-          # Laravel post-deploy tasks
-          docker compose exec -T app php artisan optimize:clear
-          docker compose exec -T app php artisan config:cache
-          docker compose exec -T app php artisan route:cache
-          docker compose exec -T app php artisan view:cache
-          docker compose exec -T app php artisan migrate --force
-          
-          echo "✅ Quick Deploy completed!"
+          echo "✅ Code synced! Run artisan commands manually if needed."
 
     - name: Full Deploy (with rebuild)
       if: ${{ github.event.inputs.full_rebuild == 'true' }}
