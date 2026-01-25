@@ -27,7 +27,7 @@ class ShortcodeForm extends FormAbstract
             ->addCustomField('tabs', ShortcodeTabsField::class);
     }
 
-    public function renderForm(array $options = [], bool $showStart = false, bool $showFields = true, bool $showEnd = false): string
+    public function renderForm(array $options = [], $showStart = false, $showFields = true, $showEnd = false): string
     {
         return parent::renderForm($options, $showStart, $showFields, $showEnd);
     }

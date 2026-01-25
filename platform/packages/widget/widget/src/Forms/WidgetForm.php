@@ -21,9 +21,9 @@ class WidgetForm extends FormAbstract
 
     public function renderForm(
         array $options = [],
-        bool $showStart = false,
-        bool $showFields = true,
-        bool $showEnd = false
+        $showStart = false,
+        $showFields = true,
+        $showEnd = false
     ): string {
         return parent::renderForm($options, $showStart, $showFields, $showEnd);
     }

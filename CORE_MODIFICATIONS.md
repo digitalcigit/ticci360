@@ -108,4 +108,27 @@ public function renderForm(array $options = [], bool $showStart = true, bool $sh
 public function renderForm(array $options = [], $showStart = true, $showFields = true, $showEnd = true): string
 ```
 
+**Other files updated for `renderForm` compatibility:**
+- `platform/packages/shortcode/src/Forms/ShortcodeForm.php`
+- `platform/packages/widget/src/Forms/WidgetForm.php`
+- `platform/packages/widget/widget/src/Forms/WidgetForm.php`
+- `platform/plugins/ecommerce/src/Forms/Fronts/Customer/AddressForm.php`
+
+## 5. ContactForm Type Compatibility
+**File:** `platform/plugins/contact/src/Forms/Fronts/ContactForm.php`
+**Date:** 2026-01-25
+**Reason:** Compatibility issue with `Kris\LaravelFormBuilder\Form`. The parent class defines `$errorBag` without a type hint, while `ContactForm` defined it as `string`.
+
+**Original Code:**
+```php
+protected string $errorBag = 'contact';
+```
+
+**Modified Code:**
+```php
+protected $errorBag = 'contact';
+```
+
+
+
 

@@ -90,9 +90,9 @@ class AddressForm extends FormFront
 
     public function renderForm(
         array $options = [],
-        bool $showStart = true,
-        bool $showFields = true,
-        bool $showEnd = true
+        $showStart = true,
+        $showFields = true,
+        $showEnd = true
     ): string {
         foreach ($this->getFields() as &$field) {
             if ($field->getType() != SelectField::class) {
