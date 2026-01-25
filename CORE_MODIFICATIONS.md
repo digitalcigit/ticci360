@@ -93,3 +93,19 @@ protected function applyScopes(
 ): EloquentBuilder|QueryBuilder|EloquentRelation|Collection
 ```
 
+## 4. FormFront Type Compatibility
+**File:** `platform/packages/theme/src/FormFront.php`
+**Date:** 2026-01-25
+**Reason:** Compatibility issue with `FormAbstract` (which was modified to match `laravel-form-builder`). The child class `FormFront` had strict types that were no longer compatible with the parent `FormAbstract` loose types.
+
+**Original Code (`renderForm`):**
+```php
+public function renderForm(array $options = [], bool $showStart = true, bool $showFields = true, bool $showEnd = true): string
+```
+
+**Modified Code (`renderForm`):**
+```php
+public function renderForm(array $options = [], $showStart = true, $showFields = true, $showEnd = true): string
+```
+
+
