@@ -129,6 +129,22 @@ protected string $errorBag = 'contact';
 protected $errorBag = 'contact';
 ```
 
+## 6. NewsletterForm Type Compatibility
+**File:** `platform/plugins/newsletter/src/Forms/Fronts/NewsletterForm.php`
+**Date:** 2026-01-25
+**Reason:** Compatibility issue with `Kris\LaravelFormBuilder\Form`. The parent class defines `$errorBag` without a type hint, while `NewsletterForm` defined it as `string`.
+
+**Original Code:**
+```php
+protected string $errorBag = 'newsletter';
+```
+
+**Modified Code:**
+```php
+protected $errorBag = 'newsletter';
+```
+
+
 
 
 

@@ -13,7 +13,7 @@ use Botble\Theme\FormFront;
 
 class NewsletterForm extends FormFront
 {
-    protected string $errorBag = 'newsletter';
+    protected $errorBag = 'newsletter';
 
     public static function formTitle(): string
     {
