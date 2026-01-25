@@ -290,7 +290,7 @@ abstract class FormAbstract extends Form implements ExtensibleContract
         return $this;
     }
 
-    public function renderForm(array $options = [], bool $showStart = true, bool $showFields = true, bool $showEnd = true): string
+    public function renderForm(array $options = [], $showStart = true, $showFields = true, $showEnd = true)
     {
         Assets::addScripts(['form-validation', 'are-you-sure']);
 
@@ -587,7 +587,7 @@ abstract class FormAbstract extends Form implements ExtensibleContract
         return static::create([...$options, 'model' => $model], $data);
     }
 
-    public function hasFiles(bool $hasFiles = true): static
+    public function hasFiles($hasFiles = true)
     {
         $this->setFormOption('files', $hasFiles);
 
