@@ -63,3 +63,13 @@ public function add(string $name, string $type = 'text', array|Arrayable $option
 ```php
 public function add($name, $type = 'text', array $options = [], $modify = false)
 ```
+
+**Original Code (`addField`):**
+```php
+protected function addField(FormField $field, bool $modify = false): static
+```
+
+**Modified Code (`addField`):**
+```php
+protected function addField(FormField $field, $modify = false)
+```
