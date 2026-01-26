@@ -118,7 +118,7 @@ abstract class FormFront extends FormAbstract
         return $this;
     }
 
-    public function renderForm(array $options = [], $showStart = true, $showFields = true, $showEnd = true)
+    public function renderForm(array $options = [], bool $showStart = true, bool $showFields = true, bool $showEnd = true): string
     {
         foreach ($this->getFields() as &$field) {
             if (! in_array($field->getType(), [
