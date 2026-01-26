@@ -488,7 +488,7 @@ class MarketplaceServiceProvider extends ServiceProvider
             });
 
             if (! $this->app->runningInConsole()) {
-                Product::addGlobalScope(HideProductsByLockedVendorScope::class);
+                Product::addGlobalScope(new HideProductsByLockedVendorScope());
             }
 
             if (is_plugin_active('language-advanced')) {
