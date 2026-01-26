@@ -386,7 +386,7 @@ abstract class FormAbstract extends Form implements ExtensibleContract
         return $this;
     }
 
-    public function add($name, $type = 'text', array $options = [], $modify = false)
+    public function add(string $name, string $type = 'text', Arrayable|array $options = [], bool $modify = false): static
     {
         if ($options instanceof Arrayable) {
             $options = $options->toArray();
