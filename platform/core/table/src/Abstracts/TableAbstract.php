@@ -720,8 +720,8 @@ abstract class TableAbstract extends DataTable implements ExtensibleContract
     }
 
     protected function applyScopes(
-        EloquentBuilder|QueryBuilder|EloquentRelation|Collection $query
-    ): EloquentBuilder|QueryBuilder|EloquentRelation|Collection {
+        EloquentBuilder|QueryBuilder|EloquentRelation|Collection|AnonymousResourceCollection $query
+    ): EloquentBuilder|QueryBuilder|EloquentRelation|Collection|AnonymousResourceCollection {
         if (isset($this->modifyQueryUsingCallback)) {
             call_user_func($this->modifyQueryUsingCallback, $query);
         }
